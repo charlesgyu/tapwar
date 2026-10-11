@@ -2289,6 +2289,15 @@ function goNextStage() {
 }
 window.goNextStage = goNextStage;
 
+// 다시 도전: 시작 연출 없이 같은 맵을 그 자리에서 다시 불러옴
+function retryStage() {
+  const key = currentMapKey;
+  document.getElementById('end-modal').style.display = 'none';
+  selectedModalMapKey = key;
+  selectModalMap(key);
+}
+window.retryStage = retryStage;
+
 function gameOver(isWin, isSurrender = false) {
   currentState = GAME_STATE.GAME_OVER;
   const toast = document.getElementById('center-toast');
@@ -2301,6 +2310,9 @@ function gameOver(isWin, isSurrender = false) {
   
   const nextBtn = document.getElementById('end-next-btn');
   if (nextBtn) nextBtn.hidden = true;
+  // 패배·항복이면 같은 맵 다시 도전 버튼
+  const retryBtn = document.getElementById('end-retry-btn');
+  if (retryBtn) retryBtn.hidden = !!isWin;
 
   if (isWin) {
     // 승리: 축하합니다. / [맵이름]을 점령했습니다. / 기록 / 다음 맵으로 · 홈으로
