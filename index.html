@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>TAPWAR - Minimal Metro Edition</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #f6f5f0;
+      background-image:
+        linear-gradient(rgba(0, 0, 0, 0.032) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.032) 1px, transparent 1px);
+      background-size: 26px 26px;
+      color: #1e293b;
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, sans-serif;
+      touch-action: none;
+    }
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+    }
+    /* UI Overlay Layer */
+    #ui-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    }
+    /* Top Floating Bar */
+    .top-bar {
+      align-self: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      pointer-events: none;
+      max-width: 96%;
+    }
+    .top-bar-main {
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1.5px solid #e2e8f0;
+      border-radius: 999px;
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+      pointer-events: auto;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+    .badge-player {
+      color: #2563eb;
+    }
+    .badge-enemy {
+      color: #dc2626;
+    }
+    .speed-control-group {
+      display: flex;
+      gap: 2px;
+      background: #f1f5f9;
+      padding: 2px 4px;
+      border-radius: 999px;
+      border: 1px solid #e2e8f0;
+      pointer-events: auto;
+    }
+    .speed-btn {
+      background: transparent;
+      border: none;
+      color: #64748b;
+      padding: 3px 7px;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .speed-btn.active {
+      background: #0f172a;
+      color: #ffffff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    }
+    .status-banner {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid #e2e8f0;
+      padding: 4px 14px;
+      border-radius: 999px;
+      color: #475569;
+      font-size: 11.5px;
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      white-space: nowrap;
+      pointer-events: auto;
+    }
+
+    /* Bottom Control Bar */
+    .bottom-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      pointer-events: none;
+      width: 100%;
+    }
+    .guide-tip {
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(8px);
+      border: 1px solid #e2e8f0;
+      padding: 6px 12px;
+      border-radius: 12px;
+      font-size: 11px;
+      color: #64748b;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      pointer-events: auto;
+      max-width: 60%;
+      line-height: 1.35;
+    }
+
+    /* Special Skill Button (Mini Metro FAB Style) */
+    .special-skill-btn {
+      background: #ffffff;
+      border: 2px solid #ef4444;
+      border-radius: 14px;
+      padding: 7px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.15);
+      transition: all 0.15s ease;
+      pointer-events: auto;
+    }
+    .special-skill-btn:active {
+      transform: scale(0.96);
+    }
+    .special-skill-btn.disabled {
+      opacity: 0.55;
+      border-color: #cbd5e1;
+      box-shadow: none;
+      filter: grayscale(0.8);
+      cursor: not-allowed;
+    }
+    .special-skill-icon {
+      font-size: 20px;
+    }
+    .special-skill-text {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      line-height: 1.2;
+    }
+    .special-skill-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .special-skill-status {
+      font-size: 10px;
+      font-weight: 700;
+      color: #ef4444;
+    }
+
+    /* Modals - Clean Bauhaus/Mini Metro Card System */
+    .modal-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(246, 245, 240, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      pointer-events: auto;
+      z-index: 100;
+      padding: 16px;
+    }
+    .modal-card {
+      background: #ffffff;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 22px;
+      padding: 24px 20px;
+      text-align: center;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 16px 45px rgba(0, 0, 0, 0.08);
+      animation: popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes popIn {
+      0% { transform: scale(0.95); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .modal-brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .modal-brand-line {
+      width: 24px;
+      height: 4px;
+      border-radius: 999px;
+    }
+    .modal-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+    }
+    .modal-desc {
+      font-size: 12.5px;
+      color: #64748b;
+      margin-bottom: 16px;
+      line-height: 1.4;
+    }
+
+    /* Mini Metro Stage Cards Grid */
+    .stage-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    .stage-card {
+      background: #f8fafc;
+      border: 2px solid #e2e8f0;
+      border-radius: 16px;
+      padding: 12px 6px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+    .stage-card:hover {
+      border-color: #cbd5e1;
+      transform: translateY(-2px);
+    }
+    .stage-card.active {
+      border-color: #0f172a !important;
+      background: #ffffff !important;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12) !important;
+      transform: translateY(-2px);
+    }
+    .stage-card-preview {
+      width: 100%;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 6px;
+      position: relative;
+    }
+    .stage-name {
+      font-weight: 800;
+      font-size: 13.5px;
+      color: #0f172a;
+      margin-bottom: 2px;
+    }
+    .stage-sub {
+      font-size: 10px;
+      color: #64748b;
+      font-weight: 600;
+    }
+    .stage-record {
+      margin-top: 6px;
+      padding-top: 5px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 10px;
+      color: #0f172a;
+      font-weight: 700;
+      width: 100%;
+    }
+
+    /* Start Button - Mini Metro Yellow Box Button */
+    .start-btn {
+      width: 100%;
+      background: #eab308;
+      color: #0f172a;
+      border: none;
+      padding: 13px 20px;
+      font-size: 15px;
+      font-weight: 800;
+      border-radius: 14px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(234, 179, 8, 0.35);
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .start-btn:hover {
+      background: #facc15;
+      transform: translateY(-1px);
+    }
+    .start-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* Mobile Responsive Tweaks */
+    @media (max-width: 480px) {
+      .stage-grid {
+        gap: 6px;
+      }
+      .stage-card {
+        padding: 8px 4px;
+      }
+      .stage-name {
+        font-size: 12px;
+      }
+      .stage-card-preview {
+        height: 42px;
+      }
+      .top-bar-main {
+        padding: 4px 10px;
+        gap: 6px;
+        font-size: 12px;
+      }
+      .guide-tip {
+        display: none; /* 화면 작은 폰에서는 간결함을 위해 숨김 */
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UI Overlay -->
+    <div id="ui-layer">
+      <!-- Top Bar -->
+      <div class="top-bar">
+        <div class="top-bar-main">
+          <div class="badge badge-player">🔵 <span id="player-count">1</span> <span id="player-full-count" style="color: #16a34a; font-size: 11px;">(🛡️0)</span></div>
+          <div style="color: #cbd5e1; font-weight: 400;">|</div>
+          <div class="badge badge-enemy">🔴 <span id="enemy-count">1</span> <span id="enemy-full-count" style="color: #dc2626; font-size: 11px;">(🛡️0)</span></div>
+          <div style="color: #cbd5e1; font-weight: 400;">|</div>
+          
+          <!-- Stopwatch Timer & Record Badge -->
+          <div class="badge" style="font-family: monospace; font-size: 13px; color: #b45309;">
+            ⏱️ <span id="match-timer">00:00</span>
+            <span id="best-timer-hud" style="color: #94a3b8; font-size: 10px; margin-left: 2px;">(미평정)</span>
+          </div>
+
+          <!-- Speed Controls -->
+          <div class="speed-control-group">
+            <button class="speed-btn active" id="speed-1x" onclick="setGameSpeed(1)">1x</button>
+            <button class="speed-btn" id="speed-2x" onclick="setGameSpeed(2)">2x</button>
+            <button class="speed-btn" id="speed-4x" onclick="setGameSpeed(4)">4x</button>
+            <button class="speed-btn" id="speed-10x" onclick="setGameSpeed(10)">10x</button>
+          </div>
+
+          <!-- Battlefield Selectors -->
+          <div class="speed-control-group">
+            <button class="speed-btn active" id="map-btn-korea" onclick="switchBattlefield('KOREA')">전국</button>
+            <button class="speed-btn" id="map-btn-seoul" onclick="switchBattlefield('SEOUL')">서울</button>
+            <button class="speed-btn" id="map-btn-gyeonggi" onclick="switchBattlefield('GYEONGGI')">경기</button>
+          </div>
+        </div>
+
+        <!-- Guide status banner -->
+        <div class="status-banner" id="status-guide">내 거점을 드래그하여 목표 지역으로 연결하세요!</div>
+      </div>
+
+      <!-- Bottom Bar -->
+      <div class="bottom-bar">
+        <div class="guide-tip">
+          🎯 <b>조작법:</b> 지역 더블탭 ➔ <b>전국 일제 집중 포격!</b><br>
+          📱 <b>화면 조작:</b> 두 손가락 핀치 ➔ <b>줌 인/아웃</b> | 드래그 ➔ <b>이동</b>
+        </div>
+
+        <!-- Special Skill FAB -->
+        <div id="special-skill-btn" class="special-skill-btn disabled" onclick="useSpecialSkill()">
+          <div class="special-skill-icon">💥</div>
+          <div class="special-skill-text">
+            <span class="special-skill-title">특수 기술</span>
+            <span class="special-skill-status" id="special-skill-timer">완전점령 3개 필요</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Start Choice Modal (Mini Metro Style) -->
+    <div class="modal-overlay" id="start-modal">
+      <div class="modal-card">
+        <div class="modal-brand">
+          <div class="modal-brand-line" style="background: #2563eb;"></div>
+          <div class="modal-brand-line" style="background: #eab308;"></div>
+          <div class="modal-brand-line" style="background: #dc2626;"></div>
+        </div>
+        <h2 class="modal-title">TAPWAR : 작전 전장 선택</h2>
+        <p class="modal-desc">미니멀 행정 전선 전략 시뮬레이션 — 원하는 전장을 선택하세요.</p>
+
+        <!-- Stage Cards Grid -->
+        <div class="stage-grid">
+          <!-- 1. Korea -->
+          <div id="modal-map-korea" class="stage-card active" onclick="selectModalMap('KOREA')">
+            <div class="stage-card-preview">
+              <!-- Mini Metro Subway Vector Style Preview -->
+              <svg width="60" height="42" viewBox="0 0 60 42">
+                <path d="M12,34 L28,22 L48,22 L52,10" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M10,12 L28,22 L40,32" fill="none" stroke="#eab308" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="28" cy="22" r="4.5" fill="#ffffff" stroke="#0f172a" stroke-width="2"/>
+                <circle cx="12" cy="34" r="3" fill="#2563eb"/>
+                <circle cx="52" cy="10" r="3" fill="#2563eb"/>
+                <rect x="7" y="9" width="6" height="6" fill="#eab308"/>
+              </svg>
+            </div>
+            <div class="stage-name">전국 전선</div>
+            <div class="stage-sub">164개 시·군</div>
+            <div class="stage-record" id="modal-korea-record">기록 확인 중...</div>
+          </div>
+
+          <!-- 2. Seoul -->
+          <div id="modal-map-seoul" class="stage-card" onclick="selectModalMap('SEOUL')">
+            <div class="stage-card-preview">
+              <svg width="60" height="42" viewBox="0 0 60 42">
+                <!-- River Curve -->
+                <path d="M4,28 Q30,12 56,22" fill="none" stroke="#93c5fd" stroke-width="5" stroke-linecap="round" opacity="0.45"/>
+                <!-- Line crossing river -->
+                <path d="M14,10 L26,20 L38,20 L48,34" fill="none" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M44,10 L38,20 L22,34" fill="none" stroke="#dc2626" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="38" cy="20" r="4.5" fill="#ffffff" stroke="#0f172a" stroke-width="2"/>
+                <polygon points="14,7 18,13 10,13" fill="#16a34a"/>
+                <circle cx="48" cy="34" r="3" fill="#16a34a"/>
+              </svg>
+            </div>
+            <div class="stage-name">서울 특별전</div>
+            <div class="stage-sub">25개 자치구</div>
+            <div class="stage-record" id="modal-seoul-record">기록 확인 중...</div>
+          </div>
+
+          <!-- 3. Gyeonggi -->
+          <div id="modal-map-gyeonggi" class="stage-card" onclick="selectModalMap('GYEONGGI')">
+            <div class="stage-card-preview">
+              <svg width="60" height="42" viewBox="0 0 60 42">
+                <!-- Ring Line -->
+                <ellipse cx="30" cy="21" rx="20" ry="14" fill="none" stroke="#ca8a04" stroke-width="3" stroke-dasharray="32 4"/>
+                <path d="M12,21 L48,21" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/>
+                <circle cx="30" cy="21" r="4" fill="#ffffff" stroke="#0f172a" stroke-width="2"/>
+                <circle cx="12" cy="21" r="3" fill="#2563eb"/>
+                <circle cx="48" cy="21" r="3" fill="#2563eb"/>
+                <rect x="27" y="5" width="6" height="6" fill="#ca8a04"/>
+              </svg>
+            </div>
+            <div class="stage-name">경기도 전선</div>
+            <div class="stage-sub">31개 시·군</div>
+            <div class="stage-record" id="modal-gyeonggi-record">기록 확인 중...</div>
+          </div>
+        </div>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: #475569; text-align: left; line-height: 1.5;">
+          🏆 <b>승리 목표:</b> 적의 모든 거점 섬멸 (0곳)<br>
+          ⏱️ <b>기록:</b> 클리어 최단 소요 시간이 영구 보존됩니다.
+        </div>
+
+        <button class="start-btn" id="start-btn" onclick="onStartBtnClick()">
+          작전 개시 ➔
+        </button>
+      </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div class="modal-overlay" id="end-modal" style="display: none;">
+      <div class="modal-card" style="max-width: 440px;">
+        <h2 id="end-title" style="font-size: 22px; font-weight: 800; margin-bottom: 12px;">게임 종료</h2>
+        <div id="end-message" style="margin-bottom: 20px;"></div>
+        <button class="start-btn" onclick="location.reload()">새로운 작전 시작 ➔</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js?v=20261011_speedlimit05_v9"></script>
+</body>
+</html>

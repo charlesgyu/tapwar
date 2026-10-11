@@ -1,0 +1,12 @@
+# Ignore temporary Python processing scripts
+*.py
+__pycache__/
+.DS_Store
+
+# Ignore unused raw map files
+assets/korea.svg
+assets/korean_sigungu.json
+assets/korean_peninsula.json
+assets/korean_peninsula_50m.json
+assets/korea_cities_full.json
+assets/south_korea_simplified_zones.json
