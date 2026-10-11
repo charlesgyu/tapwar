@@ -555,6 +555,7 @@ function loadSelectedMap(mapKey) {
         orbs: 0,
         claimant: null,       // 중립 지역 줄다리기 게이지의 현재 우세 진영 (orbs = 게이지 크기)
         protectedUntil: 0,    // 점령 직후 보호 종료 시각 (게임 시간, 초)
+        focusOptOut: false,   // 집중 포화 중 드래그 지정 공격으로 집중 포화에서 빠진 지역
         targetZones: [],
         isManualTarget: false,
         lastShotTime: 0,
@@ -1235,6 +1236,8 @@ function handleZoneDoubleClick(targetZone) {
     });
   }
 
+  // 새 집중 포화: 이전에 드래그로 빠졌던 지역도 모두 다시 참여
+  rawZones.forEach(z => { z.focusOptOut = false; });
   currentFocusZone = targetZone;
   focusFireCooldown = 0; // 쿨타임 없음!
 
@@ -1392,6 +1395,8 @@ function onPointerUp(e) {
       } else {
         dragSourceZone.isManualTarget = true;
         dragSourceZone.targetZones = [endZone];
+        // [집중 포화 중 지정 공격]: 다른 지역을 지정하면 이 지역만 집중 포화에서 빠짐 (여러 지역 중복 가능)
+        dragSourceZone.focusOptOut = !!currentFocusZone && endZone !== currentFocusZone;
       }
     }
   }
@@ -1704,6 +1709,14 @@ function updateAI(currentTime) {
   });
 }
 
+// 아군 집중 포화 참여 대상인지: 전선 기지(메인은 완전점령이어도 참여), 드래그로 빠진 지역 제외
+function shouldJoinPlayerFocus(zone) {
+  const focus = currentFocusZone;
+  if (!focus || zone.owner !== OWNER.PLAYER || zone === focus || zone.focusOptOut) return false;
+  if (isFullyConquered(zone) && !isMainZone(zone)) return false;
+  return true;
+}
+
 // Continuous automatic troop generation (adjusted by gameSpeed 1x, 2x, 4x!)
 function updateOrbSpawners(currentTime) {
   // 완전점령지역 보유 수에 따른 생성 간격 가속 보너스 계산 (1개당 -0.1초 단축, 최소 간격 0.2초=200ms 한계)
@@ -1723,6 +1736,13 @@ function updateOrbSpawners(currentTime) {
 
   rawZones.forEach(zone => {
     if (zone.owner === OWNER.NEUTRAL) return;
+
+    // [집중 포화 유지]: 집중 포화가 진행 중이면 참여 대상 기지(메인 포함, 도중에 새로 점령한 전선 포함)는
+    // 드래그로 따로 지정하지 않은 한 계속 집중 포화 목표를 사격
+    if (shouldJoinPlayerFocus(zone) && !(zone.targetZones.length === 1 && zone.targetZones[0] === currentFocusZone)) {
+      zone.isManualTarget = true;
+      zone.targetZones = [currentFocusZone];
+    }
 
     // '완전 점령' Check: 수동 지정(전국 집중포화 등)이 아닌 경우에만 잉여 생산 중단!
     if (isFullyConquered(zone) && !zone.isManualTarget && !isMainZone(zone)) {
