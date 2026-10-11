@@ -3615,7 +3615,7 @@ function showStageView() {
   const conceptEl = document.getElementById('country-concept');
   if (conceptEl) {
     conceptEl.hidden = !concept;
-    conceptEl.innerHTML = concept ? `<b>${concept[0]}</b> · ${concept[1]}` : '';
+    conceptEl.innerHTML = concept ? `<b>${concept[0]}</b>${concept[1]}` : '';
   }
   // 나라가 바뀌면 그 나라 캠페인의 다음 맵을 고름
   if ((MAP_CONFIGS[selectedModalMapKey].country || 'KR') !== c.key) selectedModalMapKey = getNextStageKey();
