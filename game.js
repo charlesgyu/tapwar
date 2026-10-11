@@ -200,7 +200,12 @@ function isMainZone(zone) {
 // 특수 기술을 쓴 완전점령 지역은 공격 제한이 풀려 메인 지역처럼 싸움:
 // 공격력 2, 맞닿은 목표가 없으면 전선 원거리 공격, 지정 공격·집중 포화 참여 (특수 기술 면역은 메인만)
 // 지역을 잃으면(중립이 되면) 해제
+// [실험] 특수 기술 없음: 완전점령 지역은 곧바로 메인처럼 공격 (원거리 + 공격력 2).
+// 충전 게이지·번쩍임 표시는 그대로. false 로 바꾸면 특수 기술 버전으로 돌아감 (저장본: save/special-skill 브랜치)
+const EXPERIMENT_NO_SKILL = true;
+
 function isUnleashed(zone) {
+  if (EXPERIMENT_NO_SKILL && zone.owner !== OWNER.NEUTRAL && isFullyConquered(zone)) return true;
   return isMainZone(zone) || (!!zone.unleashed && zone.unleashedOwner === zone.owner);
 }
 function unleashZone(zone) {
@@ -295,6 +300,7 @@ function pickSpecialSkillTargets(candidates) {
 
 // 특수 기술 발동: 충전 완료()된 아군 완전점령 지역을 탭하면 그 지역의 1발을 사용
 function useSpecialSkill(sourceZone) {
+  if (EXPERIMENT_NO_SKILL) return;
   if (currentState !== GAME_STATE.PLAYING) return;
   if (!sourceZone || sourceZone.owner !== OWNER.PLAYER || sourceZone.chargeState !== 'ready') return;
   if (gameElapsedTime < playerSkillGcdUntil) return; // 글로벌 쿨타임 중 (지역 위 시계 방향 쿨타임 표시)
@@ -345,6 +351,7 @@ function useSpecialSkill(sourceZone) {
 
 // 적군 AI 전용 특수 기술 (아군과 동일한 충전 규칙)
 function useEnemySpecialSkill() {
+  if (EXPERIMENT_NO_SKILL) return;
   if (currentState !== GAME_STATE.PLAYING) return;
 
   if (getReadySkillZones(OWNER.ENEMY).length === 0) return;
@@ -1638,7 +1645,7 @@ function onPointerUp(e) {
     const endZone = findZoneAtWorld(worldMousePos.x, worldMousePos.y);
 
     // [특수 기술]: 드래그 없이 아군 완전점령 지역을 탭하면 그 지역의 충전 1발 사용
-    if (endZone === dragSourceZone && isFullyConquered(endZone)) {
+    if (!EXPERIMENT_NO_SKILL && endZone === dragSourceZone && isFullyConquered(endZone)) {
       const guide = document.getElementById('status-guide');
       if (!skillUnlocked[OWNER.PLAYER]) {
         const n = rawZones.filter(z => z.owner === OWNER.PLAYER && isFullyConquered(z)).length;
@@ -2994,8 +3001,8 @@ const TUTORIAL = [
     text: '아무 지역이나 두 번 탭하면 전선의 내 지역이 모두 그곳을 쏴요. 점령할 때까지 계속돼요.',
     art: svgWrap(hex(45, 45, TC.blue, TC.blueS) + hex(45, 105, TC.blue, TC.blueS) + hex(160, 75, TC.red, TC.blueS, 4) +
       orb(88, 57) + orb(114, 65) + orb(88, 93) + orb(114, 85)) },
-  { title: '완전 점령과 특수 기술',
-    text: '이웃을 모두 차지하면 초록색이 돼요. 진한 초록일 때 탭하면 적 3곳의 피를 깎고, 그 지역은 기지처럼 멀리까지 강하게 공격해요.',
+  { title: EXPERIMENT_NO_SKILL ? '완전 점령' : '완전 점령과 특수 기술',
+    text: (EXPERIMENT_NO_SKILL ? '이웃을 모두 차지하면 초록색이 돼요. 그 지역은 기지처럼 멀리까지 두 배로 강하게 공격해요.' : '이웃을 모두 차지하면 초록색이 돼요. 진한 초록일 때 탭하면 적 3곳의 피를 깎고, 그 지역은 기지처럼 멀리까지 강하게 공격해요.'),
     art: svgWrap(hex(60, 48, TC.blue, TC.blueS) + hex(150, 48, TC.blue, TC.blueS) + hex(60, 102, TC.blue, TC.blueS) +
       hex(150, 102, TC.blue, TC.blueS) + hex(105, 75, TC.grn2, TC.grnS, 3) ) },
   { title: '적 기지를 무너뜨려요',
