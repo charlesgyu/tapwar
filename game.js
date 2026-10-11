@@ -2347,14 +2347,15 @@ function drawMapTitle(ctx) {
   const size = Math.max(18, Math.min(area.w, area.h) * 0.085);
   ctx.save();
   ctx.font = `900 ${size}px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
-  ctx.textAlign = 'left';
+  ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.lineJoin = 'round';
   ctx.lineWidth = size * 0.12;
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-  ctx.strokeText(cfg.label, area.x, area.y);
+  const tx = area.x + area.w / 2; // 지도 가운데 위
+  ctx.strokeText(cfg.label, tx, area.y);
   ctx.fillStyle = 'rgba(30, 41, 59, 0.55)';
-  ctx.fillText(cfg.label, area.x, area.y);
+  ctx.fillText(cfg.label, tx, area.y);
   ctx.restore();
 }
 
