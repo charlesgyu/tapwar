@@ -118,36 +118,17 @@ function formatTimeString(sec) {
 function updateRecordDisplays() {
   const records = getBattleRecords();
   
-  // 시작 모달 내 전장별 기록 뱃지 업데이트
-  const koreaRecordEl = document.getElementById('modal-korea-record');
-  if (koreaRecordEl) {
-    const k = records.KOREA;
-    if (k && k.cleared && k.bestTime !== null) {
-      koreaRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#b45309">${formatTimeString(k.bestTime)}</span> (${k.clearCount}회)`;
+  // 시작 모달 내 전장별 기록 뱃지 업데이트 (MAP_CONFIGS의 모든 전장)
+  Object.keys(MAP_CONFIGS).forEach(key => {
+    const el = document.getElementById(`modal-${key.toLowerCase()}-record`);
+    if (!el) return;
+    const r = records[key];
+    if (r && r.cleared && r.bestTime !== null) {
+      el.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#b45309">${formatTimeString(r.bestTime)}</span> (${r.clearCount}회)`;
     } else {
-      koreaRecordEl.innerHTML = `<span style="color:#94a3b8">미평정 (기록 없음)</span>`;
+      el.innerHTML = `<span style="color:#94a3b8">미평정 (기록 없음)</span>`;
     }
-  }
-
-  const seoulRecordEl = document.getElementById('modal-seoul-record');
-  if (seoulRecordEl) {
-    const s = records.SEOUL;
-    if (s && s.cleared && s.bestTime !== null) {
-      seoulRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#b45309">${formatTimeString(s.bestTime)}</span> (${s.clearCount}회)`;
-    } else {
-      seoulRecordEl.innerHTML = `<span style="color:#94a3b8">미평정 (기록 없음)</span>`;
-    }
-  }
-
-  const gyeonggiRecordEl = document.getElementById('modal-gyeonggi-record');
-  if (gyeonggiRecordEl) {
-    const g = records.GYEONGGI;
-    if (g && g.cleared && g.bestTime !== null) {
-      gyeonggiRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#b45309">${formatTimeString(g.bestTime)}</span> (${g.clearCount}회)`;
-    } else {
-      gyeonggiRecordEl.innerHTML = `<span style="color:#94a3b8">미평정 (기록 없음)</span>`;
-    }
-  }
+  });
 
   // 상단 HUD 최고 기록 뱃지
   const curRecord = records[currentMapKey];
@@ -512,9 +493,20 @@ const MAP_CONFIGS = {
     name: '경기도 전선 (31개 시·군)',
     file: 'assets/gyeonggi_exact_zones.json',
     bounds: { minLng: 126.487, maxLng: 127.8755, minLat: 36.8639, maxLat: 38.3114 },
-    aspectRatio: 0.82
+    aspectRatio: 0.82,
+    guide: '🌲 경기도 전선 작전: 시작할 시·군(예: 수원, 고양, 용인 등)을 탭하세요!'
+  },
+  // 행정구가 4곳뿐이라 행정동(44개) 단위로 구성 (tools/make_dong_map.py)
+  SUWON: {
+    name: '수원시 전선 (44개 행정동)',
+    file: 'assets/suwon_exact_zones.json',
+    bounds: { minLng: 126.8973, maxLng: 127.1206, minLat: 37.1942, maxLat: 37.3816 },
+    aspectRatio: 0.95,
+    guide: '🏯 수원시 작전: 시작할 행정동(예: 행궁동, 광교1동, 영통1동 등)을 탭하세요!'
   }
 };
+MAP_CONFIGS.KOREA.guide = '🗺️ 전국 전선 작전: 시작할 거점 도시를 탭하세요!';
+MAP_CONFIGS.SEOUL.guide = '🏙️ 서울특별시 작전: 시작할 자치구(예: 강남구, 마포구, 종로구 등)를 탭하세요!';
 
 let currentMapBounds = { ...MAP_CONFIGS.KOREA.bounds };
 
@@ -643,10 +635,7 @@ function loadSelectedMap(mapKey) {
       const timerEl = document.getElementById('match-timer');
       if (timerEl) timerEl.innerText = '00:00';
 
-      const guideText = currentMapKey === 'SEOUL' 
-        ? '🏙️ 서울특별시 작전: 시작할 구(예: 강남구, 마포구, 종로구 등)를 탭하세요!' 
-        : '🗺️ 전국 전선 작전: 시작할 거점(예: 의령, 전주, 서울 등)을 탭하세요!';
-      document.getElementById('status-guide').innerText = guideText;
+      document.getElementById('status-guide').innerText = cfg.guide || '';
     })
     .catch(err => console.error('Failed to load map data:', err));
 }
@@ -1559,13 +1548,8 @@ let selectedModalMapKey = 'KOREA';
 
 function selectModalMap(mapKey) {
   selectedModalMapKey = mapKey;
-  const cards = {
-    KOREA: document.getElementById('modal-map-korea'),
-    SEOUL: document.getElementById('modal-map-seoul'),
-    GYEONGGI: document.getElementById('modal-map-gyeonggi')
-  };
-  Object.keys(cards).forEach(key => {
-    const card = cards[key];
+  Object.keys(MAP_CONFIGS).forEach(key => {
+    const card = document.getElementById(`modal-map-${key.toLowerCase()}`);
     if (card) {
       if (key === mapKey) {
         card.classList.add('active');
@@ -1587,12 +1571,10 @@ function selectModalMap(mapKey) {
 window.selectModalMap = selectModalMap;
 
 function updateMapButtonsUI(mapKey) {
-  const kBtn = document.getElementById('map-btn-korea');
-  const sBtn = document.getElementById('map-btn-seoul');
-  const gBtn = document.getElementById('map-btn-gyeonggi');
-  if (kBtn) kBtn.classList.toggle('active', mapKey === 'KOREA');
-  if (sBtn) sBtn.classList.toggle('active', mapKey === 'SEOUL');
-  if (gBtn) gBtn.classList.toggle('active', mapKey === 'GYEONGGI');
+  Object.keys(MAP_CONFIGS).forEach(key => {
+    const btn = document.getElementById(`map-btn-${key.toLowerCase()}`);
+    if (btn) btn.classList.toggle('active', mapKey === key);
+  });
 }
 window.updateMapButtonsUI = updateMapButtonsUI;
 
@@ -1601,15 +1583,7 @@ function switchBattlefield(mapKey) {
   loadSelectedMap(mapKey);
   updateMapButtonsUI(mapKey);
   const guideEl = document.getElementById('status-guide');
-  if (guideEl) {
-    if (mapKey === 'SEOUL') {
-      guideEl.innerText = '🏙️ 서울특별시 작전: 시작할 자치구(예: 강남구, 마포구, 종로구 등)를 탭하세요!';
-    } else if (mapKey === 'GYEONGGI') {
-      guideEl.innerText = '🌲 경기도 전선 작전: 시작할 시·군(예: 수원, 고양, 용인 등)을 탭하세요!';
-    } else {
-      guideEl.innerText = '🗺️ 전국 전선 작전: 시작할 거점 도시를 탭하세요!';
-    }
-  }
+  if (guideEl && MAP_CONFIGS[mapKey]) guideEl.innerText = MAP_CONFIGS[mapKey].guide;
 }
 window.switchBattlefield = switchBattlefield;
 
@@ -1620,15 +1594,7 @@ function onStartBtnClick() {
     switchBattlefield(selectedModalMapKey);
   } else {
     const guideEl = document.getElementById('status-guide');
-    if (guideEl) {
-      if (selectedModalMapKey === 'SEOUL') {
-        guideEl.innerText = '🏙️ 시작할 아군 자치구(예: 강남구, 마포구, 종로구 등)를 탭하세요!';
-      } else if (selectedModalMapKey === 'GYEONGGI') {
-        guideEl.innerText = '🌲 시작할 아군 시·군(예: 수원, 고양, 용인 등)을 탭하세요!';
-      } else {
-        guideEl.innerText = '🗺️ 시작할 아군 거점 도시를 탭하세요!';
-      }
-    }
+    if (guideEl && MAP_CONFIGS[selectedModalMapKey]) guideEl.innerText = MAP_CONFIGS[selectedModalMapKey].guide;
   }
 }
 window.onStartBtnClick = onStartBtnClick;

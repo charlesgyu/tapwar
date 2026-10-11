@@ -148,6 +148,13 @@
     }
 
     /* Special Skill Button (Mini Metro FAB Style) */
+    .map-credit {
+      margin-top: 10px;
+      font-size: 9.5px;
+      color: #94a3b8;
+      line-height: 1.4;
+    }
+
     /* Minimap */
     .minimap-card {
       background: rgba(246, 245, 240, 0.94);
@@ -259,7 +266,7 @@
     /* Mini Metro Stage Cards Grid */
     .stage-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 10px;
       margin-bottom: 18px;
     }
@@ -400,6 +407,7 @@
             <button class="speed-btn active" id="map-btn-korea" onclick="switchBattlefield('KOREA')">전국</button>
             <button class="speed-btn" id="map-btn-seoul" onclick="switchBattlefield('SEOUL')">서울</button>
             <button class="speed-btn" id="map-btn-gyeonggi" onclick="switchBattlefield('GYEONGGI')">경기</button>
+            <button class="speed-btn" id="map-btn-suwon" onclick="switchBattlefield('SUWON')">수원</button>
           </div>
         </div>
 
@@ -488,6 +496,23 @@
             <div class="stage-sub">31개 시·군</div>
             <div class="stage-record" id="modal-gyeonggi-record">기록 확인 중...</div>
           </div>
+
+          <!-- 4. Suwon (행정동 단위) -->
+          <div id="modal-map-suwon" class="stage-card" onclick="selectModalMap('SUWON')">
+            <div class="stage-card-preview">
+              <svg width="60" height="42" viewBox="0 0 60 42">
+                <!-- Hwaseong Fortress wall ring -->
+                <path d="M14,30 L10,18 L20,8 L36,6 L48,14 L50,28 L38,36 L22,36 Z" fill="none" stroke="#16a34a" stroke-width="3" stroke-linejoin="round"/>
+                <path d="M20,22 L40,22" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/>
+                <circle cx="30" cy="22" r="4" fill="#ffffff" stroke="#0f172a" stroke-width="2"/>
+                <rect x="17" y="5" width="6" height="6" fill="#16a34a"/>
+                <rect x="33" y="3" width="6" height="6" fill="#16a34a"/>
+              </svg>
+            </div>
+            <div class="stage-name">수원시 전선</div>
+            <div class="stage-sub">44개 행정동</div>
+            <div class="stage-record" id="modal-suwon-record">기록 확인 중...</div>
+          </div>
         </div>
 
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: #475569; text-align: left; line-height: 1.5;">
@@ -498,6 +523,7 @@
         <button class="start-btn" id="start-btn" onclick="onStartBtnClick()">
           작전 개시 ➔
         </button>
+        <p class="map-credit">지도 경계: 통계청 SGIS(공공누리 제1유형) · vuski/admdongkor(CC BY 4.0) · southkorea/seoul-maps</p>
       </div>
     </div>
 

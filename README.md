@@ -109,3 +109,21 @@ python tools/build_map.py assets/새맵.json
 - 이웃 구역 사이 **틈·겹침 제거**, 이웃끼리 **완전히 같은 경계선 꼭짓점 공유** → 화면에서 경계선이 어긋나지 않음
 - 구역 이름·구슬 출발점을 구역의 **시각적 중앙**(가장 안쪽 지점)에 배치
 - 인접 관계(links)에 실제로 맞닿은 구역 추가 (기존 연결은 유지)
+
+### 맵 구역 단위 원칙
+- 기본은 **행정구역(시·군·구)** 단위로 나눕니다.
+- 행정구가 너무 적어 게임이 성립하지 않는 시(예: 수원시 = 4개 구)는 **행정동** 단위로 나눕니다. 대략 15개 미만이면 동 단위를 사용합니다.
+- 행정동 맵 만들기:
+  ```bash
+  curl -L -o HangJeongDong.geojson \
+    https://raw.githubusercontent.com/vuski/admdongkor/master/ver20260701/HangJeongDong_ver20260701.geojson
+  python tools/make_dong_map.py HangJeongDong.geojson "경기도 수원시" "수원시 44개 행정동 전선" assets/suwon_exact_zones.json \
+    --backdrop-from assets/south_korea_exact_zones.json
+  python tools/build_map.py assets/suwon_exact_zones.json
+  ```
+  그다음 `game.js`의 `MAP_CONFIGS`에 전장을 추가하고(`bounds`는 생성된 JSON의 `meta.bounds`), `index.html`에 카드(`modal-map-<키>`)와 버튼(`map-btn-<키>`)을 추가합니다.
+
+### 지도 데이터 출처 (앱 화면에 표시 필수)
+- 통계청 SGIS 행정구역·행정동 경계 (공공누리 제1유형: 출처 표시 시 상업적 이용 가능)
+- vuski/admdongkor 행정동 경계 가공본 (CC BY 4.0) — https://github.com/vuski/admdongkor
+- southkorea/seoul-maps 서울 자치구 경계 (KOSTAT 2013)
