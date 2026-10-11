@@ -2,7 +2,7 @@
 # 대륙 맵: bash tools/build_world_maps.sh <ne_50m_admin_0.geojson> [python] [ne_10m_admin_1.geojson]  (유럽은 build_europe_maps.sh 의 '유럽 전체')
 set -e
 A0=$1; PY=${2:-python3}; A1=${3:-ne_10m_admin_1_states_provinces.geojson}
-mk() { $PY tools/make_ne_map.py world "$A0" - "$@"; }
+mk() { $PY tools/make_ne_map.py world "$A0" "$A1" "$@"; }
 mk "아메리카" assets/w_america_zones.json --continent "North America|South America" --island-radius 4 --min-area 0.5 --max-lat 72 --simplify 0.08
 mk "아프리카" assets/w_africa_zones.json --continent Africa --exclude LSO --island-radius 3 --min-area 0.3 --simplify 0.05
 mk "아시아" assets/w_asia_zones.json --continent "Asia" --extra RUS --island-radius 6 --min-area 0.5 --max-lat 72 --simplify 0.1

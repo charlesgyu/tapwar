@@ -27,9 +27,88 @@ sys.path.insert(0, os.path.dirname(__file__))
 from make_region_map import split_until  # noqa: E402
 
 
+# 나라별 맵을 큰 지방(레지옹·주) 단위로 묶을 때의 한글 이름 (Natural Earth admin-1 의 region 값)
+REGION_KO = {
+    # 프랑스
+    'Hauts-de-France': '오드프랑스', 'Grand Est': '그랑테스트', "Provence-Alpes-Côte-d'Azur": '프로방스',
+    'Auvergne-Rhône-Alpes': '오베르뉴론알프', 'Nouvelle-Aquitaine': '누벨아키텐', 'Occitanie': '옥시타니',
+    'Bourgogne-Franche-Comté': '부르고뉴프랑슈콩테', 'Pays de la Loire': '페이드라루아르', 'Bretagne': '브르타뉴',
+    'Normandie': '노르망디', 'Corse': '코르시카', 'Centre-Val de Loire': '상트르발드루아르', 'Île-de-France': '일드프랑스(파리)',
+    # 이탈리아
+    "Valle d'Aosta": '발레다오스타', 'Piemonte': '피에몬테', 'Lombardia': '롬바르디아', 'Trentino-Alto Adige': '트렌티노',
+    'Liguria': '리구리아', 'Emilia-Romagna': '에밀리아로마냐', 'Marche': '마르케', 'Veneto': '베네토',
+    'Friuli-Venezia Giulia': '프리울리', 'Abruzzo': '아브루초', 'Molise': '몰리세', 'Apulia': '풀리아',
+    'Basilicata': '바실리카타', 'Calabria': '칼라브리아', 'Campania': '캄파니아', 'Lazio': '라치오(로마)',
+    'Toscana': '토스카나', 'Sicily': '시칠리아', 'Sardegna': '사르데냐', 'Umbria': '움브리아',
+    # 스페인
+    'Foral de Navarra': '나바라', 'País Vasco': '바스크', 'Aragón': '아라곤', 'Cataluña': '카탈루냐',
+    'Extremadura': '에스트레마두라', 'Andalucía': '안달루시아', 'Galicia': '갈리시아', 'Castilla y León': '카스티야이레온',
+    'Valenciana': '발렌시아', 'Murcia': '무르시아', 'Asturias': '아스투리아스', 'Cantabria': '칸타브리아',
+    'Islas Baleares': '발레아레스', 'La Rioja': '라리오하', 'Castilla-La Mancha': '카스티야라만차', 'Madrid': '마드리드',
+    # 영국
+    'Northern Ireland': '북아일랜드', 'West Wales and the Valleys': '웨일스 서부', 'East Wales': '웨일스 동부',
+    'North West': '잉글랜드 북서부', 'West Midlands': '웨스트미들랜즈', 'South West': '잉글랜드 남서부',
+    'East': '잉글랜드 동부', 'North East': '잉글랜드 북동부', 'Yorkshire and the Humber': '요크셔',
+    'East Midlands': '이스트미들랜즈', 'South East': '잉글랜드 남동부', 'Greater London': '런던',
+    'Highlands and Islands': '하일랜드', 'North Eastern': '스코틀랜드 북동부', 'Eastern': '스코틀랜드 동부',
+    'South Western': '스코틀랜드 남서부',
+}
+
 # 공식 국호 대신 흔히 쓰는 한글 이름
 COMMON_KO = {'CHN': '중국', 'PRK': '북한', 'KOR': '한국', 'TWN': '대만', 'USA': '미국', 'GBR': '영국',
              'COD': '콩고민주공화국', 'COG': '콩고', 'CAF': '중앙아프리카', 'ZAF': '남아공', 'DOM': '도미니카공화국'}
+
+
+# 데이터상 실효 지배 기준으로 들어간 곳을 국제적으로 인정된 나라로 (크림·세바스토폴 → 우크라이나)
+DEJURE = {'UA-43': 'UKR', 'UA-40': 'UKR'}
+KO_FIX = {'키예프': '키이우', '세바스토폴': '세바스토폴', '크림 자치 공화국': '크림'}
+
+
+def adm0_of(p):
+    return DEJURE.get(p.get('iso_3166_2'), p['adm0_a3'])
+
+
+def merge_enclaves(groups):
+    """다른 구역에 완전히 둘러싸인 구역(베를린·키이우 등)은 둘러싼 구역과 합침: 이름 '베를린·브란덴부르크'"""
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
+    geo = {k: unary_union([Polygon(r).buffer(0) for r in g['polygons']]) for k, g in groups.items()}
+    shell = {k: unary_union([Polygon(p.exterior) for p in (g.geoms if g.geom_type == 'MultiPolygon' else [g])]).buffer(1e-4)
+             for k, g in geo.items()}
+    for k in list(groups):
+        for h in groups:
+            if h != k and k in groups and shell[h].contains(geo[k]):
+                groups[h]['polygons'] += groups[k]['polygons']
+                groups[h]['dongs'] += groups[k]['dongs']
+                groups[h]['name'] = groups[h]['name'] if groups[k]['name'] == groups[h]['name'] else f"{groups[k]['name']}·{groups[h]['name']}"
+                del groups[k]
+                break
+    return groups
+
+
+def merge_until(groups, target):
+    """가장 작은 구역을 맞닿은 이웃 중 가장 작은 곳과 합치기를 target 개가 될 때까지 반복.
+    합친 구역 이름은 가장 넓은 원래 구역의 이름"""
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
+    zs = {}
+    for k, g in groups.items():
+        geom = unary_union([Polygon(r).buffer(0) for r in g['polygons']])
+        zs[k] = {'id': k, 'name': g['name'], 'polygons': g['polygons'], 'dongs': g['dongs'], 'geom': geom,
+                 'parts': [(geom.area, g['name'])]}
+    while len(zs) > target:
+        small = min(zs.values(), key=lambda z: z['geom'].area)
+        nb = [z for z in zs.values() if z is not small and z['geom'].buffer(0.01).intersects(small['geom'])]
+        if not nb:  # 섬처럼 이웃이 없으면 가장 가까운 곳
+            nb = [min((z for z in zs.values() if z is not small), key=lambda z: z['geom'].distance(small['geom']))]
+        t = min(nb, key=lambda z: z['geom'].area)
+        t['polygons'] = t['polygons'] + small['polygons']
+        t['dongs'] = t['dongs'] + small['dongs']
+        t['geom'] = unary_union([t['geom'], small['geom']])
+        t['parts'] += small['parts']
+        t['name'] = max(t['parts'])[1]
+        del zs[small['id']]
+    return zs
 
 
 def polys_of(geom):
@@ -41,7 +120,7 @@ def main():
     from shapely.ops import unary_union
 
     ap = argparse.ArgumentParser()
-    ap.add_argument('mode', choices=['us', 'europe', 'world'])
+    ap.add_argument('mode', choices=['us', 'europe', 'world', 'country'])
     ap.add_argument('src1'); ap.add_argument('src2')
     ap.add_argument('title'); ap.add_argument('out')
     ap.add_argument('--units', default='')
@@ -49,6 +128,7 @@ def main():
     ap.add_argument('--exclude', default='', help='뺄 나라 A3')
     ap.add_argument('--extra', default='', help='대륙과 상관없이 넣을 나라 A3')
     ap.add_argument('--target', type=int, default=0)
+    ap.add_argument('--by-region', action='store_true', help='country 모드: 1급 행정구역을 region(큰 지방) 단위로 묶음')
     ap.add_argument('--island-radius', type=float, default=1.5)
     ap.add_argument('--min-area', type=float, default=0.0)
     ap.add_argument('--max-lat', type=float, default=90)
@@ -78,10 +158,26 @@ def main():
             if units and st not in units:
                 continue
             subs.append((st, ko.get(st, st), fips, clean(shape(f['geometry']))))
+    elif a.mode == 'country':
+        # 한 나라: 1급 행정구역(한글 이름) 하나하나가 구역. 많으면 --target 까지 작은 것부터 이웃과 합침
+        feats1 = json.load(open(a.src1, encoding='utf-8'))['features']
+        for f in feats1:
+            p = f['properties']
+            if adm0_of(p) not in units:
+                continue
+            sid = p.get('iso_3166_2') or p['name']
+            if a.by_region:
+                reg = p.get('region')
+                if reg not in REGION_KO:
+                    continue  # 해외 영토·세우타 등 목록에 없는 지방은 제외
+                subs.append((reg, REGION_KO[reg], sid, clean(shape(f['geometry']))))
+            else:
+                nm = p.get('name_ko') or p['name']
+                subs.append((sid, KO_FIX.get(nm, nm), sid, clean(shape(f['geometry']))))
     elif a.mode == 'europe':
         ko = {f['properties']['ADM0_A3']: f['properties']['NAME_KO'] for f in json.load(open(a.src2, encoding='utf-8'))['features']}
         for f in json.load(open(a.src1, encoding='utf-8'))['features']:
-            p = f['properties']; c = p['adm0_a3']
+            p = f['properties']; c = adm0_of(p)
             if units and c not in units:
                 continue
             subs.append((c, ko.get(c, p.get('admin')), p.get('iso_3166_2') or p['name'], clean(shape(f['geometry']))))
@@ -106,7 +202,14 @@ def main():
                         ring = [[x + 360, y] for x, y in ring]
                     parts.append(Polygon(ring))
                 g = unary_union([pp.buffer(0) for pp in parts])
-            subs.append((c, COMMON_KO.get(c, p['NAME_KO']), c, clean(g)))
+            subs.append((c, COMMON_KO.get(c, p['NAME_KO']), c, g))
+
+    if a.mode == 'world' and a.src2 != '-':
+        crimea = unary_union([shape(f['geometry']).buffer(0) for f in json.load(open(a.src2, encoding='utf-8'))['features']
+                              if f['properties'].get('iso_3166_2') in DEJURE])
+        subs = [(k, n, i, (g.difference(crimea) if k == 'RUS' else g.union(crimea) if k == 'UKR' else g)) for k, n, i, g in subs]
+    if a.mode == 'world':
+        subs = [(k, n, i, clean(g)) for k, n, i, g in subs]
 
     # 위도 범위·먼 섬 제외 (조각 단위)
     pieces = []
@@ -146,7 +249,11 @@ def main():
         groups = {k: g for k, g in groups.items()
                   if sum(Polygon(r).area for r in g['polygons']) >= a.min_area}
 
-    if a.target and len(groups) < a.target:
+    if a.mode == 'country':
+        groups = merge_enclaves(groups)
+    if a.mode == 'country' and a.target and len(groups) > a.target:
+        groups = merge_until(groups, a.target)
+    elif a.target and len(groups) < a.target:
         groups = split_until(groups, a.target)
 
     zones = []
@@ -157,7 +264,7 @@ def main():
     xs = [x for z in zones for r in z['polygons'] for x, _ in r]; ys = [y for z in zones for r in z['polygons'] for _, y in r]
     bounds = {'minLng': round(min(xs) - a.margin, 3), 'maxLng': round(max(xs) + a.margin, 3),
               'minLat': round(min(ys) - a.margin, 3), 'maxLat': round(max(ys) + a.margin, 3)}
-    src = {'us': 'US Census 카운티 경계(plotly/datasets) · Natural Earth', 'europe': 'Natural Earth', 'world': 'Natural Earth'}[a.mode]
+    src = {'us': 'US Census 카운티 경계(plotly/datasets) · Natural Earth'}.get(a.mode, 'Natural Earth')
     out = {'meta': {'name': a.title, 'bounds': bounds, 'level': a.mode, 'source': src}, 'zones': zones, 'links': []}
     json.dump(out, open(a.out, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
     print(f'{a.out}: {a.mode} {len(zones)}개 bounds={bounds}')
