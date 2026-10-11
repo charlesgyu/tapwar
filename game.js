@@ -1139,14 +1139,19 @@ class FlyingOrb {
     // 맞는 쪽: 철벽(상대 구슬 50%)
     const power = itemHitPower(attack, own, t);
     const wasRival = t.owner !== OWNER.NEUTRAL && t.owner !== own;
-    applyOrbHit(t, own, power, this.sourceZone);
+    const wasMine = fighters(own) && t.owner === own;
+    // 튕긴 구슬은 출발 지역(맞은 지역)을 '쏜 곳'으로 치지 않음 (재배치 등에 영향 없게)
+    applyOrbHit(t, own, power, this.pierceStep ? null : this.sourceZone);
     // [아이템 관통탄] 맞닿은 공격·원거리 공격 모두: 맞힌 상대 지역에서 옆의 상대 지역으로 튕겨 나감
     // 첫 타격 → 두 번째(원래 공격력의 50%) → 세 번째(30%)까지. 이미 맞힌 지역으로는 튕기지 않음
     // (도착할 때마다 파워샷·크리티컬·철벽 등은 그대로 계산)
+    // 내 지역에 맞으면(회복) 옆의 피가 닳은 내 지역으로 튕겨 회복 (같은 50% → 30%)
     const step = this.pierceStep || 0;
-    if (wasRival && step < PIERCE_RATIOS.length && hasItem(own, 'pierce')) {
+    if ((wasRival || wasMine) && step < PIERCE_RATIOS.length && hasItem(own, 'pierce')) {
       const hit = this.pierceHit || [this.sourceZone];
-      const next = t.neighbors.filter(n => !hit.includes(n) && n !== t && n.owner !== OWNER.NEUTRAL && n.owner !== own);
+      const next = t.neighbors.filter(n => !hit.includes(n) && n !== t && (wasRival
+        ? (n.owner !== OWNER.NEUTRAL && n.owner !== own)
+        : (n.owner === own && n.orbs < n.maxOrbs)));
       if (next.length) {
         const n2 = next[Math.floor(Math.random() * next.length)];
         const basePower = this.pierceBase || this.power;
@@ -2569,7 +2574,7 @@ const ITEM_ICON = {
 const ITEMS = [
   { key: 'rapid', name: '속사', desc: '상대 땅으로 가는 원거리 구슬이 빠르게 (발사 간격 그대로)' },
   { key: 'power', name: '파워샷', desc: '상대 땅 공격력 2배 (상대 색이 조금이라도 있는 곳)' },
-  { key: 'pierce', name: '관통탄', desc: '옆 상대 지역으로 두 번 더 튕김 (50% → 30%)' },
+  { key: 'pierce', name: '관통탄', desc: '옆 지역으로 두 번 더 튕김 (50% → 30%). 내 지역에 쏘면 옆의 다친 내 지역도 회복' },
   { key: 'fortress', name: '철벽', desc: '상대 공격을 50%만 받음' },
   { key: 'rebuild', name: '재건', desc: '5초마다 내 모든 지역 피 +2' },
   { key: 'reflect', name: '반사 방패', desc: '30% 확률로 상대 구슬을 쏜 곳으로 되돌림' },
