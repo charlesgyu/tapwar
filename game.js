@@ -844,18 +844,20 @@ class FlyingOrb {
 // 2회 단일 Draw Call로 전체 비행 구슬을 렌더링하는 초경량 일괄 렌더러 (미니 메트로 스타일)
 function drawFlyingOrbs(ctx) {
   if (flyingOrbs.length === 0) return;
+  // 확대해도 구슬이 지역을 덮지 않도록 배율에 따라 크기 보정 (화면상 크기 증가를 완만하게)
+  const k = 1 / Math.sqrt(view.scale);
 
   // 1. Draw Player Orbs (Solid Cobalt Blue + Clean White Border)
   ctx.save();
   ctx.fillStyle = '#2563eb';
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = 1.2 * k;
   ctx.beginPath();
   let pCount = 0;
   for (let i = 0; i < flyingOrbs.length; i++) {
     const orb = flyingOrbs[i];
     if (!orb.isDead && orb.owner === OWNER.PLAYER) {
-      const r = orb.power > 1 ? 4.5 : 3.2;
+      const r = (orb.power > 1 ? 4.5 : 3.2) * k;
       ctx.moveTo(orb.x + r, orb.y);
       ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
       pCount++;
@@ -873,7 +875,7 @@ function drawFlyingOrbs(ctx) {
   for (let i = 0; i < flyingOrbs.length; i++) {
     const orb = flyingOrbs[i];
     if (!orb.isDead && orb.owner === OWNER.ENEMY) {
-      const r = orb.power > 1 ? 4.5 : 3.2;
+      const r = (orb.power > 1 ? 4.5 : 3.2) * k;
       ctx.moveTo(orb.x + r, orb.y);
       ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
       eCount++;
@@ -2089,8 +2091,18 @@ function drawExactDistrictsMap(ctx) {
       const st = styles[i];
       if (!st || !filter(zone)) continue;
       ctx.strokeStyle = st.stroke;
-      ctx.lineWidth = st.width;
+      ctx.lineWidth = st.width / view.scale; // 확대해도 화면상 테두리 두께 유지
+      if (zone.owner === OWNER.NEUTRAL) {
+        ctx.stroke(zone.path);
+        continue;
+      }
+      // 점령지 테두리: 두 배 굵기로 그린 뒤 면을 다시 칠해 바깥쪽 절반만 남김
+      // (여러 조각으로 된 지역(예: 수원 4개 구)의 안쪽 경계선이 보이지 않도록)
+      ctx.lineWidth *= 2;
       ctx.stroke(zone.path);
+      ctx.fillStyle = st.base;
+      ctx.fill(zone.path);
+      fillZoneFromBottom(ctx, zone, st.ratio, st.gauge);
     }
   };
   strokePass(z => z.owner === OWNER.NEUTRAL);
@@ -2100,7 +2112,7 @@ function drawExactDistrictsMap(ctx) {
   // 3. 선택(드래그 시작) 지역 강조
   if (dragSourceZone && dragSourceZone.path) {
     ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 2.6;
+    ctx.lineWidth = 2.6 / view.scale;
     ctx.stroke(dragSourceZone.path);
   }
 
@@ -2146,7 +2158,7 @@ function drawExactDistrictsMap(ctx) {
     ctx.save();
     ctx.globalAlpha = 1 - t;
     ctx.strokeStyle = zone.flashColor;
-    ctx.lineWidth = 3 + 5 * (1 - t);
+    ctx.lineWidth = (3 + 5 * (1 - t)) / view.scale;
     ctx.stroke(zone.path);
     ctx.restore();
   }
@@ -2187,18 +2199,145 @@ function drawExactDistrictsMap(ctx) {
 }
 
 // 지역 이름만 작게 표시 (상태는 색으로 표현하므로 숫자·아이콘 표시 없음)
+// 글자 크기는 확대 배율과 무관하게 화면에서 일정하게 유지하고,
+// 화면상 지역이 이름보다 작으면 이름을 생략해 겹침 방지
+const ZONE_LABEL_PX = 10;
 function drawZoneBadges(ctx) {
-  const isSeoul = currentMapKey === 'SEOUL';
-  const baseSize = isSeoul ? 11 : 9;
-  const fontSize = Math.max(8, Math.min(14, baseSize * Math.sqrt(view.scale)));
+  const fontSize = ZONE_LABEL_PX / view.scale;
   ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = 'rgba(30, 41, 59, 0.55)';
   for (let i = 0; i < rawZones.length; i++) {
     const zone = rawZones[i];
+    if (!zone.bbox) continue;
+    const w = ctx.measureText(zone.name).width;
+    if (zone.bbox.maxX - zone.bbox.minX < w * 0.9) continue;
     ctx.fillText(zone.name, zone.cx, zone.cy);
   }
+}
+
+// -------------------------------------------------------------
+// MINIMAP: 왼쪽 아래에 전체 맵 전황(지역 색 그대로) + 현재 보고 있는 화면 영역 표시
+// 미니맵을 탭하거나 드래그하면 그 위치로 화면 이동
+// -------------------------------------------------------------
+const MINIMAP_MAX_W = 140;
+const MINIMAP_MAX_H = 170;
+const MINIMAP_REDRAW_MS = 100; // 리소스 절약: 초당 10회만 다시 그림
+const minimapCanvas = document.getElementById('minimap');
+const minimapCard = document.getElementById('minimap-card');
+const minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+let minimapLayout = null; // { scale, area, cssW, cssH }
+let lastMinimapDraw = 0;
+let lastMinimapHidden = null;
+
+function layoutMinimap() {
+  if (!minimapCanvas) return null;
+  const area = getMapArea();
+  const scale = Math.min(MINIMAP_MAX_W / area.w, MINIMAP_MAX_H / area.h);
+  const cssW = Math.round(area.w * scale);
+  const cssH = Math.round(area.h * scale);
+  const dpr = window.devicePixelRatio || 1;
+  if (minimapCanvas.width !== Math.round(cssW * dpr) || minimapCanvas.height !== Math.round(cssH * dpr)) {
+    minimapCanvas.width = Math.round(cssW * dpr);
+    minimapCanvas.height = Math.round(cssH * dpr);
+    minimapCanvas.style.width = cssW + 'px';
+    minimapCanvas.style.height = cssH + 'px';
+  }
+  return { scale, area, cssW, cssH, dpr };
+}
+
+function drawMinimap(timestamp) {
+  if (!minimapCtx) return;
+  const hidden = currentState !== GAME_STATE.PLAYING || rawZones.length === 0;
+  if (hidden !== lastMinimapHidden) {
+    lastMinimapHidden = hidden;
+    minimapCard.hidden = hidden;
+  }
+  if (hidden || timestamp - lastMinimapDraw < MINIMAP_REDRAW_MS) return;
+  lastMinimapDraw = timestamp;
+
+  const L = layoutMinimap();
+  minimapLayout = L;
+  const m = minimapCtx;
+  const k = L.scale * L.dpr;
+  m.setTransform(1, 0, 0, 1, 0, 0);
+  m.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+  // 월드 좌표 그대로 그리도록 변환 (지역 Path2D 재사용)
+  m.setTransform(k, 0, 0, k, -L.area.x * k, -L.area.y * k);
+  m.lineJoin = 'round';
+
+  backdropZones.forEach(b => {
+    if (!b.path) return;
+    m.fillStyle = '#e2e0d8';
+    m.fill(b.path);
+  });
+
+  for (let i = 0; i < rawZones.length; i++) {
+    const zone = rawZones[i];
+    if (!zone.path) continue;
+    const st = getZoneStyle(zone);
+    m.fillStyle = st.base;
+    m.fill(zone.path);
+    m.strokeStyle = st.ratio >= 1 ? st.gauge : st.base;
+    m.lineWidth = 2 / L.scale;
+    m.stroke(zone.path);
+    fillZoneFromBottom(m, zone, st.ratio, st.gauge);
+  }
+  // 경계선 (얇게)
+  m.lineWidth = 0.6 / L.scale;
+  m.strokeStyle = 'rgba(120, 113, 108, 0.45)';
+  for (let i = 0; i < rawZones.length; i++) {
+    if (rawZones[i].path) m.stroke(rawZones[i].path);
+  }
+  if (playerMainZone && playerMainZone.owner === OWNER.PLAYER && playerMainZone.path) {
+    m.strokeStyle = '#ffffff';
+    m.lineWidth = 1.6 / L.scale;
+    m.stroke(playerMainZone.path);
+  }
+  if (currentMapKey === 'SEOUL' && hanRiverPath) {
+    m.fillStyle = '#bfe5fa';
+    m.fill(hanRiverPath);
+  }
+
+  // 현재 보고 있는 화면 영역
+  const tl = screenToWorld(0, 0);
+  const br = screenToWorld(canvas.width, canvas.height);
+  m.strokeStyle = '#0f172a';
+  m.lineWidth = 1.6 / L.scale;
+  m.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+  m.fillStyle = 'rgba(15, 23, 42, 0.08)';
+  m.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+}
+
+// 미니맵 탭/드래그 → 해당 월드 지점이 화면 중앙에 오도록 이동
+function moveViewToMinimapPoint(clientX, clientY) {
+  if (!minimapLayout) return;
+  const rect = minimapCanvas.getBoundingClientRect();
+  const wx = minimapLayout.area.x + (clientX - rect.left) / minimapLayout.scale;
+  const wy = minimapLayout.area.y + (clientY - rect.top) / minimapLayout.scale;
+  view.offsetX = (canvas.width / 2 - wx) * view.scale;
+  view.offsetY = (canvas.height / 2 - wy) * view.scale;
+  lastMinimapDraw = 0; // 즉시 갱신
+}
+
+if (minimapCanvas) {
+  let minimapDragging = false;
+  minimapCanvas.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    minimapDragging = true;
+    try { minimapCanvas.setPointerCapture(e.pointerId); } catch (err) {}
+    moveViewToMinimapPoint(e.clientX, e.clientY);
+  });
+  minimapCanvas.addEventListener('pointermove', e => {
+    if (!minimapDragging) return;
+    e.preventDefault();
+    moveViewToMinimapPoint(e.clientX, e.clientY);
+  });
+  const endMinimapDrag = () => { minimapDragging = false; };
+  minimapCanvas.addEventListener('pointerup', endMinimapDrag);
+  minimapCanvas.addEventListener('pointercancel', endMinimapDrag);
 }
 
 // Render Loop
@@ -2277,6 +2416,8 @@ function gameLoop(timestamp) {
     drawParticles(ctx);
 
     ctx.restore();
+
+    drawMinimap(timestamp);
   } catch (err) {
     console.error('gameLoop error:', err);
   } finally {

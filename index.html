@@ -148,6 +148,27 @@
     }
 
     /* Special Skill Button (Mini Metro FAB Style) */
+    /* Minimap */
+    .minimap-card {
+      background: rgba(246, 245, 240, 0.94);
+      border: 1.5px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 4px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+      pointer-events: auto;
+      touch-action: none;
+      line-height: 0;
+    }
+    .minimap-card[hidden] {
+      display: none;
+    }
+    #minimap {
+      display: block;
+      width: auto;
+      height: auto;
+      cursor: pointer;
+    }
+
     /* Surrender Button (2단계 확인: 첫 탭 ➔ 확인 상태, 3초 안에 다시 탭 ➔ 항복) */
     .bottom-actions {
       display: flex;
@@ -388,10 +409,9 @@
 
       <!-- Bottom Bar -->
       <div class="bottom-bar">
-        <div class="guide-tip">
-          🎯 <b>조작법:</b> 지역 더블탭 ➔ <b>전국 일제 집중 포격!</b><br>
-          💥 <b>특수 기술:</b> 충전된 완전점령 지역(💥) 탭<br>
-          📱 <b>화면 조작:</b> 두 손가락 핀치 ➔ <b>줌 인/아웃</b> | 드래그 ➔ <b>이동</b>
+        <!-- Minimap: 전체 전황 + 현재 보고 있는 화면 영역. 탭/드래그로 화면 이동 -->
+        <div class="minimap-card" id="minimap-card" hidden>
+          <canvas id="minimap"></canvas>
         </div>
 
         <div class="bottom-actions">
