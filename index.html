@@ -476,7 +476,25 @@
     }
     .start-card .start-btn:hover { background: #fde047; transform: none; }
     .start-card .start-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #eab308; }
+    .start-card { position: relative; }
     .start-card .map-credit { margin-top: 14px; }
+    .info-btn {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 1.5px solid #d6d3cd;
+      background: transparent;
+      color: #a8a29e;
+      font: 700 12px/1 Georgia, serif;
+      font-style: italic;
+      cursor: pointer;
+      padding: 0;
+    }
+    .info-btn:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
+    .map-credit[hidden] { display: none; }
   </style>
 </head>
 <body>
@@ -561,7 +579,9 @@
         </div>
 
         <button class="start-btn" id="start-btn" onclick="onStartBtnClick()">시작</button>
-        <p class="map-credit">지도: 통계청 SGIS · vuski/admdongkor (CC BY 4.0) · southkorea/seoul-maps</p>
+        <!-- 지도 데이터 출처(라이선스상 표시 필수): 첫 화면에는 ⓘ 버튼만, 누르면 표시 -->
+        <button class="info-btn" id="info-btn" aria-label="지도 출처" onclick="document.getElementById('map-credit').hidden = !document.getElementById('map-credit').hidden">i</button>
+        <p class="map-credit" id="map-credit" hidden>지도: 통계청 SGIS(공공누리 제1유형) · vuski/admdongkor (CC BY 4.0) · southkorea/seoul-maps</p>
       </div>
     </div>
 
