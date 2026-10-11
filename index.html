@@ -603,6 +603,18 @@
       cursor: pointer;
     }
     .sheet-overlay { z-index: 300; }
+    .top-timer {
+      font: 800 15px/1 ui-monospace, "SF Mono", Menlo, monospace;
+      color: #1e293b;
+      font-variant-numeric: tabular-nums;
+      padding: 8px 16px;
+    }
+    .top-timer[hidden], .status-banner[hidden] { display: none; }
+    .speed2-btn { font-size: 15px; font-weight: 900; color: #1e293b; min-width: 54px; }
+    .speed2-btn.on { background: #1e293b; color: #fde047; border-color: #1e293b; }
+    .purchase-price { font-size: 22px; font-weight: 900; color: #1e293b; margin: -6px 0 16px; font-variant-numeric: tabular-nums; }
+    .purchase-close { display: block; margin: 10px auto 0; }
+    #confirm-base .tut-nav { margin-top: 4px; }
     .sheet-card, .tutorial-card {
       max-width: 340px;
       border-radius: 26px;
@@ -646,6 +658,7 @@
       cursor: pointer;
     }
     .tut-prev[disabled] { visibility: hidden; }
+    .tut-prev { white-space: nowrap; min-width: 72px; }
     .tutorial-card .start-btn { flex: 1; border-radius: 999px; background: #fde047; box-shadow: 0 5px 0 #eab308; font-size: 16px; }
     .sheet-card .start-btn { border-radius: 999px; background: #fde047; box-shadow: 0 5px 0 #eab308; }
   </style>
@@ -659,30 +672,14 @@
     <div id="ui-layer">
       <!-- Top Bar -->
       <div class="top-bar">
-        <div class="top-bar-main">
-          <div class="badge badge-player">🔵 <span id="player-count">1</span> <span id="player-full-count" style="color: #16a34a; font-size: 11px;">(🛡️0)</span></div>
-          <div style="color: #cbd5e1; font-weight: 400;">|</div>
-          <div class="badge badge-enemy">🔴 <span id="enemy-count">1</span> <span id="enemy-full-count" style="color: #dc2626; font-size: 11px;">(🛡️0)</span></div>
-          <div style="color: #cbd5e1; font-weight: 400;">|</div>
-          
-          <!-- Stopwatch Timer & Record Badge -->
-          <div class="badge" style="font-family: monospace; font-size: 13px; color: #b45309;">
-            ⏱️ <span id="match-timer">00:00</span>
-            <span id="best-timer-hud" style="color: #94a3b8; font-size: 10px; margin-left: 2px;">(미평정)</span>
-          </div>
-
-          <!-- Speed Controls -->
-          <div class="speed-control-group">
-            <button class="speed-btn active" id="speed-1x" onclick="setGameSpeed(1)">1x</button>
-            <button class="speed-btn" id="speed-2x" onclick="setGameSpeed(2)">2x</button>
-            <button class="speed-btn" id="speed-4x" onclick="setGameSpeed(4)">4x</button>
-            <button class="speed-btn" id="speed-10x" onclick="setGameSpeed(10)">10x</button>
-          </div>
-
+        <!-- 상단: 플레이 시간만 표시 -->
+        <div class="top-bar-main top-timer" id="top-timer" hidden>
+          <span id="match-timer">00:00</span>
         </div>
 
         <!-- Guide status banner -->
-        <div class="status-banner" id="status-guide">내 거점을 드래그하여 목표 지역으로 연결하세요!</div>
+        <!-- 본진 고르는 동안에만 표시 -->
+        <div class="status-banner" id="status-guide" hidden>본진을 선택하세요</div>
       </div>
 
       <!-- Bottom Bar -->
@@ -697,6 +694,8 @@
         <!-- Home: 시작 지역을 고르는 동안에만 표시, 전장 선택 화면으로 돌아감 -->
         <button id="home-btn" class="surrender-btn" onclick="goHome()" hidden>← 홈</button>
         <button id="surrender-btn" class="surrender-btn" onclick="onSurrenderClick()" hidden>🏳️ 항복</button>
+        <!-- 게임 중 ×2 배속 (유료: 구매 전에는 결제 화면으로) -->
+        <button id="speed2-btn" class="surrender-btn speed2-btn" onclick="onSpeed2Click()" hidden>×2</button>
         </div>
       </div>
     </div>
@@ -735,6 +734,31 @@
         <h2 class="sheet-title" id="sheet-title"></h2>
         <p class="sheet-text" id="sheet-text"></p>
         <button class="start-btn" onclick="closeSheet()">확인</button>
+      </div>
+    </div>
+
+    <!-- 본진 지정 확인 -->
+    <div class="modal-overlay sheet-overlay" id="confirm-base" style="display: none;">
+      <div class="modal-card sheet-card">
+        <div class="sheet-icon">🏰</div>
+        <h2 class="sheet-title" id="confirm-base-name"></h2>
+        <p class="sheet-text">본진으로 지정하시겠습니까?</p>
+        <div class="tut-nav">
+          <button class="tut-prev" onclick="cancelBaseSelection()">취소</button>
+          <button class="start-btn tut-next" onclick="confirmBaseSelection()">확인</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 결제 화면 (인앱 구매) -->
+    <div class="modal-overlay sheet-overlay" id="purchase" style="display: none;" onclick="if (event.target === this) closePurchase()">
+      <div class="modal-card sheet-card">
+        <div class="sheet-icon" id="purchase-icon">⏩</div>
+        <h2 class="sheet-title" id="purchase-title"></h2>
+        <p class="sheet-text" id="purchase-text"></p>
+        <div class="purchase-price" id="purchase-price"></div>
+        <button class="start-btn" id="purchase-buy" onclick="buyProduct()">구매하기</button>
+        <button class="link-btn purchase-close" onclick="closePurchase()">닫기</button>
       </div>
     </div>
 

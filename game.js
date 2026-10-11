@@ -650,6 +650,9 @@ function loadSelectedMap(mapKey) {
       view.offsetX = 0;
       view.offsetY = 0;
       view.maxScale = cfg.maxScale || 3.5;
+      setGameSpeed(1);
+      const s2 = document.getElementById('speed2-btn');
+      if (s2) s2.classList.remove('on');
       pendingStartZone = null;
 
       updateZoneScreenPositions();
@@ -1311,8 +1314,8 @@ function beginGameAtZone(zone) {
   document.getElementById('status-guide').innerText = `${zone.name} 기지 확보! 작전 개시! (적 전면 섬멸 작전)`;
 }
 
-const START_GUIDE_TEXT = '🗺️ 지도를 둘러보고 시작할 지역을 탭 → 한 번 더 탭하면 시작';
-let pendingStartZone = null; // 시작 구역 후보 (한 번 더 탭하면 시작)
+const START_GUIDE_TEXT = '본진을 선택하세요';
+let pendingStartZone = null; // 본진 후보 (확인 팝업에서 확인하면 시작)
 let pointerDownPos = { x: 0, y: 0 };
 const TAP_MOVE_TOLERANCE = 8; // 이 거리(px) 이하로 움직이면 탭으로 판정
 
@@ -1322,17 +1325,92 @@ function startPan(coords) {
   view.panStartY = coords.clientY - view.offsetY;
 }
 
+// 본진 선택: 지역을 탭하면 '○○ / 본진으로 지정하시겠습니까?' 확인 팝업
 function handleStartSelectTap(zone) {
-  const guide = document.getElementById('status-guide');
   if (!zone || zone.isHidden) return;
-  if (zone === pendingStartZone) {
-    pendingStartZone = null;
-    beginGameAtZone(zone);
-    return;
-  }
   pendingStartZone = zone;
   flashZone(zone, ZONE_COLORS.main);
-  if (guide) guide.innerText = `[${zone.name}] 선택 · 한 번 더 탭하면 여기서 시작`;
+  document.getElementById('confirm-base-name').textContent = zone.name;
+  document.getElementById('confirm-base').style.display = 'flex';
+}
+function confirmBaseSelection() {
+  document.getElementById('confirm-base').style.display = 'none';
+  const zone = pendingStartZone;
+  pendingStartZone = null;
+  if (zone && currentState === GAME_STATE.SELECT_START) beginGameAtZone(zone);
+}
+function cancelBaseSelection() {
+  document.getElementById('confirm-base').style.display = 'none';
+  pendingStartZone = null;
+}
+window.confirmBaseSelection = confirmBaseSelection;
+window.cancelBaseSelection = cancelBaseSelection;
+
+// -------------------------------------------------------------
+// 유료 기능 (인앱 구매). 지금은 앱스토어 결제 연결 전이라 결제 화면만 표시
+// -------------------------------------------------------------
+const PRODUCTS = {
+  speed2: { icon: '⏩', title: '×2 배속', text: '게임을 2배 빠르게 진행해요.\n한 번 구매하면 모든 맵에서 계속 쓸 수 있어요.' }
+};
+const OWNED_KEY = 'tapwar_owned_products';
+let purchaseProductId = null;
+
+function isOwned(id) {
+  try { return (JSON.parse(localStorage.getItem(OWNED_KEY) || '[]')).includes(id); } catch (e) { return false; }
+}
+function openPurchase(id) {
+  const p = PRODUCTS[id];
+  if (!p) return;
+  purchaseProductId = id;
+  document.getElementById('purchase-icon').textContent = p.icon;
+  document.getElementById('purchase-title').textContent = p.title;
+  document.getElementById('purchase-text').textContent = p.text;
+  // TODO(IAP): StoreKit에서 받은 현지 가격 표시
+  document.getElementById('purchase-price').textContent = '';
+  const buy = document.getElementById('purchase-buy');
+  buy.textContent = '구매하기';
+  buy.disabled = false;
+  document.getElementById('purchase').style.display = 'flex';
+}
+function closePurchase() {
+  document.getElementById('purchase').style.display = 'none';
+  purchaseProductId = null;
+}
+function buyProduct() {
+  // TODO(IAP): StoreKit 결제 → 성공 시 OWNED_KEY에 저장(구매 복원 시에도 동일)
+  const buy = document.getElementById('purchase-buy');
+  buy.textContent = '앱스토어 결제 연결 후 구매할 수 있어요';
+  buy.disabled = true;
+}
+window.closePurchase = closePurchase;
+window.buyProduct = buyProduct;
+
+// 게임 중 ×2 버튼: 구매했으면 1배속↔2배속 전환, 아니면 결제 화면
+function onSpeed2Click() {
+  if (!isOwned('speed2')) {
+    openPurchase('speed2');
+    return;
+  }
+  setGameSpeed(gameSpeed === 2 ? 1 : 2);
+  document.getElementById('speed2-btn').classList.toggle('on', gameSpeed === 2);
+}
+window.onSpeed2Click = onSpeed2Click;
+
+// 상단 플레이 시간·본진 안내·×2 버튼 표시 상태
+let lastHudKey = '';
+function updateHudVisibility() {
+  const modalOpen = document.getElementById('start-modal').style.display !== 'none';
+  const confirmOpen = document.getElementById('confirm-base').style.display !== 'none';
+  const playing = currentState === GAME_STATE.PLAYING;
+  const choosing = currentState === GAME_STATE.SELECT_START && !modalOpen && !introAnim && !confirmOpen;
+  const key = `${playing}|${choosing}`;
+  if (key === lastHudKey) return;
+  lastHudKey = key;
+  document.getElementById('top-timer').hidden = !playing;
+  document.getElementById('speed2-btn').hidden = !playing;
+  const guide = document.getElementById('status-guide');
+  guide.hidden = !choosing;
+  if (choosing) guide.innerText = START_GUIDE_TEXT;
 }
 
 let dragSourceZone = null;
@@ -2967,6 +3045,7 @@ function gameLoop(timestamp) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     updateSurrenderButtonVisibility();
     updateHomeButtonVisibility();
+    updateHudVisibility();
 
     if (currentState === GAME_STATE.PLAYING) {
       // 작전 소요 시간 측정 (스톱워치 기록계, 배속 연동)
