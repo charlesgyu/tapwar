@@ -1491,7 +1491,7 @@ window.cancelBaseSelection = cancelBaseSelection;
 // 유료 기능 (인앱 구매). 지금은 앱스토어 결제 연결 전이라 결제 화면만 표시
 // -------------------------------------------------------------
 const PRODUCTS = {
-  speed2: { title: '×2 배속', text: '게임을 2배 빠르게 진행해요.\n한 번 구매하면 모든 맵에서 계속 쓸 수 있어요.' }
+  speed2: { title: '배속', text: '게임을 2배·4배 빠르게 진행해요.\n한 번 구매하면 모든 맵에서 계속 쓸 수 있어요.' }
 };
 const OWNED_KEY = 'tapwar_owned_products';
 let purchaseProductId = null;
@@ -1526,27 +1526,23 @@ window.closePurchase = closePurchase;
 window.buyProduct = buyProduct;
 
 // 게임 중 ×2 버튼: 구매했으면 1배속↔2배속 전환, 아니면 결제 화면
-// [테스트용] true 이면 배속 버튼이 결제 없이 1배 → 2배 → 4배 → 1배로 바뀜. 정식 출시 전 false 로 (4배속 없음, 2배속은 유료)
+// 배속(유료 상품 하나): 구매하면 버튼을 누를 때마다 ×1 → ×2 → ×4 → ×1
+// [테스트용] DEV_TEST_SPEED 가 true 면 구매 없이도 사용 가능. 정식 출시 전 false 로
 const DEV_TEST_SPEED = true;
 
 function onSpeed2Click() {
   const btn = document.getElementById('speed2-btn');
-  if (DEV_TEST_SPEED) {
-    const next = gameSpeed === 1 ? 2 : gameSpeed === 2 ? 4 : 1;
-    setGameSpeed(next);
-    btn.textContent = `×${next}`; // 현재 배속 표시
-    btn.classList.toggle('on', next > 1);
-    return;
-  }
-  if (!isOwned('speed2')) {
+  if (!DEV_TEST_SPEED && !isOwned('speed2')) {
     openPurchase('speed2');
     return;
   }
-  setGameSpeed(gameSpeed === 2 ? 1 : 2);
-  btn.classList.toggle('on', gameSpeed === 2);
+  const next = gameSpeed === 1 ? 2 : gameSpeed === 2 ? 4 : 1;
+  setGameSpeed(next);
+  btn.textContent = `×${next}`; // 현재 배속 표시
+  btn.classList.toggle('on', next > 1);
 }
 window.onSpeed2Click = onSpeed2Click;
-if (DEV_TEST_SPEED) { const b = document.getElementById('speed2-btn'); if (b) b.textContent = `×${gameSpeed}`; }
+if (DEV_TEST_SPEED || isOwned('speed2')) { const b = document.getElementById('speed2-btn'); if (b) b.textContent = `×${gameSpeed}`; }
 
 // 상단 플레이 시간·본진 안내·×2 버튼 표시 상태
 let lastHudKey = '';
