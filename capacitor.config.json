@@ -1,0 +1,10 @@
+{
+  "appId": "com.tapwar.game",
+  "appName": "TAPWAR",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": false,
+    "backgroundColor": "#f6f5f0"
+  }
+}

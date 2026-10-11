@@ -126,3 +126,35 @@ python tools/build_map.py assets/새맵.json
 - 통계청 SGIS 행정구역·행정동 경계 (공공누리 제1유형: 출처 표시 시 상업적 이용 가능)
 - vuski/admdongkor 행정동 경계 가공본 (CC BY 4.0) — https://github.com/vuski/admdongkor
 - southkorea/seoul-maps 서울 자치구 경계 (KOSTAT 2013)
+
+---
+
+## 📱 iOS 앱 빌드 (Capacitor)
+
+웹 게임(`index.html`, `game.js`, `assets/`)을 Capacitor로 감싼 네이티브 iOS 프로젝트가 `ios/`에 있습니다.
+
+### 준비물 (Mac)
+- Xcode 최신 버전 (App Store)
+- Node.js 20 이상
+- Apple 개발자 계정 (실기기 테스트는 무료 Apple ID로도 가능, App Store 출시는 연 $99)
+
+### 실행 순서
+```bash
+git pull
+npm install
+npm run ios:sync      # 웹 파일을 www/로 복사하고 iOS 프로젝트에 반영
+npm run ios:open      # Xcode 열기
+```
+Xcode에서:
+1. 왼쪽 `App` 프로젝트 → **Signing & Capabilities** → Team에 본인 Apple ID 선택
+2. **Bundle Identifier**를 고유한 값으로 변경 (예: `com.본인이름.tapwar`) — `capacitor.config.json`의 `appId`도 같은 값으로
+3. 아이폰을 USB로 연결하고 상단에서 기기 선택 → ▶ 실행
+   (처음 실행 시 아이폰 설정 → 일반 → VPN 및 기기 관리에서 개발자 앱 신뢰 필요)
+
+### 게임 코드를 수정한 뒤
+`npm run ios:sync` 를 다시 실행하면 앱에 반영됩니다.
+
+### 설정
+- 세로 화면 고정, 앱 이름 `TAPWAR`
+- 앱 아이콘: `ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png` (1024×1024)
+- 스플래시: `ios/App/App/Assets.xcassets/Splash.imageset/`

@@ -13,3 +13,7 @@ assets/south_korea_simplified_zones.json
 
 # 맵 정리 도구는 커밋
 !tools/*.py
+
+# Capacitor / Node
+node_modules/
+www/
