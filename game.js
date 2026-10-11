@@ -1714,7 +1714,10 @@ function onPointerUp(e) {
     // 아군 지역 지정 = 방어 지원(피 회복). 피가 가득 차면 자동 공격으로 복귀
     if (sourceCanAttack && endZone && endZone.id !== dragSourceZone.id) {
       // 완전 점령된 적 기지는 일반 공격 불가!
-      if (!canAttackTarget(dragSourceZone, endZone)) {
+      if (!canRangeAttack(dragSourceZone) && !dragSourceZone.neighbors.includes(endZone)) {
+        // 원거리 지정은 완전점령 지역만 가능: 맞닿지 않은 곳은 무시
+        flashZone(dragSourceZone, SKILL_DENIED_FLASH);
+      } else if (!canAttackTarget(dragSourceZone, endZone)) {
         document.getElementById('status-guide').innerText = `[${endZone.name}]은(는) 완전 점령된 철벽 기지입니다! [즉시 점령] 아이템으로만 공략 가능합니다.`;
         createImmuneShieldParticles(endZone.cx, endZone.cy);
       } else {
@@ -3038,7 +3041,7 @@ const TUTORIAL = [
       `<rect x="115" y="80" width="60" height="30" fill="${TC.blue}" clip-path="url(#tut-c1)"/>` +
       orb(97, 75) + orb(110, 75)) },
   { title: '지정 공격',
-    text: '내 지역을 꾹 눌러 원하는 곳으로 끌면 그곳을 공격해요. 내 땅으로 끌면 피를 채워 줘요.',
+    text: '내 지역을 꾹 눌러 맞닿은 곳으로 끌면 그곳을 공격해요. 내 땅으로 끌면 피를 채워 줘요. 먼 곳은 초록 지역만 지정할 수 있어요.',
     art: svgWrap(hex(55, 70, TC.blue, TC.blueS) + hex(155, 70, TC.red, TC.redS) +
       `<path d="M60 70 L148 70" stroke="${TC.blueS}" stroke-width="3" stroke-dasharray="6 6"/>` ) },
   { title: '집중 포화',
