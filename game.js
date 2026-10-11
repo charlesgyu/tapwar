@@ -2356,6 +2356,19 @@ function drawMapTitle(ctx) {
   ctx.strokeText(cfg.label, tx, area.y);
   ctx.fillStyle = 'rgba(30, 41, 59, 0.55)';
   ctx.fillText(cfg.label, tx, area.y);
+
+  // 게임 진행 시간: 맵 이름 아래에 진한 검정 디지털 시계 글꼴로 새김 (게임 시작 후)
+  if (currentState === GAME_STATE.PLAYING || currentState === GAME_STATE.GAME_OVER) {
+    const tSize = size * 0.62;
+    ctx.font = `700 ${tSize}px "SF Mono", ui-monospace, Menlo, "Courier New", monospace`;
+    ctx.lineWidth = tSize * 0.14;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    const ty = area.y + size * 1.12;
+    const t = formatTimeString(gameElapsedTime);
+    ctx.strokeText(t, tx, ty);
+    ctx.fillStyle = '#0b0b0b';
+    ctx.fillText(t, tx, ty);
+  }
   ctx.restore();
 }
 
