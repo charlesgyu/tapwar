@@ -1,0 +1,244 @@
+"""
+TAPWAR 맵 데이터 정리 도구 (모든 맵 공통, 새 맵 추가 시에도 반드시 실행)
+
+사용법:
+    pip install "shapely>=2.1"
+    python tools/build_map.py assets/새맵.json [assets/다른맵.json ...]
+
+하는 일:
+1. 한 지역이 여러 조각(예: 서울 = 25개 구)으로 되어 있으면 하나의 덩어리로 병합 (섬은 별도 유지)
+2. 이웃 지역 사이의 틈·겹침을 제거해 빈틈 없는 커버리지로 만듦
+   - 겹침: 먼저 처리한 지역 우선으로 잘라냄
+   - 틈: 가장 길게 맞닿은 이웃 지역에 편입
+3. 커버리지 단순화(coverage_simplify)로 이웃 지역이 **완전히 같은 경계선 꼭짓점**을 공유하게 만듦
+   → 화면에서 구역 경계선이 어긋나지 않고 정확히 겹침
+4. 지역 이름·구슬 출발 위치(lng/lat)를 지역의 시각적 중심(가장 안쪽 지점, polylabel)으로 설정
+5. 인접 관계(links)를 실제로 맞닿은 경계 기준으로 다시 계산
+   (기존 links 중 섬 연결처럼 맞닿지 않은 연결은 유지)
+
+6. "water"(강·호수 폴리곤)가 있으면 물을 사이에 둔 연결을 waterLinks로 표시
+   (게임에서 물 건너 이웃은 완전점령 판정에서 제외 → 물가 지역이 전략적 요충지)
+
+입력 JSON 형식: { "zones": [{ "id", "name", "lng", "lat", "polygons": [[[lng, lat], ...], ...] }],
+                  "links": [[id1, id2], ...], "backdrop"(선택): [{ "name", "polygons", ... }],
+                  "water"(선택): [{ "name", "polygons": [[[lng, lat], ...]] }] }
+"""
+import json
+import sys
+
+import shapely
+from shapely.geometry import MultiPolygon, Polygon
+from shapely.ops import polylabel, unary_union
+from shapely.validation import make_valid
+
+MERGE_EPS = 0.0008     # 같은 지역 조각 사이 틈 메우기 폭 (도 단위, 약 80m)
+GAP_EPS = 0.0015       # 지역 사이 틈 판정용 폭 (약 150m)
+SIMPLIFY_TOL = 0.0002  # 공유 경계 단순화 허용 오차 (약 20m)
+MIN_AREA = 1e-8
+WATER_EPS = 0.002        # 물 경계 판정 여유 (약 200m)
+WATER_LINK_RATIO = 0.45  # 공유 경계 중 물 위 비율이 이 이상이면 물 건너 연결
+
+
+def polygons_only(g):
+    if g.is_empty:
+        return []
+    if g.geom_type == 'Polygon':
+        return [g]
+    if hasattr(g, 'geoms'):
+        out = []
+        for p in g.geoms:
+            out.extend(polygons_only(p))
+        return out
+    return []
+
+
+def to_multi(g):
+    parts = [p for p in polygons_only(g) if p.area > MIN_AREA]
+    return MultiPolygon(parts) if parts else MultiPolygon()
+
+
+def merge_parts(rings):
+    parts = [make_valid(Polygon(r)) for r in rings if len(r) >= 3]
+    u = unary_union([p.buffer(MERGE_EPS, join_style='mitre') for p in parts]).buffer(-MERGE_EPS, join_style='mitre')
+    # 구멍 제거(외곽선만 사용)
+    return to_multi(unary_union([Polygon(p.exterior) for p in polygons_only(u)]))
+
+
+def build_coverage(geoms):
+    # 1) 겹침 제거
+    clean = []
+    acc = Polygon()
+    for g in geoms:
+        d = to_multi(make_valid(g.difference(acc)))
+        clean.append(d)
+        acc = unary_union([acc, d])
+    # 2) 틈 메우기: 전체를 살짝 부풀렸다 줄여 틈만 추출 후 가장 길게 맞닿은 지역에 편입
+    land = acc.buffer(GAP_EPS, join_style='mitre').buffer(-GAP_EPS, join_style='mitre')
+    gaps = polygons_only(make_valid(land.difference(acc)))
+    for gap in gaps:
+        if gap.area <= MIN_AREA:
+            continue
+        ring = gap.boundary.buffer(1e-6)
+        best, best_len = None, 0.0
+        for i, g in enumerate(clean):
+            l = g.boundary.intersection(ring).length
+            if l > best_len:
+                best, best_len = i, l
+        if best is not None:
+            clean[best] = to_multi(make_valid(unary_union([clean[best], gap])))
+    # 3) 모든 경계선을 교차점에서 쪼갠(노딩) 뒤 면을 재구성해, 이웃끼리 같은 꼭짓점을 공유하게 함
+    from shapely.ops import polygonize
+    lines = unary_union([g.boundary for g in clean])
+    faces = list(polygonize(lines))
+    tree = shapely.STRtree(clean)
+    buckets = [[] for _ in clean]
+    for f in faces:
+        rp = f.representative_point()
+        owner = None
+        for j in tree.query(rp):
+            if clean[j].contains(rp):
+                owner = j
+                break
+        if owner is None:
+            continue  # 커버리지 바깥(바다·구멍)
+        buckets[owner].append(f)
+    clean = [to_multi(unary_union(b)) if b else clean[i] for i, b in enumerate(buckets)]
+    # 4) 공유 경계가 동일한 꼭짓점을 갖도록 커버리지 단순화
+    simplified = shapely.coverage_simplify(clean, SIMPLIFY_TOL, simplify_boundary=False)
+    return [to_multi(make_valid(g)) for g in simplified]
+
+
+def rings_of(mp):
+    out = []
+    for p in sorted(mp.geoms, key=lambda p: -p.area):
+        coords = list(p.exterior.coords)[:-1]
+        if len(coords) >= 3:
+            out.append([[round(x, 6), round(y, 6)] for x, y in coords])
+    return out
+
+
+def label_point(mp):
+    main = max(mp.geoms, key=lambda p: p.area)
+    pt = polylabel(main, tolerance=0.0005)
+    return round(pt.x, 6), round(pt.y, 6)
+
+
+def process(path):
+    d = json.load(open(path, encoding='utf-8'))
+    zones = d['zones']
+    backdrop = d.get('backdrop', [])
+    # 배경 지역(플레이 불가)도 함께 커버리지로 만들어 플레이 지역과 경계가 맞물리게 함
+    all_geoms = build_coverage([merge_parts(z['polygons']) for z in zones] +
+                               [merge_parts(b['polygons']) for b in backdrop])
+    geoms = all_geoms[:len(zones)]
+    for b, g in zip(backdrop, all_geoms[len(zones):]):
+        b['polygons'] = rings_of(g)
+        b['lng'], b['lat'] = label_point(g)
+
+    # 다른 지역 외곽선 안에 완전히 들어간 조각(구멍 속 비지)은 외곽선만 쓰는 렌더링에서 가려지므로 제거
+    exteriors = [[Polygon(p.exterior) for p in g.geoms] for g in geoms]
+    for i, g in enumerate(geoms):
+        keep_parts = []
+        for p in g.geoms:
+            inside_other = any(e.contains(p) for j, ex in enumerate(exteriors) if j != i for e in ex)
+            if not inside_other:
+                keep_parts.append(p)
+        if keep_parts and len(keep_parts) != len(g.geoms):
+            print(f'  {zones[i]["name"]}: 다른 지역 안에 갇힌 조각 {len(g.geoms) - len(keep_parts)}개 제거')
+            geoms[i] = MultiPolygon(keep_parts)
+
+    for z, g in zip(zones, geoms):
+        z['polygons'] = rings_of(g)
+        z['lng'], z['lat'] = label_point(g)
+
+    # 인접 관계: 실제로 경계를 공유하는 지역끼리 + 기존의 비접촉 연결(섬 등) 유지
+    ids = [z['id'] for z in zones]
+    touching = set()
+    tree = shapely.STRtree(geoms)
+    for i, g in enumerate(geoms):
+        for j in tree.query(g.buffer(1e-6)):
+            if j <= i:
+                continue
+            if g.boundary.intersection(geoms[j].buffer(1e-6)).length > 1e-4:
+                touching.add((ids[i], ids[j]))
+    old = {tuple(l) for l in d.get('links', [])}
+    keep = set()
+    for a, b in old:
+        ia, ib = ids.index(a), ids.index(b)
+        if geoms[ia].distance(geoms[ib]) > 1e-4:
+            keep.add((a, b))  # 섬 연결 등 맞닿지 않은 기존 연결
+    # 게임 인접 관계 안정성을 위해 기존 연결은 모두 유지하고, 새로 맞닿은 연결만 추가
+    links = touching | old
+    # 섬처럼 어떤 구역과도 이어지지 않은 덩어리는 가장 가까운 구역과 바닷길로 연결 (고립 방지)
+    idx = {zid: i for i, zid in enumerate(ids)}
+    while True:
+        parent = list(range(len(ids)))
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+        for a2, b2 in links:
+            parent[find(idx[a2])] = find(idx[b2])
+        comps = {}
+        for i in range(len(ids)):
+            comps.setdefault(find(i), []).append(i)
+        if len(comps) <= 1:
+            break
+        groups = sorted(comps.values(), key=len, reverse=True)
+        main_grp, rest = groups[0], [i for g in groups[1:] for i in g]
+        best = min(((geoms[i].distance(geoms[j]), i, j) for i in rest for j in main_grp), key=lambda t: t[0])
+        _, i, j = best
+        links.add(tuple(sorted((ids[i], ids[j]))))
+        print(f'  바닷길 연결: {zones[i]["name"]} – {zones[j]["name"]}')
+    d['links'] = sorted([list(l) for l in links])
+
+    # 물(강·호수)로 갈라진 연결 판정: 두 구역의 공유 경계 중 물 위에 있는 비율이 높으면 '물 건너 연결'
+    # → 게임에서 완전점령 판정 시 물 건너 이웃은 세지 않음 (강이 아군 지역처럼 방어선 역할)
+    water = d.get('water', [])
+    if water:
+        import os
+        spec_path = os.path.join(os.path.dirname(__file__), 'water_spec.json')
+        eps = WATER_EPS
+        if os.path.exists(spec_path):
+            spec = json.load(open(spec_path, encoding='utf-8'))
+            eps = spec['maps'].get(os.path.basename(path), spec.get('defaultMap', {})).get('waterEps', WATER_EPS)
+        wp = unary_union([make_valid(Polygon(r)) for w in water for r in w['polygons']]).buffer(eps)
+        zg = {z['id']: g for z, g in zip(zones, geoms)}
+        # 이미 강을 깎아낸 맵(carved)은 구역이 더 이상 맞닿지 않으므로 기존 waterLinks 유지
+        wl = [list(l) for l in d.get('waterLinks', [])] if d.get('carved') else []
+        for a, b in ([] if d.get('carved') else d['links']):
+            line = zg[a].boundary.intersection(zg[b].buffer(1e-5))
+            if line.length <= 0:
+                continue
+            if line.intersection(wp).length / line.length >= WATER_LINK_RATIO:
+                wl.append([a, b])
+        # 직접 지정한 보정 (tools/water_spec.json maps[파일].waterLinksAdd / waterLinksRemove, 구역 이름 쌍)
+        if os.path.exists(spec_path):
+            mcfg = json.load(open(spec_path, encoding='utf-8'))['maps'].get(os.path.basename(path), {})
+            by_name = {z['name']: z['id'] for z in zones}
+            key = lambda a, b: tuple(sorted((a, b)))
+            wl_set = {key(a, b) for a, b in wl}
+            links_set = {key(a, b) for a, b in d['links']}
+            for na, nb in mcfg.get('waterLinksAdd', []):
+                k = key(by_name[na], by_name[nb])
+                if k not in links_set:
+                    d['links'].append(list(k))  # 물 건너 공격 가능하도록 연결도 추가
+                    links_set.add(k)
+                wl_set.add(k)
+            for na, nb in mcfg.get('waterLinksRemove', []):
+                wl_set.discard(key(by_name[na], by_name[nb]))
+            wl = [list(k) for k in wl_set]
+            d['links'] = sorted(d['links'])
+        d['waterLinks'] = sorted(wl)
+        print(f'  물 건너 연결 {len(wl)}개')
+
+    json.dump(d, open(path, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
+    print(f'{path}: zones={len(zones)} links {len(old)}→{len(d["links"])} '
+          f'(added {len(touching - old)}, removed {len(old - touching - keep)}) '
+          f'coverage_valid={bool(shapely.coverage_is_valid(all_geoms))}')
+
+
+if __name__ == '__main__':
+    for p in sys.argv[1:]:
+        process(p)

@@ -57,7 +57,6 @@ const ENEMY_CONFIG = {
   enemyFocusCooldown: 8.0,      // 적 집중포화 쿨타임 (8초)
   enemyFocusSalvo: 3,           // 적 집중포화 일제 사격 수
   enemySpecialCooldown: 20,     // 특수기술 쿨타임 (20초)
-  enemySpecialMinFull: 3,       // 특수기술 발동 필요 완전점령 지역 수 (3개)
   startingEnemyBases: 1         // 시작 적 거점 수 (1개, 플레이어와 1:1 대등)
 };
 
@@ -119,36 +118,14 @@ function formatTimeString(sec) {
 function updateRecordDisplays() {
   const records = getBattleRecords();
   
-  // 시작 모달 내 전장별 기록 뱃지 업데이트
-  const koreaRecordEl = document.getElementById('modal-korea-record');
-  if (koreaRecordEl) {
-    const k = records.KOREA;
-    if (k && k.cleared && k.bestTime !== null) {
-      koreaRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#b45309">${formatTimeString(k.bestTime)}</span> (${k.clearCount}회)`;
-    } else {
-      koreaRecordEl.innerHTML = `<span style="color:#94a3b8">미평정 (기록 없음)</span>`;
-    }
-  }
-
-  const seoulRecordEl = document.getElementById('modal-seoul-record');
-  if (seoulRecordEl) {
-    const s = records.SEOUL;
-    if (s && s.cleared && s.bestTime !== null) {
-      seoulRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#b45309">${formatTimeString(s.bestTime)}</span> (${s.clearCount}회)`;
-    } else {
-      seoulRecordEl.innerHTML = `<span style="color:#94a3b8">미평정 (기록 없음)</span>`;
-    }
-  }
-
-  const gyeonggiRecordEl = document.getElementById('modal-gyeonggi-record');
-  if (gyeonggiRecordEl) {
-    const g = records.GYEONGGI;
-    if (g && g.cleared && g.bestTime !== null) {
-      gyeonggiRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#b45309">${formatTimeString(g.bestTime)}</span> (${g.clearCount}회)`;
-    } else {
-      gyeonggiRecordEl.innerHTML = `<span style="color:#94a3b8">미평정 (기록 없음)</span>`;
-    }
-  }
+  // 시작 모달 내 전장별 기록 뱃지 업데이트 (MAP_CONFIGS의 모든 전장)
+  Object.keys(MAP_CONFIGS).forEach(key => {
+    const el = document.getElementById(`modal-${key.toLowerCase()}-record`);
+    if (!el) return;
+    const r = records[key];
+    // 기록이 있을 때만 최고 기록 표시 (없으면 비워 둠)
+    el.textContent = (r && r.cleared && r.bestTime !== null) ? `🏆 ${formatTimeString(r.bestTime)}` : '';
+  });
 
   // 상단 HUD 최고 기록 뱃지
   const curRecord = records[currentMapKey];
@@ -176,13 +153,26 @@ let focusRings = []; // 집중포화 및 타격 링 이펙트
 let baseOrbSpeed = 5.2;
 let focusSalvoCount = 3;
 
-// Special Skill (완전점령 3개 이상 보유 시 발동 가능, 쿨타임 10초)
-let specialSkillCooldown = 0; // 글로벌 쿨타임 (초 단위)
-const SPECIAL_SKILL_COOLDOWN_MAX = 10; // 10초 쿨타임
+// Special Skill (완전점령 지역 1곳당 10초 충전 후 1발, 사용 시 소모)
+// [특수 기술 충전 규칙]
+// - 완전점령 지역 1곳마다 특수 기술 1발을 충전할 수 있음
+// - 완전점령 상태를 10초(게임 시간) 유지하면 그 지역에 1발 충전 완료
+// - 사용하면 그 지역의 1발은 소모되어, 완전점령이 풀렸다가 다시 완전점령되어야 재충전
+// - 충전 중이든 충전 완료든 완전점령이 풀리면 리셋
+const SKILL_CHARGE_SEC = 10;
+const SKILL_DENIED_FLASH = '#94a3b8'; // 특수 기술을 지금 쓸 수 없을 때 탭한 지역 테두리 회색 번쩍
+const SKILL_GCD_SEC = 10;       // 특수 기술 글로벌 쿨타임 (게임 시간)
+let playerSkillGcdUntil = 0;    // 아군 글로벌 쿨타임 종료 시각 (gameElapsedTime 기준)
+let enemySkillGcdUntil = 0;     // 적군 글로벌 쿨타임 종료 시각
+// 최초 해금: 완전점령 지역을 동시에 3곳 이상 확보한 적이 있어야 특수 기술 충전·사용 가능 (이후에는 조건 없음)
+const SKILL_UNLOCK_FULL_COUNT = 3;
+const skillUnlocked = { player: false, enemy: false };
+const gcdWasActive = { player: false, enemy: false };
+let specialSkillCooldown = 0; // (미사용) 이전 글로벌 쿨타임 호환용
 
 // Enemy AI Special Skill & Focus Fire
 let enemySpecialSkillCooldown = 0;
-const ENEMY_SPECIAL_SKILL_COOLDOWN_MAX = 15; // 적군 15초 쿨타임
+const ENEMY_SPECIAL_SKILL_MIN_GAP = 10; // 적군도 아군과 같은 글로벌 쿨타임
 let enemyFocusFireCooldown = 0;
 const ENEMY_FOCUS_FIRE_COOLDOWN_MAX = 5.0; // 5초 쿨타임
 let currentEnemyFocusZone = null;
@@ -194,119 +184,110 @@ let playerMainZone = null;
 let enemyMainZone = null;
 
 const MAIN_ZONE_POWER = 2; // 메인 지역 구슬 공격력
+const MAIN_ZONE_HP = 400;   // 메인 지역 피 (일반 지역 50). 처음부터 메인을 노리기보다 주변을 먼저 공략하도록
 
 function isMainZone(zone) {
   return (zone === playerMainZone && zone.owner === OWNER.PLAYER) ||
          (zone === enemyMainZone && zone.owner === OWNER.ENEMY);
 }
 
-// 메인 지역 전용 원거리 타겟: 거리와 무관하게 가장 가까운 적 거점(철벽 제외) ➔ 중립 구역 순
-function pickMainZoneLongRangeTarget(zone) {
-  let best = null;
-  let bestDist = Infinity;
-  let bestIsEnemy = false;
+// 공격 가능한 자동 목표인지: 내 점령지가 아니고, 적의 완전점령(🛡️) 철벽 기지가 아님
+function isAutoAttackable(target, owner) {
+  if (target.owner === owner || target.isHidden) return false;
+  if (target.owner !== OWNER.NEUTRAL && isFullyConquered(target)) return false;
+  return true;
+}
+
+// 메인 지역 원거리 자동 목표: 내 점령지역 전체와 맞닿아 있는 지역(전선) 중 무작위 1곳
+function pickMainZoneFrontierTarget(zone) {
+  const frontier = new Set();
   for (let i = 0; i < rawZones.length; i++) {
-    const t = rawZones[i];
-    if (t === zone || t.owner === zone.owner || t.isHidden) continue;
-    const isEnemy = t.owner !== OWNER.NEUTRAL;
-    if (isEnemy && isFullyConquered(t)) continue;
-    if (bestIsEnemy && !isEnemy) continue;
-    const d = Math.hypot(t.cx - zone.cx, t.cy - zone.cy);
-    if ((isEnemy && !bestIsEnemy) || d < bestDist) {
-      best = t;
-      bestDist = d;
-      bestIsEnemy = isEnemy;
-    }
+    const own = rawZones[i];
+    if (own.owner !== zone.owner) continue;
+    own.neighbors.forEach(n => {
+      if (isAutoAttackable(n, zone.owner)) frontier.add(n);
+    });
   }
-  return best;
+  if (frontier.size === 0) return null;
+  const list = [...frontier];
+  return list[Math.floor(Math.random() * list.length)];
 }
 
-// 특수 기술 대상 선정 및 피해 적용 (아군/적군 공용)
-// - 완전점령(🛡️)과 메인 지역은 대상에서 제외
-// - 메인 지역이 살아 있으면 대상 후보 전부(최대 3곳)를 공격
-// - 메인 지역을 잃은 상태라면 최후 1곳은 남겨둠(피만 깎고 중립화하지 않음)
-function pickSpecialSkillTargets(candidates, mainAlive) {
-  if (mainAlive) return candidates.slice(0, Math.min(3, candidates.length));
-  const count = candidates.length <= 1 ? 1 : Math.min(3, candidates.length - 1);
-  return candidates.slice(0, count);
-}
-
-function useSpecialSkill() {
-  if (currentState !== GAME_STATE.PLAYING) return;
-
-  // 전체 완전점령지 수 (3개 이상 보유해야 특수기술 사용 가능)
-  const totalPlayerFullZones = rawZones.filter(z => z.owner === OWNER.PLAYER && isFullyConquered(z));
-  if (totalPlayerFullZones.length < 3) {
-    document.getElementById('status-guide').innerText = `⚠️ 특수 기술은 완전점령지역이 3개 이상일 때부터 사용 가능합니다! (현재: ${totalPlayerFullZones.length}/3개)`;
-    return;
-  }
-
-  // 10초 쿨타임 체크
-  if (specialSkillCooldown > 0) {
-    document.getElementById('status-guide').innerText = `⏳ 특수 기술 쿨타임 대기 중입니다 (${Math.ceil(specialSkillCooldown)}초 남음)`;
-    return;
-  }
-
-  // [규칙]: 특수 기술은 적의 완전점령지역(🛡️)을 제외하고, 아군 영토와 가장 인접한 적군의 일반 점령지 중 무작위 3곳 공격!
-  const playerZones = rawZones.filter(z => z.owner === OWNER.PLAYER);
-  const enemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY && !isFullyConquered(z) && !isMainZone(z));
-  const enemyMainAlive = !!(enemyMainZone && enemyMainZone.owner === OWNER.ENEMY);
-  if (enemyZones.length === 0) {
-    document.getElementById('status-guide').innerText = '공격 가능한 적의 일반 점령지가 없습니다! (완전점령 철벽 기지와 적 메인 지역은 특수 기술 면역)';
-    return;
-  }
-
-  // 10초 쿨타임 부여
-  specialSkillCooldown = SPECIAL_SKILL_COOLDOWN_MAX;
-
-  // 1. 각 적 점령지마다 가장 가까운 아군 점령지와의 거리(및 직접 인접 여부) 계산
-  enemyZones.forEach(ez => {
+// [특수 기술 대상 우선순위] (메인 지역은 항상 제외, 피가 닳은 점령지도 대상)
+// 1순위: 일반 점령지역 (완전점령 아님)
+// 2순위: 1순위가 3곳보다 적으면 부족한 수만큼 완전점령지역으로 채움
+//   예) 점령지역 2곳 → 점령지역 2 + 완전점령 1 / 점령지역 1곳 → 점령지역 1 + 완전점령 2
+// 같은 순위 안에서는 공격하는 쪽 지역과 가까운 순: 맞닿은 지역 우선 → 최단 거리 순 (동률은 무작위)
+function buildSkillTargetList(victimOwner) {
+  const attackerOwner = victimOwner === OWNER.PLAYER ? OWNER.ENEMY : OWNER.PLAYER;
+  const attackers = rawZones.filter(z => z.owner === attackerOwner);
+  const victims = rawZones.filter(z => z.owner === victimOwner && !isMainZone(z));
+  victims.forEach(v => {
     let minDist = Infinity;
-    let isDirectNeighbor = false;
-    for (let i = 0; i < playerZones.length; i++) {
-      const pz = playerZones[i];
-      if (ez.neighbors && ez.neighbors.includes(pz)) {
-        isDirectNeighbor = true;
-      }
-      const d = Math.hypot(ez.cx - pz.cx, ez.cy - pz.cy);
+    let touching = false;
+    for (let i = 0; i < attackers.length; i++) {
+      const a = attackers[i];
+      if (v.neighbors.includes(a)) touching = true;
+      const d = Math.hypot(v.cx - a.cx, v.cy - a.cy);
       if (d < minDist) minDist = d;
     }
-    ez._distToPlayer = minDist;
-    ez._isDirectNeighbor = isDirectNeighbor;
+    v._skillTouching = touching;
+    v._skillDist = minDist;
+    v._skillTie = Math.random();
   });
+  const byProximity = (a, b) => {
+    if (a._skillTouching !== b._skillTouching) return a._skillTouching ? -1 : 1;
+    if (a._skillDist !== b._skillDist) return a._skillDist - b._skillDist;
+    return a._skillTie - b._skillTie;
+  };
+  const normal = victims.filter(z => !isFullyConquered(z)).sort(byProximity);
+  const full = victims.filter(z => isFullyConquered(z)).sort(byProximity);
+  return normal.concat(full);
+}
 
-  // 2. 아군과 가장 인접한 순서로 정렬 (직접 맞닿아 있는 전선 우선, 그 다음 최단 거리 순)
-  const sortedEnemyZones = [...enemyZones].sort((a, b) => {
-    if (a._isDirectNeighbor !== b._isDirectNeighbor) {
-      return a._isDirectNeighbor ? -1 : 1;
-    }
-    return a._distToPlayer - b._distToPlayer;
-  });
+const SKILL_DAMAGE = 10;
+// 특수 기술 피해: 소유는 유지한 채 피만 깎음. 0 이하가 되면 중립(공격한 쪽 우세 게이지 0)
+function applySkillDamage(zone, attacker) {
+  zone.orbs -= SKILL_DAMAGE;
+  if (zone.orbs <= 0) {
+    zone.owner = OWNER.NEUTRAL;
+    zone.maxOrbs = ZONE_MAX_HP;
+    zone.claimant = -zone.orbs > 0 ? attacker : null;
+    zone.orbs = Math.max(0, -zone.orbs);
+    zone.targetZones = [];
+    zone.isManualTarget = false;
+  }
+}
 
-  // 3. 가장 가까운 상위 전선 후보군(최대 6곳) 중에서 무작위 3곳 선택
-  const candidatePoolSize = Math.min(sortedEnemyZones.length, Math.max(3, Math.min(6, sortedEnemyZones.length)));
-  const nearestCandidates = sortedEnemyZones.slice(0, candidatePoolSize);
-  const shuffledCandidates = [...nearestCandidates].sort(() => Math.random() - 0.5);
+// 특수 기술 대상: 우선순위대로 정렬된 후보 중 최대 3곳 (중립화하지 않으므로 최후 거점 보호 불필요)
+function pickSpecialSkillTargets(candidates) {
+  return candidates.slice(0, Math.min(3, candidates.length));
+}
 
-  const targetEnemyZones = pickSpecialSkillTargets(shuffledCandidates, enemyMainAlive);
+// 특수 기술 발동: 충전 완료(💥)된 아군 완전점령 지역을 탭하면 그 지역의 1발을 사용
+function useSpecialSkill(sourceZone) {
+  if (currentState !== GAME_STATE.PLAYING) return;
+  if (!sourceZone || sourceZone.owner !== OWNER.PLAYER || sourceZone.chargeState !== 'ready') return;
+  if (gameElapsedTime < playerSkillGcdUntil) return; // 글로벌 쿨타임 중 (지역 위 시계 방향 쿨타임 표시)
+
+  // [규칙]: 메인 제외, 1순위 점령지역 → 2순위 완전점령지역으로 최대 3곳 공격
+  const enemyZones = buildSkillTargetList(OWNER.ENEMY);
+  const enemyMainAlive = !!(enemyMainZone && enemyMainZone.owner === OWNER.ENEMY);
+  if (enemyZones.length === 0) {
+    document.getElementById('status-guide').innerText = '특수 기술로 공격할 적 지역이 없습니다! (적 메인 지역은 특수 기술 면역)';
+    flashZone(sourceZone, SKILL_DENIED_FLASH);
+    return;
+  }
+
+  sourceZone.chargeState = 'spent';
+  playerSkillGcdUntil = gameElapsedTime + SKILL_GCD_SEC;
+
+  const targetEnemyZones = pickSpecialSkillTargets(enemyZones, enemyMainAlive);
 
   targetEnemyZones.forEach(z => {
-    // [규칙]: 피 10 감소 및 점령 요건(피 꽉 참) 미달로 점령 해제(중립화)!
-    z.orbs = Math.max(0, z.orbs - 10);
-    // 메인 지역을 잃은 상태에서 최후 1곳만 남았다면 피만 깎이고 구슬 전투로만 전멸되도록 보호
-    if (enemyMainAlive || enemyZones.length > 1) {
-      z.owner = OWNER.NEUTRAL;
-    }
-    z.targetZones = [];
-    z.isManualTarget = false;
-
-    // 해당 지역과 연결된 비행 중인 구슬들 즉시 소멸
-    for (let j = 0; j < flyingOrbs.length; j++) {
-      const orb = flyingOrbs[j];
-      if (orb.sourceZone.id === z.id || orb.targetZone.id === z.id) {
-        orb.isDead = true;
-      }
-    }
+    // [규칙]: 피 10 감소. 지역은 계속 소유 진영의 것이며 공격도 계속함 (중립화하지 않음)
+    // 피가 0이 되면 일반 전투와 같이 중립으로 전환
+    applySkillDamage(z, OWNER.PLAYER);
 
     createDisintegrateParticle(z.cx, z.cy, '#ef4444');
     focusRings.push({
@@ -329,44 +310,32 @@ function useSpecialSkill() {
   updateEnemyPowerZone();
 
   const names = targetEnemyZones.map(tz => tz.name).join(', ');
-  document.getElementById('status-guide').innerText = `💥 [특수 기술 발동!]: 최인접 적지 [${names}] ${targetEnemyZones.length}곳 피 10 감소 및 점령 해제! (쿨타임 10초)`;
+  document.getElementById('status-guide').innerText = `💥 [특수 기술 발동!]: 적지 [${names}] ${targetEnemyZones.length}곳 피 10 감소! ([${sourceZone.name}] 충전 사용, 남은 충전: ${getReadySkillZones(OWNER.PLAYER).length}발)`;
 }
 
-// 적군 AI 전용 특수 기술 (완전점령 3개 이상 보유 시 발동)
+// 적군 AI 전용 특수 기술 (아군과 동일한 충전 규칙)
 function useEnemySpecialSkill() {
   if (currentState !== GAME_STATE.PLAYING) return;
 
-  const totalEnemyFullZones = rawZones.filter(z => z.owner === OWNER.ENEMY && isFullyConquered(z));
-  if (totalEnemyFullZones.length < ENEMY_CONFIG.enemySpecialMinFull) return;
+  if (getReadySkillZones(OWNER.ENEMY).length === 0) return;
+  // 적군은 충전이 있어도 연사하지 않도록 최소 간격 유지
   if (enemySpecialSkillCooldown > 0) return;
 
-  // 적군 AI의 특수 기술도 플레이어의 완전점령지역(🛡️)은 공격하지 못하고 일반 점령지만 공격!
-  const playerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && !isFullyConquered(z) && !isMainZone(z));
+  // 적군 AI도 동일 우선순위: 메인 제외, 1순위 점령지역 → 2순위 완전점령지역
+  const playerZones = buildSkillTargetList(OWNER.PLAYER);
   const playerMainAlive = !!(playerMainZone && playerMainZone.owner === OWNER.PLAYER);
   if (playerZones.length === 0) return;
 
-  enemySpecialSkillCooldown = ENEMY_SPECIAL_SKILL_COOLDOWN_MAX;
+  enemySpecialSkillCooldown = ENEMY_SPECIAL_SKILL_MIN_GAP;
+  enemySkillGcdUntil = gameElapsedTime + SKILL_GCD_SEC;
+  consumeSkillCharge(OWNER.ENEMY);
 
-  // 무작위 아군 점령지 3곳 선택 (완전점령지 제외)
-  const shuffled = [...playerZones].sort(() => Math.random() - 0.5);
-  const targetPlayerZones = pickSpecialSkillTargets(shuffled, playerMainAlive);
+  const targetPlayerZones = pickSpecialSkillTargets(playerZones, playerMainAlive);
 
   targetPlayerZones.forEach(z => {
-    // [규칙]: 아군 점령지 피 10 감소 및 점령 해제(중립화)!
-    z.orbs = Math.max(0, z.orbs - 10);
-    if (playerMainAlive || playerZones.length > 1) {
-      z.owner = OWNER.NEUTRAL;
-    }
-    z.targetZones = [];
-    z.isManualTarget = false;
-
-    // 해당 지역과 연결된 비행 중인 구슬들 즉시 소멸
-    for (let j = 0; j < flyingOrbs.length; j++) {
-      const orb = flyingOrbs[j];
-      if (orb.sourceZone.id === z.id || orb.targetZone.id === z.id) {
-        orb.isDead = true;
-      }
-    }
+    // [규칙]: 피 10 감소. 지역은 계속 소유 진영의 것이며 공격도 계속함 (중립화하지 않음)
+    // 피가 0이 되면 일반 전투와 같이 중립으로 전환
+    applySkillDamage(z, OWNER.ENEMY);
 
     createDisintegrateParticle(z.cx, z.cy, '#38bdf8');
     focusRings.push({
@@ -389,41 +358,104 @@ function useEnemySpecialSkill() {
   updateEnemyPowerZone();
 
   const names = targetPlayerZones.map(tz => tz.name).join(', ');
-  document.getElementById('status-guide').innerText = `🚨 [적군 특수 기술 발동!]: 아군 점령지 [${names}] ${targetPlayerZones.length}곳 피 10 감소 및 점령 해제!`;
+  document.getElementById('status-guide').innerText = `🚨 [적군 특수 기술 발동!]: 아군 점령지 [${names}] ${targetPlayerZones.length}곳 피 10 감소!`;
+}
+
+// 지역별 충전 상태 갱신: state = null(완전점령 아님) | 'charging' | 'ready' | 'spent'
+function updateSkillCharges(dt) {
+  // 최초 해금 판정: 완전점령 3곳 이상을 처음 달성하면 그 진영은 이후 계속 해금 상태
+  [OWNER.PLAYER, OWNER.ENEMY].forEach(owner => {
+    if (skillUnlocked[owner]) return;
+    let count = 0;
+    for (let i = 0; i < rawZones.length; i++) {
+      if (rawZones[i].owner === owner && isFullyConquered(rawZones[i])) count++;
+    }
+    if (count >= SKILL_UNLOCK_FULL_COUNT) skillUnlocked[owner] = true;
+  });
+
+  // 글로벌 쿨타임이 끝나는 순간: 다시 사용 가능해진 충전 지역의 테두리를 번쩍
+  [[OWNER.PLAYER, playerSkillGcdUntil], [OWNER.ENEMY, enemySkillGcdUntil]].forEach(([owner, until]) => {
+    const active = gameElapsedTime < until;
+    if (gcdWasActive[owner] && !active) {
+      for (let i = 0; i < rawZones.length; i++) {
+        const z = rawZones[i];
+        if (z.owner === owner && z.chargeState === 'ready') {
+          const isMyMain = z.owner === OWNER.PLAYER && z === playerMainZone;
+          flashZone(z, isMyMain ? ZONE_COLORS.mainCharged : (owner === OWNER.PLAYER ? ZONE_COLORS.playerFullCharged : ZONE_COLORS.enemyFullCharged));
+        }
+      }
+    }
+    gcdWasActive[owner] = active;
+  });
+
+  for (let i = 0; i < rawZones.length; i++) {
+    const z = rawZones[i];
+    // 해금 전에는 충전이 시작되지 않음 (연한 완전점령 색 유지)
+    const full = z.owner !== OWNER.NEUTRAL && isFullyConquered(z) && skillUnlocked[z.owner];
+    if (!full || z.chargeOwner !== z.owner) {
+      z.chargeState = full ? 'charging' : null;
+      z.chargeTime = 0;
+      z.chargeOwner = full ? z.owner : null;
+      continue;
+    }
+    if (z.chargeState === 'charging') {
+      z.chargeTime += dt * gameSpeed;
+      if (z.chargeTime >= SKILL_CHARGE_SEC) {
+        z.chargeState = 'ready';
+        // 충전 완료: 테두리가 같은 색으로 번쩍
+        const isMyMain = z.owner === OWNER.PLAYER && z === playerMainZone;
+        flashZone(z, isMyMain ? ZONE_COLORS.mainCharged : (z.owner === OWNER.PLAYER ? ZONE_COLORS.playerFullCharged : ZONE_COLORS.enemyFullCharged));
+      }
+    }
+  }
+}
+
+function getReadySkillZones(owner) {
+  return rawZones.filter(z => z.owner === owner && z.chargeState === 'ready');
+}
+
+// 충전 완료된 지역 1곳의 1발을 소모
+function consumeSkillCharge(owner) {
+  const ready = getReadySkillZones(owner);
+  if (ready.length === 0) return false;
+  ready[0].chargeState = 'spent';
+  return true;
 }
 
 let lastSkillTimerText = '';
 let lastSkillBtnDisabled = null;
 
 function updateSpecialSkillHUD(dt) {
-  if (specialSkillCooldown > 0) {
-    specialSkillCooldown = Math.max(0, specialSkillCooldown - dt * gameSpeed);
-  }
+  updateSkillCharges(dt);
 
   const btn = document.getElementById('special-skill-btn');
   const timer = document.getElementById('special-skill-timer');
   if (!btn || !timer) return;
 
-  const playerFullZones = rawZones.filter(z => z.owner === OWNER.PLAYER && isFullyConquered(z));
-  const totalFullCount = playerFullZones.length;
+  const own = rawZones.filter(z => z.owner === OWNER.PLAYER && z.chargeState);
+  const readyCount = own.filter(z => z.chargeState === 'ready').length;
+  const charging = own.filter(z => z.chargeState === 'charging');
 
   let text = '';
   let color = '';
   let disabled = false;
 
-  if (totalFullCount < 3) {
-    disabled = true;
-    text = `완전점령 3개 필요 (${totalFullCount}/3)`;
-    color = '#94a3b8';
-  } else if (specialSkillCooldown > 0) {
-    disabled = true;
-    const sec = Math.ceil(specialSkillCooldown);
-    text = `쿨타임 (${sec}s)`;
-    color = '#f59e0b';
-  } else {
-    disabled = false;
-    text = `특수 기술 즉시 발동! 💥`;
+  if (readyCount > 0) {
+    text = `${readyCount}발 발사 가능! 💥`;
     color = '#22c55e';
+  } else if (charging.length > 0) {
+    disabled = true;
+    const remain = Math.min(...charging.map(z => SKILL_CHARGE_SEC - z.chargeTime));
+    text = `충전 중 (${Math.max(1, Math.ceil(remain))}s)`;
+    color = '#f59e0b';
+  } else if (own.length > 0) {
+    disabled = true;
+    text = '재충전: 완전점령 풀렸다 다시 확보';
+    color = '#94a3b8';
+  } else {
+    disabled = true;
+    text = '완전점령 지역 필요';
+    color = '#94a3b8';
   }
 
   if (disabled !== lastSkillBtnDisabled) {
@@ -445,6 +477,8 @@ let currentMapKey = 'KOREA';
 const MAP_CONFIGS = {
   KOREA: {
     name: '한반도 전국 전선 (164개 시·군)',
+    maxScale: 14,                     // 전국처럼 큰 맵은 4배 더 확대 (기본 3.5 → 14)
+    minimap: { w: 84, h: 104 },       // 세로로 긴 전국 맵은 미니맵을 작게
     file: 'assets/south_korea_exact_zones.json',
     bounds: { minLng: 125.7, maxLng: 131.1, minLat: 33.1, maxLat: 38.65 },
     aspectRatio: 0.82
@@ -459,13 +493,35 @@ const MAP_CONFIGS = {
     name: '경기도 전선 (31개 시·군)',
     file: 'assets/gyeonggi_exact_zones.json',
     bounds: { minLng: 126.487, maxLng: 127.8755, minLat: 36.8639, maxLat: 38.3114 },
-    aspectRatio: 0.82
-  }
+    aspectRatio: 0.82,
+    guide: '🌲 경기도 전선 작전: 시작할 시·군(예: 수원, 고양, 용인 등)을 탭하세요!'
+  },
+  // 시·도 맵 (tools/make_region_map.py로 생성. 범위·화면 비율은 맵 JSON의 meta.bounds에서 계산)
+  BUSAN: { name: '부산', label: '부산', count: 20, file: 'assets/busan_zones.json', maxScale: 8 },
+  DAEGU: { name: '대구', label: '대구', count: 24, file: 'assets/daegu_zones.json', maxScale: 8 },
+  INCHEON: { name: '인천', label: '인천', count: 26, file: 'assets/incheon_zones.json', maxScale: 8 },
+  GWANGJU_JEONNAM: { name: '전남광주', label: '전남광주', count: 27, file: 'assets/gwangju_jeonnam_zones.json', maxScale: 8 },
+  DAEJEON: { name: '대전', label: '대전', count: 82, file: 'assets/daejeon_zones.json', maxScale: 8 },
+  ULSAN: { name: '울산', label: '울산', count: 16, file: 'assets/ulsan_zones.json', maxScale: 8 },
+  SEJONG: { name: '세종', label: '세종', count: 24, file: 'assets/sejong_zones.json', maxScale: 8 },
+  GANGWON: { name: '강원', label: '강원', count: 25, file: 'assets/gangwon_zones.json', maxScale: 8 },
+  CHUNGBUK: { name: '충북', label: '충북', count: 25, file: 'assets/chungbuk_zones.json', maxScale: 8 },
+  CHUNGNAM: { name: '충남', label: '충남', count: 25, file: 'assets/chungnam_zones.json', maxScale: 8 },
+  JEONBUK: { name: '전북', label: '전북', count: 25, file: 'assets/jeonbuk_zones.json', maxScale: 8 },
+  GYEONGBUK: { name: '경북', label: '경북', count: 25, file: 'assets/gyeongbuk_zones.json', maxScale: 8 },
+  GYEONGNAM: { name: '경남', label: '경남', count: 25, file: 'assets/gyeongnam_zones.json', maxScale: 8 },
+  JEJU: { name: '제주', label: '제주', count: 43, file: 'assets/jeju_zones.json', maxScale: 8 }
 };
+MAP_CONFIGS.KOREA.label = '전국'; MAP_CONFIGS.KOREA.count = 164;
+MAP_CONFIGS.SEOUL.label = '서울'; MAP_CONFIGS.SEOUL.count = 25;
+MAP_CONFIGS.GYEONGGI.label = '경기'; MAP_CONFIGS.GYEONGGI.count = 31;
+MAP_CONFIGS.KOREA.guide = '🗺️ 전국 전선 작전: 시작할 거점 도시를 탭하세요!';
+MAP_CONFIGS.SEOUL.guide = '🏙️ 서울특별시 작전: 시작할 자치구(예: 강남구, 마포구, 종로구 등)를 탭하세요!';
 
 let currentMapBounds = { ...MAP_CONFIGS.KOREA.bounds };
 
 let rawZones = [];
+let backdropZones = []; // 플레이 불가 배경 지역 (예: 경기도 맵 안쪽의 서울·인천) - 빈 구멍 없이 지도를 채움
 let rawLinks = [];
 let flyingOrbs = [];
 let particles = [];
@@ -505,7 +561,7 @@ let cachedLinks = [];
 function loadSelectedMap(mapKey) {
   currentMapKey = mapKey || 'KOREA';
   const cfg = MAP_CONFIGS[currentMapKey] || MAP_CONFIGS.KOREA;
-  currentMapBounds = { ...cfg.bounds };
+  if (cfg.bounds) currentMapBounds = { ...cfg.bounds };
 
   // Reset in-game entities
   flyingOrbs = [];
@@ -515,6 +571,10 @@ function loadSelectedMap(mapKey) {
   currentEnemyFocusZone = null;
   playerMainZone = null;
   enemyMainZone = null;
+  playerSkillGcdUntil = 0;
+  enemySkillGcdUntil = 0;
+  skillUnlocked.player = false;
+  skillUnlocked.enemy = false;
   currentPowerZone = null;
   currentEnemyPowerZone = null;
   specialSkillCooldown = 0;
@@ -527,20 +587,21 @@ function loadSelectedMap(mapKey) {
   hanRiverData = null;
   hanRiverPath = null;
 
-  if (currentMapKey === 'SEOUL') {
-    fetch('assets/seoul_han_river.json')
-      .then(r => r.json())
-      .then(river => {
-        hanRiverData = river;
-        updateZoneScreenPositions();
-      })
-      .catch(e => console.warn('Han river load skipped:', e));
-  }
 
   fetch(cfg.file)
     .then(res => res.json())
     .then(data => {
+      // 범위·화면 비율이 설정에 없으면 맵 JSON의 meta.bounds로 계산 (위도에 따른 경도 축소 반영)
+      if (!cfg.bounds && data.meta && data.meta.bounds) {
+        const b = data.meta.bounds;
+        cfg.bounds = { ...b };
+        cfg.aspectRatio = ((b.maxLng - b.minLng) * Math.cos(((b.minLat + b.maxLat) / 2) * Math.PI / 180)) / (b.maxLat - b.minLat);
+      }
+      currentMapBounds = { ...cfg.bounds };
       rawLinks = data.links;
+      backdropZones = (data.backdrop || []).map(b => ({ ...b, path: null }));
+      // 큰 물(강·호수): 지도에 물로 표시. 점령 불가
+      hanRiverData = (data.water && data.water.length) ? data.water : null;
       rawZones = data.zones.map(z => ({
         ...z,
         maxOrbs: ZONE_MAX_HP, // 모든 지역 피 50 고정 (주요 도시 가중치 없음)
@@ -548,6 +609,9 @@ function loadSelectedMap(mapKey) {
         cy: 0,
         owner: OWNER.NEUTRAL,
         orbs: 0,
+        claimant: null,       // 중립 지역 줄다리기 게이지의 현재 우세 진영 (orbs = 게이지 크기)
+        protectedUntil: 0,    // 점령 직후 보호 종료 시각 (게임 시간, 초)
+        focusOptOut: false,   // 집중 포화 중 드래그 지정 공격으로 집중 포화에서 빠진 지역
         targetZones: [],
         isManualTarget: false,
         lastShotTime: 0,
@@ -570,21 +634,30 @@ function loadSelectedMap(mapKey) {
           cachedLinks.push({ z1, z2 });
         }
       });
+      // 물(강·호수)을 사이에 둔 연결: 공격은 가능하지만 완전점령 판정에서는 제외
+      rawZones.forEach(z => { z.waterNeighbors = new Set(); });
+      (data.waterLinks || []).forEach(([id1, id2]) => {
+        const z1 = zoneMap.get(id1);
+        const z2 = zoneMap.get(id2);
+        if (z1 && z2) {
+          z1.waterNeighbors.add(z2);
+          z2.waterNeighbors.add(z1);
+        }
+      });
 
-      // Reset camera view
+      // Reset camera view (맵 크기에 따라 최대 확대 배율 다름)
       view.scale = 1.0;
       view.offsetX = 0;
       view.offsetY = 0;
+      view.maxScale = cfg.maxScale || 3.5;
+      pendingStartZone = null;
 
       updateZoneScreenPositions();
       updateRecordDisplays();
       const timerEl = document.getElementById('match-timer');
       if (timerEl) timerEl.innerText = '00:00';
 
-      const guideText = currentMapKey === 'SEOUL' 
-        ? '🏙️ 서울특별시 작전: 시작할 구(예: 강남구, 마포구, 종로구 등)를 탭하세요!' 
-        : '🗺️ 전국 전선 작전: 시작할 거점(예: 의령, 전주, 서울 등)을 탭하세요!';
-      document.getElementById('status-guide').innerText = guideText;
+      document.getElementById('status-guide').innerText = START_GUIDE_TEXT;
     })
     .catch(err => console.error('Failed to load map data:', err));
 }
@@ -621,19 +694,33 @@ function updateZoneScreenPositions() {
     z.bbox = { minX, maxX, minY, maxY };
   });
 
-  // Project Han River Path2D if present
-  if (hanRiverData && hanRiverData.polygon) {
+  backdropZones.forEach(b => {
+    const path = new Path2D();
+    b.polygons.forEach(poly => {
+      if (poly.length < 3) return;
+      poly.forEach(([lng, lat], i) => {
+        const p = projectGeo(lng, lat, mapArea);
+        if (i === 0) path.moveTo(p.x, p.y); else path.lineTo(p.x, p.y);
+      });
+      path.closePath();
+    });
+    b.path = path;
+    const c = projectGeo(b.lng, b.lat, mapArea);
+    b.cx = c.x;
+    b.cy = c.y;
+  });
+
+  // 큰 물(강·호수) Path2D
+  if (hanRiverData) {
     const rPath = new Path2D();
-    const poly = hanRiverData.polygon;
-    if (poly.length >= 3) {
-      const p0 = projectGeo(poly[0][0], poly[0][1], mapArea);
-      rPath.moveTo(p0.x, p0.y);
-      for (let i = 1; i < poly.length; i++) {
-        const pt = projectGeo(poly[i][0], poly[i][1], mapArea);
-        rPath.lineTo(pt.x, pt.y);
-      }
+    hanRiverData.forEach(w => w.polygons.forEach(poly => {
+      if (poly.length < 3) return;
+      poly.forEach(([lng, lat], i) => {
+        const pt = projectGeo(lng, lat, mapArea);
+        if (i === 0) rPath.moveTo(pt.x, pt.y); else rPath.lineTo(pt.x, pt.y);
+      });
       rPath.closePath();
-    }
+    }));
     hanRiverPath = rPath;
   }
 }
@@ -687,21 +774,28 @@ function getNeighbors(zone) {
 }
 
 // Exact Territory Status:
+// 완전점령: 맞닿은 모든 이웃이 같은 진영. 단, 큰 물(강·호수) 건너 이웃은 세지 않음
+// → 강가 지역은 강이 아군 지역처럼 방어선이 되어 완전점령이 쉬운 전략적 요충지
 function isFullyConquered(zone) {
   if (zone.owner === OWNER.NEUTRAL) return false;
   const neighbors = zone.neighbors;
   if (!neighbors || neighbors.length === 0) return true;
+  const water = zone.waterNeighbors;
   for (let i = 0; i < neighbors.length; i++) {
-    if (neighbors[i].owner !== zone.owner) return false;
+    const n = neighbors[i];
+    if (water && water.has(n)) continue;
+    if (n.owner !== zone.owner) return false;
   }
   return true;
 }
 
 // Smart Auto-Target Selection:
 function pickAutoTarget(zone) {
-  // 메인 지역은 공격을 멈추지 않음: 인접 목표가 없으면 거리와 무관한 원거리 목표로 계속 사격
+  // [자동 공격 규칙]: 모든 점령지역(메인 포함)은 맞닿은 지역만 무작위로 공격.
+  // 메인 지역은 공격을 멈추지 않으므로, 자기와 맞닿은 목표가 없으면
+  // 내 점령지역 전체와 맞닿아 있는 전선 지역 중 무작위 1곳을 원거리 공격.
   if (isMainZone(zone)) {
-    return pickAdjacentTarget(zone) || pickMainZoneLongRangeTarget(zone);
+    return pickAdjacentTarget(zone) || pickMainZoneFrontierTarget(zone);
   }
   if (isFullyConquered(zone)) return null;
   return pickAdjacentTarget(zone);
@@ -712,23 +806,14 @@ function pickAdjacentTarget(zone) {
   const neighbors = zone.neighbors;
   if (!neighbors || neighbors.length === 0) return null;
 
-  // 1. 직접 맞닿아 있는 적군 지역 우선
-  const enemyTargets = neighbors.filter(n => n.owner !== zone.owner && n.owner !== OWNER.NEUTRAL && !isFullyConquered(n));
-  if (enemyTargets.length > 0) {
-    return enemyTargets[Math.floor(Math.random() * enemyTargets.length)];
-  }
-
-  // 2. 직접 맞닿아 있는 중립(미점령) 지역
-  const neutralTargets = neighbors.filter(n => n.owner === OWNER.NEUTRAL);
-  if (neutralTargets.length > 0) {
-    return neutralTargets[Math.floor(Math.random() * neutralTargets.length)];
-  }
-
-  return null;
+  // 맞닿아 있는 적군·중립 지역 중 무작위 1곳 (적 철벽 기지 제외)
+  const targets = neighbors.filter(n => isAutoAttackable(n, zone.owner));
+  if (targets.length === 0) return null;
+  return targets[Math.floor(Math.random() * targets.length)];
 }
 
 // 초기 맵 로드 (기본: 전국 전선)
-loadSelectedMap('KOREA');
+// 초기 맵은 파일 끝의 홈 화면 초기화에서 다음 스테이지로 로드
 
 // Troop/Orb Class
 class FlyingOrb {
@@ -792,18 +877,20 @@ class FlyingOrb {
 // 2회 단일 Draw Call로 전체 비행 구슬을 렌더링하는 초경량 일괄 렌더러 (미니 메트로 스타일)
 function drawFlyingOrbs(ctx) {
   if (flyingOrbs.length === 0) return;
+  // 확대해도 구슬이 지역을 덮지 않도록 배율에 따라 크기 보정 (화면상 크기 증가를 완만하게)
+  const k = 1 / Math.sqrt(view.scale);
 
   // 1. Draw Player Orbs (Solid Cobalt Blue + Clean White Border)
   ctx.save();
   ctx.fillStyle = '#2563eb';
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = 1.2 * k;
   ctx.beginPath();
   let pCount = 0;
   for (let i = 0; i < flyingOrbs.length; i++) {
     const orb = flyingOrbs[i];
     if (!orb.isDead && orb.owner === OWNER.PLAYER) {
-      const r = orb.power > 1 ? 4.5 : 3.2;
+      const r = (orb.power > 1 ? 4.5 : 3.2) * k;
       ctx.moveTo(orb.x + r, orb.y);
       ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
       pCount++;
@@ -821,7 +908,7 @@ function drawFlyingOrbs(ctx) {
   for (let i = 0; i < flyingOrbs.length; i++) {
     const orb = flyingOrbs[i];
     if (!orb.isDead && orb.owner === OWNER.ENEMY) {
-      const r = orb.power > 1 ? 4.5 : 3.2;
+      const r = (orb.power > 1 ? 4.5 : 3.2) * k;
       ctx.moveTo(orb.x + r, orb.y);
       ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
       eCount++;
@@ -905,12 +992,28 @@ function applyOrbHit(zone, hitOwner, power, sourceZone) {
   if (zone.owner === hitOwner) {
     // If friendly zone, reinforce defense
     zone.orbs = Math.min(zone.maxOrbs, zone.orbs + power);
+    if (zone.orbs >= zone.maxOrbs && currentFocusZone === zone) currentFocusZone = null;
     // If it's already full & friendly, source zone should look for next conquest target!
     if (zone.orbs >= zone.maxOrbs && sourceZone && !sourceZone.isManualTarget) {
       reRouteZone(sourceZone);
     }
   } else if (zone.owner === OWNER.NEUTRAL) {
-    zone.orbs += power;
+    // [줄다리기 게이지]: 중립 지역은 우세 진영(claimant)과 게이지(orbs)를 가짐.
+    // 같은 편 구슬은 게이지를 올리고, 상대 구슬은 깎음. 0을 넘어가면 우세 진영이 뒤집힘.
+    // 게이지가 50에 닿은 진영이 점령.
+    if (!zone.claimant || zone.orbs <= 0) {
+      zone.claimant = hitOwner;
+      zone.orbs = 0;
+    }
+    if (zone.claimant === hitOwner) {
+      zone.orbs += power;
+    } else {
+      zone.orbs -= power;
+      if (zone.orbs < 0) {
+        zone.claimant = hitOwner;
+        zone.orbs = -zone.orbs;
+      }
+    }
     if (zone.orbs >= zone.maxOrbs) {
       conquerZone(zone, hitOwner, sourceZone);
     }
@@ -925,9 +1028,16 @@ function applyOrbHit(zone, hitOwner, power, sourceZone) {
       return;
     }
 
+    // [점령 직후 보호]: 막 점령된 지역은 잠시 피해를 받지 않음 (주인이 1초에 여러 번 바뀌는 혼전 방지)
+    if (gameElapsedTime < zone.protectedUntil) {
+      return;
+    }
+
     zone.orbs -= power;
     if (zone.orbs <= 0) {
       zone.owner = OWNER.NEUTRAL;
+      zone.maxOrbs = ZONE_MAX_HP; // 메인이었다면 중립이 되면서 일반 지역(피 50)으로
+      zone.claimant = hitOwner;
       zone.targetZones = [];
       zone.isManualTarget = false;
       zone.orbs = Math.abs(zone.orbs);
@@ -940,13 +1050,61 @@ function applyOrbHit(zone, hitOwner, power, sourceZone) {
   }
 }
 
+const CAPTURE_PROTECT_SEC = 1.5; // 점령 직후 보호 시간 (게임 시간 기준, 배속 연동)
+
+// [공중 충돌]: 두 지역 사이를 서로 마주 보고 날아가는 적대 구슬은 중간에서 만나면 함께 소멸.
+// 같은 두 지역 사이 구슬끼리만 비교하므로 전체 비용은 O(구슬 수).
+function resolveOrbCollisions() {
+  if (flyingOrbs.length < 2) return;
+  const lanes = new Map();
+  for (let i = 0; i < flyingOrbs.length; i++) {
+    const orb = flyingOrbs[i];
+    if (orb.isDead) continue;
+    const a = orb.sourceZone.id, b = orb.targetZone.id;
+    const key = a < b ? a + '|' + b : b + '|' + a;
+    let lane = lanes.get(key);
+    if (!lane) {
+      lane = { fwd: [], back: [] };
+      lanes.set(key, lane);
+    }
+    (a < b ? lane.fwd : lane.back).push(orb);
+  }
+
+  lanes.forEach(lane => {
+    if (lane.fwd.length === 0 || lane.back.length === 0) return;
+    // 가장 앞서 나간 구슬끼리 먼저 만남
+    lane.fwd.sort((o1, o2) => o2.progress - o1.progress);
+    lane.back.sort((o1, o2) => o2.progress - o1.progress);
+    let i = 0, j = 0;
+    while (i < lane.fwd.length && j < lane.back.length) {
+      const f = lane.fwd[i], k = lane.back[j];
+      if (f.owner === k.owner) {
+        // 같은 편끼리는 충돌하지 않음: 더 뒤처진 쪽을 건너뜀
+        if (f.progress < k.progress) i++; else j++;
+        continue;
+      }
+      if (f.progress + k.progress < 1) break; // 아직 만나지 않음
+      const hit = Math.min(f.power, k.power);
+      f.power -= hit;
+      k.power -= hit;
+      createDisintegrateParticle((f.x + k.x) / 2, (f.y + k.y) / 2, '#a855f7');
+      if (f.power <= 0) { f.isDead = true; i++; }
+      if (k.power <= 0) { k.isDead = true; j++; }
+    }
+  });
+}
+
 let totalPlayerConquests = 0;
 let nextConquestThreshold = 3; // 3 -> 6 -> 12 -> 24 -> 48 -> 96... 배수로 증가!
 let isInstantConquerMode = false;
 
 function conquerZone(conqueredZone, newOwner, conqueredBySource) {
   conqueredZone.owner = newOwner;
+  conqueredZone.maxOrbs = ZONE_MAX_HP; // 함락된 메인은 메인 지위를 잃고 일반 지역(피 50)이 됨
   conqueredZone.orbs = conqueredZone.maxOrbs; // Full garrison upon capture
+  conqueredZone.claimant = null;
+  conqueredZone.protectedUntil = gameElapsedTime + CAPTURE_PROTECT_SEC;
+  flashZone(conqueredZone, newOwner === OWNER.PLAYER ? ZONE_COLORS.playerStroke : ZONE_COLORS.enemyStroke);
 
   // 1. Conquered Zone immediately starts advancing towards an adjacent front!
   const newTarget = pickAutoTarget(conqueredZone);
@@ -966,27 +1124,15 @@ function conquerZone(conqueredZone, newOwner, conqueredBySource) {
   });
 
   // [사용자 요구사항]: 집중포화로 인해 그 지역이 점령되면 날아가던 구슬들이 없어질 때 그 효과(파티클 & 충격파)를 주면서 소멸!
-  if (currentFocusZone && currentFocusZone.id === conqueredZone.id) {
-    let effectCount = 0;
+  const wasPlayerFocus = currentFocusZone && currentFocusZone.id === conqueredZone.id;
+  const wasEnemyFocus = currentEnemyFocusZone && currentEnemyFocusZone.id === conqueredZone.id;
+  if (wasPlayerFocus || wasEnemyFocus) {
+    // [집중 포화 점령]: 점령되는 순간 그 지역으로 날아가던 모든 구슬은 소멸 (별도 그래픽 효과 없음)
     for (let j = 0; j < flyingOrbs.length; j++) {
       const orb = flyingOrbs[j];
-      if (orb.targetZone && orb.targetZone.id === conqueredZone.id && !orb.isDead) {
-        orb.isDead = true;
-        // 그래픽 리소스 부담을 극소화하기 위해 소수(최대 8개) 지점에서만 경량 파티클 연출
-        if (effectCount < 8 && j % 3 === 0) {
-          createDisintegrateParticle(orb.x, orb.y, (orb.owner === OWNER.PLAYER) ? '#38bdf8' : '#f87171');
-          effectCount++;
-        }
-      }
+      if (orb.targetZone && orb.targetZone.id === conqueredZone.id) orb.isDead = true;
     }
-    focusRings.push({
-      x: conqueredZone.cx,
-      y: conqueredZone.cy,
-      radius: 12,
-      alpha: 1.0,
-      color: (newOwner === OWNER.PLAYER) ? '#38bdf8' : '#ef4444'
-    });
-    currentFocusZone = null;
+    if (wasPlayerFocus) currentFocusZone = null;
   }
 
   // Player gets item reward at doubling intervals (3 -> 6 -> 12 -> 24...)
@@ -1122,6 +1268,73 @@ function reRouteZone(zone) {
   }
 }
 
+function beginGameAtZone(zone) {
+  zone.owner = OWNER.PLAYER;
+  zone.maxOrbs = MAIN_ZONE_HP; zone.orbs = MAIN_ZONE_HP; // 내 메인 지역 피 400
+  lastSelectedPlayerZone = zone;
+  playerMainZone = zone;
+
+  // Assign initial auto target for starter
+  const initTarget = pickAutoTarget(zone);
+  if (initTarget) zone.zones = [initTarget];
+
+  // Assign AI Enemy starting base (1 base)
+  const baseCount = ENEMY_CONFIG.startingEnemyBases;
+
+  const enemyCandidates = rawZones.filter(z => z.id !== zone.id && !z.isHidden);
+  // 이웃이 1곳뿐인 외딴 섬(추자도·울릉도 등)에서는 적이 시작하지 않도록 제외 (후보가 남을 때만)
+  const wellConnected = enemyCandidates.filter(z => z.neighbors.length >= 2);
+  if (wellConnected.length > 0) enemyCandidates.splice(0, enemyCandidates.length, ...wellConnected);
+  enemyCandidates.sort((a, b) => Math.hypot(b.cx - zone.cx, b.cy - zone.cy) - Math.hypot(a.cx - zone.cx, a.cy - zone.cy));
+
+  const chosenEnemies = [];
+  for (let k = 0; k < baseCount; k++) {
+    const idx = Math.min(enemyCandidates.length - 1, k * 5);
+    const eZone = enemyCandidates[idx];
+    if (eZone && !chosenEnemies.includes(eZone)) {
+      eZone.owner = OWNER.ENEMY;
+      eZone.maxOrbs = MAIN_ZONE_HP; eZone.orbs = MAIN_ZONE_HP; // 적 메인 지역 피 400
+      const aiTarget = pickAutoTarget(eZone);
+      if (aiTarget) eZone.zones = [aiTarget];
+      chosenEnemies.push(eZone);
+      if (!enemyMainZone) enemyMainZone = eZone;
+    }
+  }
+
+  // Configure enemy buffs based on standard config
+  enemyBuffs.interval = ENEMY_CONFIG.enemyInterval;
+  enemyBuffs.powerLevel = 0;
+  gameElapsedTime = 0;
+  lastTimerText = '';
+
+  currentState = GAME_STATE.PLAYING;
+  document.getElementById('status-guide').innerText = `${zone.name} 기지 확보! 작전 개시! (적 전면 섬멸 작전)`;
+}
+
+const START_GUIDE_TEXT = '🗺️ 지도를 둘러보고 시작할 지역을 탭 → 한 번 더 탭하면 시작';
+let pendingStartZone = null; // 시작 구역 후보 (한 번 더 탭하면 시작)
+let pointerDownPos = { x: 0, y: 0 };
+const TAP_MOVE_TOLERANCE = 8; // 이 거리(px) 이하로 움직이면 탭으로 판정
+
+function startPan(coords) {
+  view.isPanning = true;
+  view.panStartX = coords.clientX - view.offsetX;
+  view.panStartY = coords.clientY - view.offsetY;
+}
+
+function handleStartSelectTap(zone) {
+  const guide = document.getElementById('status-guide');
+  if (!zone || zone.isHidden) return;
+  if (zone === pendingStartZone) {
+    pendingStartZone = null;
+    beginGameAtZone(zone);
+    return;
+  }
+  pendingStartZone = zone;
+  flashZone(zone, ZONE_COLORS.main);
+  if (guide) guide.innerText = `[${zone.name}] 선택 · 한 번 더 탭하면 여기서 시작`;
+}
+
 let dragSourceZone = null;
 let worldMousePos = { x: 0, y: 0 };
 let isDragging = false;
@@ -1131,6 +1344,12 @@ let lastTapZoneId = null;
 // 더블클릭 / 더블탭 시 인접 아군 점령지가 해당 구역을 일제히 집중 포격! (쿨타임 없이 무제한 즉시 발동 가능)
 function handleZoneDoubleClick(targetZone) {
   if (!targetZone || currentState !== GAME_STATE.PLAYING) return;
+
+  // [방어 지원]: 내 점령지역에 집중 포격하면 아군 구슬이 들어가 피를 회복(최대 50)
+  if (targetZone.owner === OWNER.PLAYER && targetZone.orbs >= targetZone.maxOrbs) {
+    document.getElementById('status-guide').innerText = `🛡️ [${targetZone.name}]은(는) 이미 피가 가득 찼습니다!`;
+    return;
+  }
 
   // [면역 규칙]: 완전 점령된 적 기지는 일반 공격 절대 불가!
   if (targetZone.owner === OWNER.ENEMY && isFullyConquered(targetZone)) {
@@ -1157,28 +1376,24 @@ function handleZoneDoubleClick(targetZone) {
     });
   }
 
+  // 새 집중 포화: 이전에 드래그로 빠졌던 지역도 모두 다시 참여
+  rawZones.forEach(z => { z.focusOptOut = false; });
   currentFocusZone = targetZone;
   focusFireCooldown = 0; // 쿨타임 없음!
 
-  // 1. 완전점령지역을 제외한 전선의 모든 아군 기지가 이 단 하나의 목표 지역을 동시 타겟으로 지정!
+  // 전선의 모든 아군 기지(완전점령 제외, 메인 포함)가 목표를 고정 타겟으로 지정하고
+  // 평소 생산 주기대로 점령(또는 피 회복)될 때까지 계속 사격.
+  // 즉시 추가 발사는 없음: 더블탭을 반복해도 구슬이 더 나가지 않음.
   allPlayerZones.forEach(pZone => {
     pZone.isManualTarget = true;
     pZone.targetZones = [targetZone];
-
-    // 2. 즉시 일제 집중 포격 (전선 모든 기지에서 3~4발 쾌속 연발 발사!)
-    const isPowerZone = (currentPowerZone && currentPowerZone.id === pZone.id);
-    const power = isMainZone(pZone) ? MAIN_ZONE_POWER : (isPowerZone ? (1 + playerBuffs.powerLevel * 2) : 1);
-
-    for (let i = 0; i < 4; i++) {
-      setTimeout(() => {
-        if (currentState === GAME_STATE.PLAYING) {
-          flyingOrbs.push(new FlyingOrb(pZone, targetZone, OWNER.PLAYER, power));
-        }
-      }, i * (70 / gameSpeed));
-    }
   });
+  // 집중 포화 지정 순간: 목표 지역 테두리 번쩍 (내 지역 보급이면 초록)
+  flashZone(targetZone, targetZone.owner === OWNER.PLAYER ? ZONE_COLORS.playerFullCharged : ZONE_COLORS.playerStroke);
 
-  document.getElementById('status-guide').innerText = `🔥 [${targetZone.name}] 집중 포격! 전선의 아군 ${allPlayerZones.length}개 거점에서 일제 사격 (3~4발 연발)!`;
+  document.getElementById('status-guide').innerText = targetZone.owner === OWNER.PLAYER
+    ? `🛡️ [${targetZone.name}] 방어 지원! 아군 ${allPlayerZones.length}개 거점에서 피가 찰 때까지 보급!`
+    : `🔥 [${targetZone.name}] 집중 포화! 아군 ${allPlayerZones.length}개 거점에서 점령할 때까지 일제 사격!`;
 }
 
 function getEventCoords(e) {
@@ -1204,6 +1419,7 @@ function getEventCoords(e) {
 
 function onPointerDown(e) {
   const coords = getEventCoords(e);
+  if (introAnim) { skipIntro(); return; } // 시작 연출 중 탭하면 건너뜀
 
   if (e.button === 2) {
     view.isPanning = true;
@@ -1214,6 +1430,7 @@ function onPointerDown(e) {
 
   worldMousePos = screenToWorld(coords.sx, coords.sy);
   const targetZone = findZoneAtWorld(worldMousePos.x, worldMousePos.y);
+  pointerDownPos = { x: coords.clientX, y: coords.clientY };
 
 
   // Instant Conquer mode activated from Item Reward!
@@ -1227,54 +1444,30 @@ function onPointerDown(e) {
     }
   }
 
+  // [시작 구역 선택]: 맵을 둘러볼 수 있도록 드래그는 화면 이동, 탭 1번 = 선택, 같은 곳 다시 탭 = 시작
+  // (탭/드래그 구분은 손을 뗄 때 판정)
   if (currentState === GAME_STATE.SELECT_START) {
-    if (targetZone && !targetZone.isHidden) {
-      targetZone.owner = OWNER.PLAYER;
-      targetZone.orbs = targetZone.maxOrbs;
-      lastSelectedPlayerZone = targetZone;
-      playerMainZone = targetZone;
-
-      // Assign initial auto target for starter
-      const initTarget = pickAutoTarget(targetZone);
-      if (initTarget) targetZone.targetZones = [initTarget];
-
-      // Assign AI Enemy starting base (1 base)
-      const baseCount = ENEMY_CONFIG.startingEnemyBases;
-
-      const enemyCandidates = rawZones.filter(z => z.id !== targetZone.id && !z.isHidden);
-      enemyCandidates.sort((a, b) => Math.hypot(b.cx - targetZone.cx, b.cy - targetZone.cy) - Math.hypot(a.cx - targetZone.cx, a.cy - targetZone.cy));
-
-      const chosenEnemies = [];
-      for (let k = 0; k < baseCount; k++) {
-        const idx = Math.min(enemyCandidates.length - 1, k * 5);
-        const eZone = enemyCandidates[idx];
-        if (eZone && !chosenEnemies.includes(eZone)) {
-          eZone.owner = OWNER.ENEMY;
-          eZone.orbs = eZone.maxOrbs;
-          const aiTarget = pickAutoTarget(eZone);
-          if (aiTarget) eZone.targetZones = [aiTarget];
-          chosenEnemies.push(eZone);
-          if (!enemyMainZone) enemyMainZone = eZone;
-        }
-      }
-
-      // Configure enemy buffs based on standard config
-      enemyBuffs.interval = ENEMY_CONFIG.enemyInterval;
-      enemyBuffs.powerLevel = 0;
-      gameElapsedTime = 0;
-      lastTimerText = '';
-
-      currentState = GAME_STATE.PLAYING;
-      document.getElementById('status-guide').innerText = `${targetZone.name} 기지 확보! 작전 개시! (적 전면 섬멸 작전)`;
-    }
+    startPan(coords);
     return;
   }
 
   if (currentState !== GAME_STATE.PLAYING) return;
 
+  // [특수 기술 사용 완료 지역]: 완전점령 상태로 특수 기술을 이미 쓴 내 지역은 탭·드래그·더블탭 모두 반응 없음
+  if (targetZone && targetZone.owner === OWNER.PLAYER && isFullyConquered(targetZone) &&
+      !isMainZone(targetZone) && targetZone.chargeState === 'spent') {
+    lastTapTime = 0;
+    lastTapZoneId = null;
+    startPan(coords);
+    return;
+  }
+
   // 지역 더블클릭 / 더블탭 판정 (집중 포격 발동!)
   const now = performance.now();
-  if (targetZone && targetZone.id === lastTapZoneId && (now - lastTapTime) < 380) {
+  // 피가 가득 찬 아군 지역은 더블탭(방어 지원)할 일이 없으므로 탭으로 처리 (특수 기술 연속 사용 가능)
+  const isFullFriendly = targetZone && targetZone.owner === OWNER.PLAYER &&
+    (targetZone.orbs >= targetZone.maxOrbs || isFullyConquered(targetZone));
+  if (targetZone && !isFullFriendly && targetZone.id === lastTapZoneId && (now - lastTapTime) < 380) {
     handleZoneDoubleClick(targetZone);
     lastTapTime = 0;
     lastTapZoneId = null;
@@ -1289,6 +1482,9 @@ function onPointerDown(e) {
     dragSourceZone = targetZone;
     lastSelectedPlayerZone = targetZone;
     isDragging = true;
+  } else {
+    // [화면 이동]: 내 지역이 아닌 곳(적·중립 지역, 맵 바깥)에서 시작한 한 손가락/마우스 드래그
+    startPan(coords);
   }
 }
 
@@ -1307,12 +1503,46 @@ function onPointerMove(e) {
 function onPointerUp(e) {
   if (view.isPanning) {
     view.isPanning = false;
+    if (currentState === GAME_STATE.SELECT_START) {
+      const c = getEventCoords(e);
+      const moved = Math.hypot(c.clientX - pointerDownPos.x, c.clientY - pointerDownPos.y);
+      if (moved <= TAP_MOVE_TOLERANCE) {
+        const w = screenToWorld(c.sx, c.sy);
+        handleStartSelectTap(findZoneAtWorld(w.x, w.y));
+      }
+    }
     return;
   }
 
   if (isDragging && dragSourceZone) {
     const endZone = findZoneAtWorld(worldMousePos.x, worldMousePos.y);
-    if (endZone && endZone.id !== dragSourceZone.id) {
+
+    // [특수 기술]: 드래그 없이 아군 완전점령 지역을 탭하면 그 지역의 충전 1발 사용
+    if (endZone === dragSourceZone && isFullyConquered(endZone)) {
+      const guide = document.getElementById('status-guide');
+      if (!skillUnlocked[OWNER.PLAYER]) {
+        const n = rawZones.filter(z => z.owner === OWNER.PLAYER && isFullyConquered(z)).length;
+        guide.innerText = `🔒 특수 기술은 완전점령 지역 ${SKILL_UNLOCK_FULL_COUNT}곳을 처음 확보하면 열립니다 (${n}/${SKILL_UNLOCK_FULL_COUNT})`;
+        flashZone(endZone, SKILL_DENIED_FLASH);
+      } else if (endZone.chargeState === 'ready' && gameElapsedTime < playerSkillGcdUntil) {
+        guide.innerText = `⏳ 특수 기술 글로벌 쿨타임 (${Math.ceil(playerSkillGcdUntil - gameElapsedTime)}초 남음)`;
+        flashZone(endZone, SKILL_DENIED_FLASH);
+      } else if (endZone.chargeState === 'ready') {
+        useSpecialSkill(endZone);
+      } else if (endZone.chargeState === 'charging') {
+        guide.innerText = `⏳ [${endZone.name}] 특수 기술 충전 중 (${Math.max(1, Math.ceil(SKILL_CHARGE_SEC - endZone.chargeTime))}초 남음)`;
+        flashZone(endZone, SKILL_DENIED_FLASH);
+      } else if (endZone.chargeState === 'spent') {
+        guide.innerText = `[${endZone.name}] 특수 기술 사용 완료. 완전점령이 풀렸다 다시 확보되면 재충전됩니다.`;
+      }
+    }
+
+    // [완전점령 지역 공격 불가]: 완전점령 지역(메인 제외)은 특수 기술 외 어떤 공격도 할 수 없음 → 지정 공격 무시
+    const sourceCanAttack = !isFullyConquered(dragSourceZone) || isMainZone(dragSourceZone);
+
+    // [지정 공격 규칙]: 모든 지역(적군·중립·아군, 거리 무관) 지정 가능
+    // 아군 지역 지정 = 방어 지원(피 회복). 피가 가득 차면 자동 공격으로 복귀
+    if (sourceCanAttack && endZone && endZone.id !== dragSourceZone.id) {
       // 완전 점령된 적 기지는 일반 공격 불가!
       if (endZone.owner !== dragSourceZone.owner && endZone.owner !== OWNER.NEUTRAL && isFullyConquered(endZone)) {
         document.getElementById('status-guide').innerText = `🛡️ [${endZone.name}]은(는) 완전 점령된 철벽 기지입니다! [즉시 점령] 아이템으로만 공략 가능합니다.`;
@@ -1320,6 +1550,8 @@ function onPointerUp(e) {
       } else {
         dragSourceZone.isManualTarget = true;
         dragSourceZone.targetZones = [endZone];
+        // [집중 포화 중 지정 공격]: 다른 지역을 지정하면 이 지역만 집중 포화에서 빠짐 (여러 지역 중복 가능)
+        dragSourceZone.focusOptOut = !!currentFocusZone && endZone !== currentFocusZone;
       }
     }
   }
@@ -1328,10 +1560,21 @@ function onPointerUp(e) {
 }
 
 // Mouse Wheel Zoom
+// 화면의 한 점(sx, sy: 캔버스 좌표)을 고정한 채 배율 변경
+function zoomAt(newScale, sx, sy, worldAnchor) {
+  const s2 = Math.min(view.maxScale, Math.max(view.minScale, newScale));
+  const w = worldAnchor || screenToWorld(sx, sy);
+  const cx = canvas.width / 2, cy = canvas.height / 2;
+  view.scale = s2;
+  view.offsetX = sx - cx - (w.x - cx) * s2;
+  view.offsetY = sy - cy - (w.y - cy) * s2;
+}
+
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
-  view.scale = Math.min(view.maxScale, Math.max(view.minScale, view.scale * zoomFactor));
+  const c = getEventCoords(e);
+  zoomAt(view.scale * zoomFactor, c.sx, c.sy); // 마우스 위치를 중심으로 확대/축소
 }, { passive: false });
 
 canvas.addEventListener('contextmenu', e => e.preventDefault());
@@ -1351,6 +1594,7 @@ let initialPinchDist = null;
 let initialScale = 1.0;
 let initialPanMidX = 0;
 let initialPanMidY = 0;
+let pinchWorldAnchor = null;
 
 canvas.addEventListener('touchstart', (e) => {
   lastTouchTime = performance.now();
@@ -1361,6 +1605,9 @@ canvas.addEventListener('touchstart', (e) => {
     initialScale = view.scale;
     initialPanMidX = (t1.clientX + t2.clientX) / 2 - view.offsetX;
     initialPanMidY = (t1.clientY + t2.clientY) / 2 - view.offsetY;
+    // 두 손가락 가운데 지점의 월드 좌표를 기억해 그 지점을 중심으로 확대
+    const r = canvas.getBoundingClientRect();
+    pinchWorldAnchor = screenToWorld((t1.clientX + t2.clientX) / 2 - r.left, (t1.clientY + t2.clientY) / 2 - r.top);
     view.isPanning = false;
     isDragging = false;
     dragSourceZone = null;
@@ -1377,12 +1624,10 @@ window.addEventListener('touchmove', (e) => {
     const t2 = e.touches[1];
     const currentDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
     const scaleFactor = currentDist / initialPinchDist;
-    view.scale = Math.min(view.maxScale, Math.max(view.minScale, initialScale * scaleFactor));
-
-    const curMidX = (t1.clientX + t2.clientX) / 2;
-    const curMidY = (t1.clientY + t2.clientY) / 2;
-    view.offsetX = curMidX - initialPanMidX;
-    view.offsetY = curMidY - initialPanMidY;
+    const r = canvas.getBoundingClientRect();
+    const curMidX = (t1.clientX + t2.clientX) / 2 - r.left;
+    const curMidY = (t1.clientY + t2.clientY) / 2 - r.top;
+    zoomAt(initialScale * scaleFactor, curMidX, curMidY, pinchWorldAnchor);
     e.preventDefault();
   } else if (e.touches.length === 1) {
     onPointerMove(e);
@@ -1403,13 +1648,8 @@ let selectedModalMapKey = 'KOREA';
 
 function selectModalMap(mapKey) {
   selectedModalMapKey = mapKey;
-  const cards = {
-    KOREA: document.getElementById('modal-map-korea'),
-    SEOUL: document.getElementById('modal-map-seoul'),
-    GYEONGGI: document.getElementById('modal-map-gyeonggi')
-  };
-  Object.keys(cards).forEach(key => {
-    const card = cards[key];
+  Object.keys(MAP_CONFIGS).forEach(key => {
+    const card = document.getElementById(`modal-map-${key.toLowerCase()}`);
     if (card) {
       if (key === mapKey) {
         card.classList.add('active');
@@ -1431,12 +1671,10 @@ function selectModalMap(mapKey) {
 window.selectModalMap = selectModalMap;
 
 function updateMapButtonsUI(mapKey) {
-  const kBtn = document.getElementById('map-btn-korea');
-  const sBtn = document.getElementById('map-btn-seoul');
-  const gBtn = document.getElementById('map-btn-gyeonggi');
-  if (kBtn) kBtn.classList.toggle('active', mapKey === 'KOREA');
-  if (sBtn) sBtn.classList.toggle('active', mapKey === 'SEOUL');
-  if (gBtn) gBtn.classList.toggle('active', mapKey === 'GYEONGGI');
+  Object.keys(MAP_CONFIGS).forEach(key => {
+    const btn = document.getElementById(`map-btn-${key.toLowerCase()}`);
+    if (btn) btn.classList.toggle('active', mapKey === key);
+  });
 }
 window.updateMapButtonsUI = updateMapButtonsUI;
 
@@ -1445,34 +1683,19 @@ function switchBattlefield(mapKey) {
   loadSelectedMap(mapKey);
   updateMapButtonsUI(mapKey);
   const guideEl = document.getElementById('status-guide');
-  if (guideEl) {
-    if (mapKey === 'SEOUL') {
-      guideEl.innerText = '🏙️ 서울특별시 작전: 시작할 자치구(예: 강남구, 마포구, 종로구 등)를 탭하세요!';
-    } else if (mapKey === 'GYEONGGI') {
-      guideEl.innerText = '🌲 경기도 전선 작전: 시작할 시·군(예: 수원, 고양, 용인 등)을 탭하세요!';
-    } else {
-      guideEl.innerText = '🗺️ 전국 전선 작전: 시작할 거점 도시를 탭하세요!';
-    }
-  }
+  if (guideEl) guideEl.innerText = START_GUIDE_TEXT;
 }
 window.switchBattlefield = switchBattlefield;
 
 function onStartBtnClick() {
   const modal = document.getElementById('start-modal');
   if (modal) modal.style.display = 'none';
+  startIntroZoom(selectedModalMapKey);
   if (currentMapKey !== selectedModalMapKey) {
     switchBattlefield(selectedModalMapKey);
   } else {
     const guideEl = document.getElementById('status-guide');
-    if (guideEl) {
-      if (selectedModalMapKey === 'SEOUL') {
-        guideEl.innerText = '🏙️ 시작할 아군 자치구(예: 강남구, 마포구, 종로구 등)를 탭하세요!';
-      } else if (selectedModalMapKey === 'GYEONGGI') {
-        guideEl.innerText = '🌲 시작할 아군 시·군(예: 수원, 고양, 용인 등)을 탭하세요!';
-      } else {
-        guideEl.innerText = '🗺️ 시작할 아군 거점 도시를 탭하세요!';
-      }
-    }
+    if (guideEl) guideEl.innerText = START_GUIDE_TEXT;
   }
 }
 window.onStartBtnClick = onStartBtnClick;
@@ -1594,22 +1817,12 @@ function triggerEnemyFocusFire() {
   const firingBases = activeEnemyZones.filter(e => e.neighbors.includes(target) || Math.random() < 0.45);
   if (firingBases.length === 0) return;
 
-  const salvoCount = ENEMY_CONFIG.enemyFocusSalvo;
+  // 적군도 동일 규칙: 즉시 추가 발사 없이 점령할 때까지 고정 사격
   firingBases.forEach(eZone => {
     eZone.isManualTarget = true;
     eZone.targetZones = [target];
-
-    const isEnemyPower = (currentEnemyPowerZone && currentEnemyPowerZone.id === eZone.id);
-    const power = isMainZone(eZone) ? MAIN_ZONE_POWER : (isEnemyPower ? (1 + enemyBuffs.powerLevel * 2) : 1);
-
-    for (let i = 0; i < salvoCount; i++) {
-      setTimeout(() => {
-        if (currentState === GAME_STATE.PLAYING) {
-          flyingOrbs.push(new FlyingOrb(eZone, target, OWNER.ENEMY, power));
-        }
-      }, i * (70 / gameSpeed));
-    }
   });
+  flashZone(target, ZONE_COLORS.enemyStroke); // 적 집중 포화 목표 번쩍
 
   document.getElementById('status-guide').innerText = `🚨 [적군 집중포화 경보!]: 적 기지 ${firingBases.length}곳에서 [${target.name}]에 일제 사격을 개시했습니다!`;
 }
@@ -1621,7 +1834,7 @@ function updateAI(currentTime) {
   if (currentTime - lastAiDecisionTime < decisionInterval) return;
   lastAiDecisionTime = currentTime;
 
-  // 1. 적군 특수 기술 사용 검토 (완전점령 3개 이상 & 충전 보유 & 쿨타임 완료 시)
+  // 1. 적군 특수 기술 사용 검토 (충전된 완전점령 지역이 있을 때)
   useEnemySpecialSkill();
 
   // 2. 적군 집중포화 사용 검토 (쿨타임 완료 시 아군 거점에 일제 사격)
@@ -1641,6 +1854,14 @@ function updateAI(currentTime) {
       if (tgt) eZone.targetZones = [tgt];
     }
   });
+}
+
+// 아군 집중 포화 참여 대상인지: 전선 기지(메인은 완전점령이어도 참여), 드래그로 빠진 지역 제외
+function shouldJoinPlayerFocus(zone) {
+  const focus = currentFocusZone;
+  if (!focus || zone.owner !== OWNER.PLAYER || zone === focus || zone.focusOptOut) return false;
+  if (isFullyConquered(zone) && !isMainZone(zone)) return false;
+  return true;
 }
 
 // Continuous automatic troop generation (adjusted by gameSpeed 1x, 2x, 4x!)
@@ -1663,9 +1884,18 @@ function updateOrbSpawners(currentTime) {
   rawZones.forEach(zone => {
     if (zone.owner === OWNER.NEUTRAL) return;
 
+    // [집중 포화 유지]: 집중 포화가 진행 중이면 참여 대상 기지(메인 포함, 도중에 새로 점령한 전선 포함)는
+    // 드래그로 따로 지정하지 않은 한 계속 집중 포화 목표를 사격
+    if (shouldJoinPlayerFocus(zone) && !(zone.targetZones.length === 1 && zone.targetZones[0] === currentFocusZone)) {
+      zone.isManualTarget = true;
+      zone.targetZones = [currentFocusZone];
+    }
+
     // '완전 점령' Check: 수동 지정(전국 집중포화 등)이 아닌 경우에만 잉여 생산 중단!
-    if (isFullyConquered(zone) && !zone.isManualTarget && !isMainZone(zone)) {
+    // [완전점령 지역]: 메인 외에는 지정 공격·집중 포화 여부와 관계없이 구슬을 쏘지 않음
+    if (isFullyConquered(zone) && !isMainZone(zone)) {
       zone.targetZones = [];
+      zone.isManualTarget = false;
       return;
     }
 
@@ -1739,7 +1969,76 @@ function checkWinConditions(isTimeUp = false) {
   }
 }
 
-function gameOver(isWin) {
+// 항복: 실수 방지를 위해 2단계 확인 (첫 탭 ➔ 확인 상태, 3초 안에 다시 탭 ➔ 항복)
+const SURRENDER_CONFIRM_MS = 3000;
+let surrenderArmedUntil = 0;
+let surrenderResetTimer = null;
+
+function resetSurrenderButton() {
+  surrenderArmedUntil = 0;
+  const btn = document.getElementById('surrender-btn');
+  if (btn) {
+    btn.classList.remove('armed');
+    btn.innerText = '🏳️ 항복';
+  }
+}
+
+function onSurrenderClick() {
+  if (currentState !== GAME_STATE.PLAYING) return;
+  const btn = document.getElementById('surrender-btn');
+  const now = performance.now();
+
+  if (now < surrenderArmedUntil) {
+    clearTimeout(surrenderResetTimer);
+    resetSurrenderButton();
+    gameOver(false, true);
+    return;
+  }
+
+  surrenderArmedUntil = now + SURRENDER_CONFIRM_MS;
+  if (btn) {
+    btn.classList.add('armed');
+    btn.innerText = '한 번 더 누르면 항복';
+  }
+  clearTimeout(surrenderResetTimer);
+  surrenderResetTimer = setTimeout(resetSurrenderButton, SURRENDER_CONFIRM_MS);
+}
+window.onSurrenderClick = onSurrenderClick;
+
+// 시작 전(시작 지역 고르는 중) 홈으로: 전장 선택 화면을 다시 열고 선택 초기화
+function goHome() {
+  if (currentState !== GAME_STATE.SELECT_START) return;
+  introAnim = null;
+  pendingStartZone = null;
+  view.scale = 1;
+  view.offsetX = 0;
+  view.offsetY = 0;
+  const modal = document.getElementById('start-modal');
+  if (modal) modal.style.display = 'flex';
+}
+window.goHome = goHome;
+
+let lastHomeHidden = null;
+function updateHomeButtonVisibility() {
+  const modal = document.getElementById('start-modal');
+  const hidden = currentState !== GAME_STATE.SELECT_START || !modal || modal.style.display !== 'none';
+  if (hidden === lastHomeHidden) return;
+  lastHomeHidden = hidden;
+  const btn = document.getElementById('home-btn');
+  if (btn) btn.hidden = hidden;
+}
+
+let lastSurrenderHidden = null;
+function updateSurrenderButtonVisibility() {
+  const hidden = currentState !== GAME_STATE.PLAYING;
+  if (hidden === lastSurrenderHidden) return;
+  lastSurrenderHidden = hidden;
+  const btn = document.getElementById('surrender-btn');
+  if (btn) btn.hidden = hidden;
+  if (hidden) resetSurrenderButton();
+}
+
+function gameOver(isWin, isSurrender = false) {
   currentState = GAME_STATE.GAME_OVER;
   const modal = document.getElementById('end-modal');
   const title = document.getElementById('end-title');
@@ -1751,6 +2050,7 @@ function gameOver(isWin) {
     title.style.color = '#2563eb';
     title.innerText = '🎉 [전면 승리] 적군 섬멸 완료!';
 
+    const wasCleared = isStageCleared(currentMapKey);
     const recordResult = saveBattleRecord(currentMapKey, gameElapsedTime);
     const bestStr = formatTimeString(recordResult.bestTime);
 
@@ -1762,9 +2062,21 @@ function gameOver(isWin) {
     }
     recordMsg += `<div style="font-size: 12px; color: #475569; line-height: 1.5;">🎖️ [${mapName}] 누적 평정: <b>${recordResult.clearCount}회</b><br>적의 모든 거점을 격파하고 전선을 완전히 평정했습니다!</div>`;
 
+    // 캠페인: 처음 클리어한 맵이면 다음 맵이 열림
+    const order = getCampaignOrder();
+    const nextKey = order[order.indexOf(currentMapKey) + 1];
+    if (!wasCleared && nextKey) {
+      recordMsg = `<div style="background:#fef9c3; border:1.5px solid #fde047; color:#1e293b; padding:10px 12px; border-radius:14px; margin-bottom:12px; font-weight:800;">🔓 다음 맵 열림: ${MAP_CONFIGS[nextKey].label}</div>` + recordMsg;
+    }
     desc.innerHTML = recordMsg;
   } else {
     title.style.color = '#ef4444';
+    if (isSurrender) {
+      title.innerText = '🏳️ 항복... 작전 중단';
+      desc.innerHTML = `<div style="font-size: 14px; color: #475569; margin-bottom: 10px;">작전 진행 시간: <b>${timeStr}</b></div><div style="font-size: 13px; color: #334155;">스스로 항복하여 작전을 중단했습니다.<br>전열을 가다듬고 다시 도전하세요!</div>`;
+      if (modal) modal.style.display = 'flex';
+      return;
+    }
     title.innerText = '💀 본진 함락... 작전 실패!';
     desc.innerHTML = `<div style="font-size: 14px; color: #475569; margin-bottom: 10px;">작전 진행 시간: <b>${timeStr}</b></div><div style="font-size: 13px; color: #334155;">적의 공세에 아군의 모든 거점이 함락되었습니다.<br>전열을 가다듬고 다시 도전하세요!</div>`;
   }
@@ -1774,81 +2086,239 @@ function gameOver(isWin) {
 // -------------------------------------------------------------
 // RENDER TACTICAL ADMINISTRATIVE MAP
 // -------------------------------------------------------------
+function drawBackdropZones(ctx) {
+  if (backdropZones.length === 0) return;
+  ctx.save();
+  ctx.fillStyle = '#e2e0d8';
+  ctx.strokeStyle = '#cfcdc4';
+  ctx.lineWidth = 1.0;
+  ctx.lineJoin = 'round';
+  backdropZones.forEach(b => {
+    if (!b.path) return;
+    // 외곽선 없이 면만 칠함 (내부 구 경계선이 보이지 않도록, 미세 틈은 같은 색 선으로 메움)
+    ctx.fill(b.path);
+    ctx.strokeStyle = '#e2e0d8';
+    ctx.lineWidth = 1.2 / view.scale;
+    ctx.stroke(b.path);
+  });
+  ctx.font = `600 ${ZONE_LABEL_PX / view.scale}px -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif`;
+  ctx.fillStyle = '#a8a59b';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  backdropZones.forEach(b => {
+    if (b.path) ctx.fillText(b.name, b.cx, b.cy);
+  });
+  ctx.restore();
+}
+
+// -------------------------------------------------------------
+// 지역 색상 표현 (글자 대신 색으로 상태 표시)
+// - 중립: 바탕색 + 아래에서 차오르는 줄다리기 게이지 (우세 진영 색)
+// - 점령지: 피(0~50)만큼 아래에서 소유 진영 색이 차오름
+// - 내 메인: 밝은 노란색 + 흰 테두리
+// - 완전점령: 연한 색 바탕 위로 10초에 걸쳐 진한 색이 차오름(특수 기술 충전), 충전 완료 시 테두리 번쩍
+// - 특수 기술 사용 후: 다시 연한 완전점령 색
+// - 점령 순간: 테두리가 점령한 진영 색으로 번쩍
+// -------------------------------------------------------------
+const ZONE_COLORS = {
+  base: '#edebe3',
+  baseStroke: '#cfcdc4',
+  player: '#60a5fa',
+  playerStroke: '#2563eb',
+  enemy: '#f87171',
+  enemyStroke: '#b91c1c',
+  playerFull: '#bbf7d0',
+  playerFullCharged: '#22c55e',
+  playerFullStroke: '#16a34a',
+  enemyFull: '#fecaca',
+  enemyFullCharged: '#dc2626',
+  enemyFullStroke: '#991b1b',
+  main: '#fde047',
+  mainCharged: '#eab308',
+  mainStroke: '#ffffff',
+  enemyMain: '#be123c',        // 적 메인: 진한 와인 레드 + 흰 테두리
+  enemyMainCharged: '#881337'
+};
+const ZONE_FLASH_MS = 700;
+
+function flashZone(zone, color) {
+  zone.flashAt = performance.now();
+  zone.flashColor = color;
+}
+
+// 지역 모양 안을 아래에서부터 ratio(0~1)만큼 color로 채움
+function fillZoneFromBottom(ctx, zone, ratio, color) {
+  if (ratio <= 0 || !zone.bbox) return;
+  const r = Math.min(1, ratio);
+  const { minX, maxX, minY, maxY } = zone.bbox;
+  const h = (maxY - minY) * r;
+  ctx.save();
+  ctx.clip(zone.path);
+  ctx.fillStyle = color;
+  ctx.fillRect(minX - 1, maxY - h, maxX - minX + 2, h + 1);
+  ctx.restore();
+}
+
+function getZoneStyle(zone) {
+  const isFull = isFullyConquered(zone);
+  const isPlayer = zone.owner === OWNER.PLAYER;
+  const isMyMain = isPlayer && zone === playerMainZone;
+  const hpRatio = zone.orbs / zone.maxOrbs;
+  const chargeRatio = zone.chargeState === 'ready' ? 1 : (zone.chargeState === 'charging' ? zone.chargeTime / SKILL_CHARGE_SEC : 0);
+
+  if (zone.owner === OWNER.NEUTRAL) {
+    const gauge = zone.claimant === OWNER.PLAYER ? ZONE_COLORS.player : ZONE_COLORS.enemy;
+    return { base: ZONE_COLORS.base, gauge, ratio: zone.claimant ? hpRatio : 0, stroke: ZONE_COLORS.baseStroke, width: 1.0 };
+  }
+  const isEnemyMain = zone.owner === OWNER.ENEMY && zone === enemyMainZone;
+  if (isEnemyMain) {
+    if (isFull && hpRatio >= 1) {
+      return { base: ZONE_COLORS.enemyMain, gauge: ZONE_COLORS.enemyMainCharged, ratio: chargeRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
+    }
+    return { base: ZONE_COLORS.base, gauge: ZONE_COLORS.enemyMain, ratio: hpRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
+  }
+  if (isMyMain) {
+    if (isFull && hpRatio >= 1) {
+      return { base: ZONE_COLORS.main, gauge: ZONE_COLORS.mainCharged, ratio: chargeRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
+    }
+    return { base: ZONE_COLORS.base, gauge: ZONE_COLORS.main, ratio: hpRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
+  }
+  if (isFull && hpRatio >= 1) {
+    return isPlayer
+      ? { base: ZONE_COLORS.playerFull, gauge: ZONE_COLORS.playerFullCharged, ratio: chargeRatio, stroke: ZONE_COLORS.playerFullStroke, width: 2.0 }
+      : { base: ZONE_COLORS.enemyFull, gauge: ZONE_COLORS.enemyFullCharged, ratio: chargeRatio, stroke: ZONE_COLORS.enemyFullStroke, width: 2.0 };
+  }
+  return isPlayer
+    ? { base: ZONE_COLORS.base, gauge: ZONE_COLORS.player, ratio: hpRatio, stroke: ZONE_COLORS.playerStroke, width: 2.0 }
+    : { base: ZONE_COLORS.base, gauge: ZONE_COLORS.enemy, ratio: hpRatio, stroke: ZONE_COLORS.enemyStroke, width: 2.0 };
+}
+
+// 특수 기술 글로벌 쿨타임 표시: 해당 진영의 충전 완료 지역 위 어두운 부채꼴이 시계 방향으로 걷힘
+function drawSkillGcdSweep(ctx, owner, gcdUntil) {
+  const remain = gcdUntil - gameElapsedTime;
+  if (remain <= 0) return;
+  const f = Math.min(1, remain / SKILL_GCD_SEC); // 남은 비율
+  const start = -Math.PI / 2 + (1 - f) * Math.PI * 2;
+  const end = -Math.PI / 2 + Math.PI * 2;
+  for (let i = 0; i < rawZones.length; i++) {
+    const zone = rawZones[i];
+    if (zone.owner !== owner || zone.chargeState !== 'ready' || !zone.path || !zone.bbox) continue;
+    const { minX, maxX, minY, maxY } = zone.bbox;
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    const r = Math.hypot(maxX - minX, maxY - minY);
+    ctx.save();
+    ctx.clip(zone.path);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, end);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.5)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(start) * r, cy + Math.sin(start) * r);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 1.5 / view.scale;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 function drawExactDistrictsMap(ctx) {
-  // 1. Draw Polygons via pre-compiled Path2D (Mini Metro Light/Minimalist Aesthetic)
+  drawBackdropZones(ctx);
+
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  // 1. 면 채우기 (바탕 + 아래에서 차오르는 게이지)
+  const styles = new Array(rawZones.length);
   for (let i = 0; i < rawZones.length; i++) {
     const zone = rawZones[i];
     if (!zone.path) continue;
-
-    const isHovered = hoveredZone && hoveredZone.id === zone.id;
-    const isSelected = dragSourceZone && dragSourceZone.id === zone.id;
-    const isFull = isFullyConquered(zone);
-
-    const isSeoul = (currentMapKey === 'SEOUL');
-    // Reference image styling: Pure crisp white district cards with subtle shadow and light grey stroke
-    let fillColor = isSeoul ? '#ffffff' : '#edebe3';
-    let strokeColor = isSeoul ? '#cbd5e1' : '#cfcdc4';
-    let lineWidth = isSeoul ? 1.3 : 1.0;
-
-    if (zone.owner === OWNER.PLAYER) {
-      if (isFull) {
-        // [아군 완전 점령]: 편안하고 단정한 세이지 그린 / 에메랄드
-        fillColor = '#dcfce7';
-        strokeColor = '#16a34a';
-        lineWidth = 2.0;
-      } else {
-        // [아군 교전 중]: 산뜻한 파스텔 스카이 블루 & 선명한 코발트 테두리
-        fillColor = '#dbeafe';
-        strokeColor = '#2563eb';
-        lineWidth = 2.2;
-      }
-    } else if (zone.owner === OWNER.ENEMY) {
-      if (isFull) {
-        // [적군 완전 점령]: 딥 소프트 로즈
-        fillColor = '#fee2e2';
-        strokeColor = '#dc2626';
-        lineWidth = 2.0;
-      } else {
-        // [적군 교전 중]: 소프트 레드 & 버밀리온 레드 테두리
-        fillColor = '#fecaca';
-        strokeColor = '#b91c1c';
-        lineWidth = 2.2;
-      }
-    }
-
-    if (isHovered || isSelected) {
-      fillColor = zone.owner === OWNER.PLAYER ? '#bfdbfe' : '#fef08a';
-      strokeColor = '#0f172a';
-      lineWidth = 2.4;
-    }
-
-    // Subtle drop shadow for illustration card look in Seoul map
-    if (isSeoul) {
-      ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.06)';
-      ctx.shadowBlur = 6;
-      ctx.shadowOffsetY = 2;
-      ctx.fillStyle = fillColor;
-      ctx.fill(zone.path);
-      ctx.restore();
-    } else {
-      ctx.fillStyle = fillColor;
-      ctx.fill(zone.path);
-    }
-
-    ctx.strokeStyle = strokeColor;
-    ctx.lineWidth = lineWidth;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
+    const st = getZoneStyle(zone);
+    styles[i] = st;
+    ctx.fillStyle = st.base;
+    ctx.fill(zone.path);
+    // 안티앨리어싱으로 생기는 경계의 머리카락 틈만 메우는 얇은 덧칠 (맵 데이터는 build_map.py로 경계가 정확히 맞물림)
+    ctx.strokeStyle = st.ratio >= 1 ? st.gauge : st.base;
+    ctx.lineWidth = 1.2 / view.scale;
     ctx.stroke(zone.path);
+    fillZoneFromBottom(ctx, zone, st.ratio, st.gauge);
   }
 
-  // 1.5 Draw Han River (한강 자연 수로 - 사용자 레퍼런스 스타일)
-  if (currentMapKey === 'SEOUL' && hanRiverPath) {
+  // 2. 테두리: 중립 → 점령지 → 메인 순으로 그려 굵은 테두리가 이웃 선에 덮이지 않게 함
+  const strokePass = (filter) => {
+    for (let i = 0; i < rawZones.length; i++) {
+      const zone = rawZones[i];
+      const st = styles[i];
+      if (!st || !filter(zone)) continue;
+      ctx.strokeStyle = st.stroke;
+      ctx.lineWidth = st.width / view.scale; // 확대해도 화면상 테두리 두께 유지
+      if (zone.owner === OWNER.NEUTRAL) {
+        ctx.stroke(zone.path);
+        continue;
+      }
+      // 점령지 테두리: 두 배 굵기로 그린 뒤 면을 다시 칠해 바깥쪽 절반만 남김
+      // (여러 조각으로 된 지역(예: 수원 4개 구)의 안쪽 경계선이 보이지 않도록)
+      ctx.lineWidth *= 2;
+      ctx.stroke(zone.path);
+      ctx.fillStyle = st.base;
+      ctx.fill(zone.path);
+      fillZoneFromBottom(ctx, zone, st.ratio, st.gauge);
+    }
+  };
+  strokePass(z => z.owner === OWNER.NEUTRAL);
+  const isAnyMain = z => (z === playerMainZone && z.owner === OWNER.PLAYER) || (z === enemyMainZone && z.owner === OWNER.ENEMY);
+  strokePass(z => z.owner !== OWNER.NEUTRAL && !isAnyMain(z));
+  strokePass(isAnyMain);
+
+  // 2.5 시작 구역 후보: 노란색 + 흰 테두리 (한 번 더 탭하면 시작)
+  if (currentState === GAME_STATE.SELECT_START && pendingStartZone && pendingStartZone.path) {
+    const pulse = 0.65 + 0.25 * Math.sin(performance.now() / 220);
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = ZONE_COLORS.main;
+    ctx.fill(pendingStartZone.path);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3.2 / view.scale;
+    ctx.stroke(pendingStartZone.path);
+    ctx.restore();
+  }
+
+  // 3. 선택(드래그 시작) 지역 강조
+  if (dragSourceZone && dragSourceZone.path) {
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 2.6 / view.scale;
+    ctx.stroke(dragSourceZone.path);
+  }
+
+  // 3.5 특수 기술 글로벌 쿨타임: 충전 완료된 내 지역 위로 어두운 부채꼴이 시계 방향으로 걷히며 돌아감
+  //     (월드 오브 워크래프트 스킬 아이콘 쿨타임 방식)
+  drawSkillGcdSweep(ctx, OWNER.PLAYER, playerSkillGcdUntil);
+  drawSkillGcdSweep(ctx, OWNER.ENEMY, enemySkillGcdUntil);
+
+  // 4. 번쩍 효과 (점령 순간, 특수 기술 충전 완료 순간)
+  const now = performance.now();
+  for (let i = 0; i < rawZones.length; i++) {
+    const zone = rawZones[i];
+    if (!zone.flashAt || !zone.path) continue;
+    const t = (now - zone.flashAt) / ZONE_FLASH_MS;
+    if (t >= 1) { zone.flashAt = 0; continue; }
+    ctx.save();
+    ctx.globalAlpha = 1 - t;
+    ctx.strokeStyle = zone.flashColor;
+    ctx.lineWidth = (3 + 5 * (1 - t)) / view.scale;
+    ctx.stroke(zone.path);
+    ctx.restore();
+  }
+
+  // 1.5 큰 물(강·호수)
+  if (hanRiverPath) {
     ctx.save();
     ctx.fillStyle = '#bfe5fa'; // 산뜻한 한강 라이트 블루
     ctx.strokeStyle = '#93cbf0';
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 1.6 / view.scale;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.fill(hanRiverPath);
@@ -1859,8 +2329,8 @@ function drawExactDistrictsMap(ctx) {
   // 2. Draw Network Links (구슬이 움직이는 선 표시 제거)
   // (Network links hidden per user request)
 
-  // 3. Drag line from source (Clean Dotted Transit Vector)
-  if (isDragging && dragSourceZone) {
+  // 3. Drag line from source (Clean Dotted Transit Vector) - 공격할 수 없는 완전점령 지역에서는 표시 안 함
+  if (isDragging && dragSourceZone && (!isFullyConquered(dragSourceZone) || isMainZone(dragSourceZone))) {
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(dragSourceZone.cx, dragSourceZone.cy);
@@ -1875,128 +2345,614 @@ function drawExactDistrictsMap(ctx) {
   // 4. Zone Labels & Badges
   drawZoneBadges(ctx);
 
-  // 5. Active Focus Fire Reticle
-  drawActiveFocusReticle(ctx);
+  // 집중 포화 조준선 그래픽은 표시하지 않음
 }
 
-function drawActiveFocusReticle(ctx) {
-  // 1. 아군 집중포화 목표 조준선 (미니멀 레드 서클)
-  if (currentFocusZone && currentFocusZone.owner !== OWNER.PLAYER) {
-    const { cx, cy } = currentFocusZone;
-    const t = Date.now() / 250;
-    const r = 18 + Math.sin(t * 3) * 3;
-
-    ctx.save();
-    ctx.strokeStyle = '#dc2626';
-    ctx.lineWidth = 2.0;
-    ctx.setLineDash([5, 4]);
-
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Crosshair ticks
-    ctx.setLineDash([]);
-    ctx.lineWidth = 2.0;
-    ctx.beginPath();
-    ctx.moveTo(cx - r - 5, cy); ctx.lineTo(cx - r + 3, cy);
-    ctx.moveTo(cx + r - 3, cy); ctx.lineTo(cx + r + 5, cy);
-    ctx.moveTo(cx, cy - r - 5); ctx.lineTo(cx, cy - r + 3);
-    ctx.moveTo(cx, cy + r - 3); ctx.lineTo(cx, cy + r + 5);
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  // 2. 적군 집중포화 피격 경보 조준선
-  if (currentEnemyFocusZone && enemyFocusReticleTimer > 0) {
-    const { cx, cy } = currentEnemyFocusZone;
-    const t = Date.now() / 150;
-    const r = 21 + Math.sin(t * 4) * 3;
-
-    ctx.save();
-    ctx.strokeStyle = '#b91c1c';
-    ctx.lineWidth = 2.2;
-    ctx.setLineDash([4, 4]);
-
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Inner danger pulse ring
-    ctx.beginPath();
-    ctx.arc(cx, cy, r - 6, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(185, 28, 28, 0.6)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([]);
-    ctx.stroke();
-
-    ctx.restore();
-  }
-}
-
+// 지역 이름만 작게 표시 (상태는 색으로 표현하므로 숫자·아이콘 표시 없음)
+// 글자 크기는 확대 배율과 무관하게 화면에서 일정하게 유지하고,
+// 화면상 지역이 이름보다 작으면 이름을 생략해 겹침 방지
+const ZONE_LABEL_PX = 10;
 function drawZoneBadges(ctx) {
-  const isSeoul = currentMapKey === 'SEOUL';
-  const baseSize = isSeoul ? 11 : 9.5;
-  const fontSize = Math.max(9, Math.min(15, baseSize * Math.sqrt(view.scale)));
-  const titleFont = `700 ${fontSize}px -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif`;
-  const subFont = `600 ${isSeoul ? 9.5 : 8.5}px monospace`;
-
+  const fontSize = ZONE_LABEL_PX / view.scale;
+  ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif`;
   ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(30, 41, 59, 0.55)';
+  for (let i = 0; i < rawZones.length; i++) {
+    const zone = rawZones[i];
+    if (!zone.bbox) continue;
+    const w = ctx.measureText(zone.name).width;
+    if (zone.bbox.maxX - zone.bbox.minX < w * 0.9) continue;
+    ctx.fillText(zone.name, zone.cx, zone.cy);
+  }
+}
+
+// -------------------------------------------------------------
+// MINIMAP: 왼쪽 아래에 전체 맵 전황(지역 색 그대로) + 현재 보고 있는 화면 영역 표시
+// 미니맵을 탭하거나 드래그하면 그 위치로 화면 이동
+// -------------------------------------------------------------
+const MINIMAP_MAX_W = 140;
+const MINIMAP_MAX_H = 170;
+const MINIMAP_REDRAW_MS = 100; // 리소스 절약: 초당 10회만 다시 그림
+const minimapCanvas = document.getElementById('minimap');
+const minimapCard = document.getElementById('minimap-card');
+const minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+let minimapLayout = null; // { scale, area, cssW, cssH }
+let lastMinimapDraw = 0;
+let lastMinimapHidden = null;
+
+function layoutMinimap() {
+  if (!minimapCanvas) return null;
+  const area = getMapArea();
+  const mm = (MAP_CONFIGS[currentMapKey] && MAP_CONFIGS[currentMapKey].minimap) || { w: MINIMAP_MAX_W, h: MINIMAP_MAX_H };
+  const scale = Math.min(mm.w / area.w, mm.h / area.h);
+  const cssW = Math.round(area.w * scale);
+  const cssH = Math.round(area.h * scale);
+  const dpr = window.devicePixelRatio || 1;
+  if (minimapCanvas.width !== Math.round(cssW * dpr) || minimapCanvas.height !== Math.round(cssH * dpr)) {
+    minimapCanvas.width = Math.round(cssW * dpr);
+    minimapCanvas.height = Math.round(cssH * dpr);
+    minimapCanvas.style.width = cssW + 'px';
+    minimapCanvas.style.height = cssH + 'px';
+  }
+  return { scale, area, cssW, cssH, dpr };
+}
+
+function drawMinimap(timestamp) {
+  if (!minimapCtx) return;
+  const startModalOpen = document.getElementById('start-modal').style.display !== 'none';
+  const hidden = !!introAnim || !(currentState === GAME_STATE.PLAYING || (currentState === GAME_STATE.SELECT_START && !startModalOpen)) || rawZones.length === 0;
+  if (hidden !== lastMinimapHidden) {
+    lastMinimapHidden = hidden;
+    minimapCard.hidden = hidden;
+  }
+  if (hidden || timestamp - lastMinimapDraw < MINIMAP_REDRAW_MS) return;
+  lastMinimapDraw = timestamp;
+
+  const L = layoutMinimap();
+  minimapLayout = L;
+  const m = minimapCtx;
+  const k = L.scale * L.dpr;
+  m.setTransform(1, 0, 0, 1, 0, 0);
+  m.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+  // 월드 좌표 그대로 그리도록 변환 (지역 Path2D 재사용)
+  m.setTransform(k, 0, 0, k, -L.area.x * k, -L.area.y * k);
+  m.lineJoin = 'round';
+
+  backdropZones.forEach(b => {
+    if (!b.path) return;
+    m.fillStyle = '#e2e0d8';
+    m.fill(b.path);
+  });
 
   for (let i = 0; i < rawZones.length; i++) {
     const zone = rawZones[i];
-    const { cx: x, cy: y, name, orbs, maxOrbs, owner } = zone;
-    const isFull = isFullyConquered(zone);
-
-    let tagColor = '#64748b'; // 단일 폰트 색상 (Neutral Slate)
-    if (owner === OWNER.PLAYER) tagColor = isFull ? '#16a34a' : '#2563eb';
-    else if (owner === OWNER.ENEMY) tagColor = isFull ? '#dc2626' : '#b91c1c';
-
-    // Garrison Progress Outer Arc (단일 스트로크 링 게이지)
-    if (orbs > 0) {
-      const fillPct = Math.min(1, orbs / maxOrbs);
-      ctx.beginPath();
-      ctx.arc(x, y, 7.0, -Math.PI / 2, -Math.PI / 2 + fillPct * Math.PI * 2);
-      ctx.strokeStyle = tagColor;
-      ctx.lineWidth = 2.0;
-      ctx.stroke();
-    }
-
-    const isPlayerPowerZone = (currentPowerZone && currentPowerZone.id === zone.id);
-    const isEnemyPowerZone = (currentEnemyPowerZone && currentEnemyPowerZone.id === zone.id);
-
-    // Name text
-    ctx.font = titleFont;
-    ctx.textBaseline = 'bottom';
-
-    let prefix = '';
-    if (isMainZone(zone)) prefix = '👑';
-    else if (isPlayerPowerZone || isEnemyPowerZone) prefix = '⚡';
-    else if (isFull) {
-      prefix = '🛡️';
-    }
-
-    const labelText = `${prefix}${name}`;
-
-    // 지역명 색상 지정
-    if (isPlayerPowerZone) {
-      ctx.fillStyle = '#b45309';
-    } else if (isEnemyPowerZone) {
-      ctx.fillStyle = '#c2410c';
-    } else if (isFull) {
-      ctx.fillStyle = owner === OWNER.PLAYER ? '#15803d' : '#b91c1c';
-    } else {
-      ctx.fillStyle = owner === OWNER.PLAYER ? '#1d4ed8' : (owner === OWNER.ENEMY ? '#b91c1c' : '#1e293b');
-    }
-    ctx.fillText(labelText, x, y - 2);
-
-    // HP / Garrison text (흰색 외곽선/중복 잔상 제거: 단일 단정한 회색/소속색 텍스트만 표시)
-    ctx.font = subFont;
-    ctx.fillStyle = tagColor;
-    ctx.textBaseline = 'top';
-    ctx.fillText(`${orbs}/${maxOrbs}`, x, y + 4);
+    if (!zone.path) continue;
+    const st = getZoneStyle(zone);
+    m.fillStyle = st.base;
+    m.fill(zone.path);
+    m.strokeStyle = st.ratio >= 1 ? st.gauge : st.base;
+    m.lineWidth = 2 / L.scale;
+    m.stroke(zone.path);
+    fillZoneFromBottom(m, zone, st.ratio, st.gauge);
   }
+  // 경계선 (얇게)
+  m.lineWidth = 0.6 / L.scale;
+  m.strokeStyle = 'rgba(120, 113, 108, 0.45)';
+  for (let i = 0; i < rawZones.length; i++) {
+    if (rawZones[i].path) m.stroke(rawZones[i].path);
+  }
+  if (playerMainZone && playerMainZone.owner === OWNER.PLAYER && playerMainZone.path) {
+    m.strokeStyle = '#ffffff';
+    m.lineWidth = 1.6 / L.scale;
+    m.stroke(playerMainZone.path);
+  }
+  if (hanRiverPath) {
+    m.fillStyle = '#bfe5fa';
+    m.fill(hanRiverPath);
+  }
+
+  // 현재 보고 있는 화면 영역
+  const tl = screenToWorld(0, 0);
+  const br = screenToWorld(canvas.width, canvas.height);
+  m.strokeStyle = '#0f172a';
+  m.lineWidth = 1.6 / L.scale;
+  m.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+  m.fillStyle = 'rgba(15, 23, 42, 0.08)';
+  m.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+}
+
+// 미니맵 탭/드래그 → 해당 월드 지점이 화면 중앙에 오도록 이동
+function moveViewToMinimapPoint(clientX, clientY) {
+  if (!minimapLayout) return;
+  const rect = minimapCanvas.getBoundingClientRect();
+  const wx = minimapLayout.area.x + (clientX - rect.left) / minimapLayout.scale;
+  const wy = minimapLayout.area.y + (clientY - rect.top) / minimapLayout.scale;
+  view.offsetX = (canvas.width / 2 - wx) * view.scale;
+  view.offsetY = (canvas.height / 2 - wy) * view.scale;
+  lastMinimapDraw = 0; // 즉시 갱신
+}
+
+if (minimapCanvas) {
+  let minimapDragging = false;
+  minimapCanvas.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    minimapDragging = true;
+    try { minimapCanvas.setPointerCapture(e.pointerId); } catch (err) {}
+    moveViewToMinimapPoint(e.clientX, e.clientY);
+  });
+  minimapCanvas.addEventListener('pointermove', e => {
+    if (!minimapDragging) return;
+    e.preventDefault();
+    moveViewToMinimapPoint(e.clientX, e.clientY);
+  });
+  const endMinimapDrag = () => { minimapDragging = false; };
+  minimapCanvas.addEventListener('pointerup', endMinimapDrag);
+  minimapCanvas.addEventListener('pointercancel', endMinimapDrag);
+}
+
+// -------------------------------------------------------------
+// 시작 화면 전장 썸네일: 각 맵 실제 모양을 파스텔 실루엣으로 그림
+// -------------------------------------------------------------
+const THUMB_PALETTE = ['#93c5fd', '#fda4af', '#86efac', '#fcd34d', '#c4b5fd', '#fdba74', '#5eead4', '#f9a8d4'];
+
+// -------------------------------------------------------------
+// 홈 화면: 나라 선택 + 대한민국 캠페인(구역 적은 맵부터, 클리어하면 다음 맵 열림) + 튜토리얼
+// -------------------------------------------------------------
+const COUNTRIES = [
+  { key: 'KR', flag: '🇰🇷', name: '대한민국', open: true },
+  { key: 'JP', flag: '🇯🇵', name: '일본', open: false },
+  { key: 'CN', flag: '🇨🇳', name: '중국', open: false },
+  { key: 'US', flag: '🇺🇸', name: '미국', open: false },
+  { key: 'EU', flag: '🇪🇺', name: '유럽', open: false }
+];
+const DEV_UNLOCK_KEY = 'tapwar_dev_unlock_all';
+
+// 대한민국 캠페인 순서: 구역 수가 적은 맵부터 (같으면 MAP_CONFIGS 순서)
+function getCampaignOrder() {
+  const keys = Object.keys(MAP_CONFIGS);
+  return keys.slice().sort((a, b) => (MAP_CONFIGS[a].count - MAP_CONFIGS[b].count) || (keys.indexOf(a) - keys.indexOf(b)));
+}
+
+function isDevUnlockAll() {
+  try { return localStorage.getItem(DEV_UNLOCK_KEY) === '1'; } catch (e) { return false; }
+}
+
+function isStageCleared(key) {
+  const r = getBattleRecords()[key];
+  return !!(r && r.cleared);
+}
+
+function isStageUnlocked(key) {
+  if (isDevUnlockAll() || isStageCleared(key)) return true; // 한 번 클리어한 맵은 항상 열림
+  const order = getCampaignOrder();
+  const i = order.indexOf(key);
+  return i <= 0 || isStageCleared(order[i - 1]);
+}
+
+// 다음에 할 스테이지: 열려 있고 아직 클리어하지 않은 첫 맵 (모두 깼으면 마지막 맵)
+function getNextStageKey() {
+  const order = getCampaignOrder();
+  return order.find(k => isStageUnlocked(k) && !isStageCleared(k)) || order[order.length - 1];
+}
+
+function openSheet(icon, title, text) {
+  document.getElementById('sheet-icon').textContent = icon;
+  document.getElementById('sheet-title').textContent = title;
+  document.getElementById('sheet-text').textContent = text;
+  document.getElementById('sheet').style.display = 'flex';
+}
+function closeSheet() {
+  document.getElementById('sheet').style.display = 'none';
+}
+window.closeSheet = closeSheet;
+
+function restorePurchases() {
+  // TODO(IAP): App Store 상품 등록 후 StoreKit 구매 복원 연결
+  openSheet('🧾', '구매 복원', '앱스토어 결제를 연결한 뒤에 사용할 수 있어요.\n같은 Apple ID로 산 나라·기능을 다시 열어 줍니다.');
+}
+window.restorePurchases = restorePurchases;
+
+function buildCountryRow() {
+  const row = document.getElementById('country-row');
+  if (!row) return;
+  row.innerHTML = '';
+  COUNTRIES.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'country-chip' + (c.open ? ' active' : ' locked');
+    b.textContent = `${c.flag} ${c.name}${c.open ? '' : ' 🔒'}`;
+    b.onclick = () => {
+      if (c.open) return;
+      // TODO(IAP): 출시 후 인앱 구매 시트로 연결
+      openSheet(c.flag, `${c.name} 전선`, '곧 출시돼요.\n출시되면 인앱 구매로 열 수 있어요.');
+    };
+    row.appendChild(b);
+  });
+}
+
+// 가로 슬라이드 공통: 터치 스와이프(기본) + 마우스 끌기 + 마우스 휠(세로→가로)
+// 스테이지 카드 줄과 나라 버튼 줄에 적용
+function enableHorizontalSlide(el) {
+  if (!el) return;
+  el.addEventListener('wheel', e => {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    }
+  }, { passive: false });
+  let down = false, startX = 0, startLeft = 0, moved = false;
+  el.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    down = true; moved = false;
+    startX = e.clientX; startLeft = el.scrollLeft;
+    el.style.scrollSnapType = 'none';
+    el.style.scrollBehavior = 'auto';
+  });
+  window.addEventListener('pointermove', e => {
+    if (!down) return;
+    const dx = e.clientX - startX;
+    if (Math.abs(dx) > 5) moved = true;
+    el.scrollLeft = startLeft - dx;
+  });
+  window.addEventListener('pointerup', () => {
+    if (!down) return;
+    down = false;
+    el.style.scrollSnapType = '';
+    el.style.scrollBehavior = '';
+  });
+  // 끌어서 넘긴 경우에는 카드 클릭으로 처리하지 않음
+  el.addEventListener('click', e => {
+    if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; }
+  }, true);
+}
+enableHorizontalSlide(document.getElementById('stage-grid'));
+enableHorizontalSlide(document.getElementById('country-row'));
+
+// 스테이지 줄 좌우 화살표 (PC에서 넘길 수 있다는 걸 보여 줌)
+function slideStages(dir) {
+  const grid = document.getElementById('stage-grid');
+  if (grid) grid.scrollBy({ left: dir * grid.clientWidth * 0.8, behavior: 'smooth' });
+}
+window.slideStages = slideStages;
+
+// 시작 화면 스테이지 카드 (캠페인 순서, 잠김·클리어 표시)
+function buildStageCards() {
+  const grid = document.getElementById('stage-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  const order = getCampaignOrder();
+  order.forEach((key, i) => {
+    const cfg = MAP_CONFIGS[key];
+    const k = key.toLowerCase();
+    const unlocked = isStageUnlocked(key);
+    const cleared = isStageCleared(key);
+    const btn = document.createElement('button');
+    btn.id = `modal-map-${k}`;
+    btn.className = 'stage-card' + (key === selectedModalMapKey ? ' active' : '') +
+      (unlocked ? '' : ' locked') + (cleared ? ' cleared' : '');
+    btn.onclick = () => {
+      if (!unlocked) {
+        const prev = MAP_CONFIGS[order[i - 1]];
+        openSheet('🔒', `${cfg.label} 잠김`, `${prev.label} 맵을 클리어하면 열려요.`);
+        return;
+      }
+      selectModalMap(key);
+    };
+    btn.innerHTML = `<span class="stage-no">${i + 1}</span>` +
+      (unlocked ? '' : '<span class="stage-lock">🔒</span>') +
+      `<canvas class="stage-thumb" id="thumb-${k}"></canvas>` +
+      `<span class="stage-name">${cfg.label || key}</span>` +
+      `<span class="stage-sub">${cfg.count || ''}</span>` +
+      `<span class="stage-record" id="modal-${k}-record"></span>`;
+    grid.appendChild(btn);
+  });
+  updateRecordDisplays();
+  // 가로 슬라이드: 선택된(다음에 할) 스테이지가 보이도록 이동
+  const sel = document.getElementById(`modal-map-${selectedModalMapKey.toLowerCase()}`);
+  if (sel) requestAnimationFrame(() => { grid.scrollLeft = sel.offsetLeft - (grid.clientWidth - sel.offsetWidth) / 2; });
+}
+
+// 로고 5번 탭: (개발·테스트용) 모든 맵 열기/닫기
+(function setupDevUnlock() {
+  const logo = document.getElementById('start-logo');
+  if (!logo) return;
+  let taps = 0, timer = null;
+  logo.addEventListener('click', () => {
+    taps++;
+    clearTimeout(timer);
+    timer = setTimeout(() => { taps = 0; }, 1500);
+    if (taps >= 5) {
+      taps = 0;
+      const on = !isDevUnlockAll();
+      try { localStorage.setItem(DEV_UNLOCK_KEY, on ? '1' : '0'); } catch (e) {}
+      renderStageThumbs();
+      openSheet('🛠️', on ? '테스트: 모든 맵 열림' : '테스트: 잠금 복원',
+        on ? '개발 확인용으로 모든 스테이지를 열었어요.' : '캠페인 잠금을 다시 적용했어요.');
+    }
+  });
+})();
+
+// -------------------------------------------------------------
+// 튜토리얼 (처음 실행 시 자동, 홈의 '튜토리얼'로 다시 보기)
+// -------------------------------------------------------------
+const TUTORIAL_KEY = 'tapwar_tutorial_seen';
+const TC = { b: '#edebe3', s: '#cfcdc4', blue: '#60a5fa', blueS: '#2563eb', red: '#f87171', redS: '#b91c1c', yel: '#fde047', grn2: '#22c55e', grnS: '#16a34a', wine: '#be123c' };
+function hexPoints(x, y, r = 26) {
+  return [0, 1, 2, 3, 4, 5].map(k => {
+    const a = Math.PI / 3 * k + Math.PI / 6;
+    return `${(x + r * Math.cos(a)).toFixed(1)},${(y + r * Math.sin(a)).toFixed(1)}`;
+  }).join(' ');
+}
+const hex = (x, y, fill, stroke = '#ffffff', w = 2) =>
+  `<polygon points="${hexPoints(x, y)}" fill="${fill}" stroke="${stroke}" stroke-width="${w}" stroke-linejoin="round"/>`;
+const svgWrap = inner => `<svg viewBox="0 0 210 150" aria-hidden="true">${inner}</svg>`;
+const orb = (x, y, c = TC.blueS) => `<circle cx="${x}" cy="${y}" r="4.5" fill="${c}" stroke="#fff" stroke-width="1.5"/>`;
+
+const TUTORIAL = [
+  { title: '시작 지역 고르기',
+    text: '지도를 확대·이동하며 둘러보고, 시작할 지역을 한 번 탭해 고른 뒤 한 번 더 탭하면 시작해요.',
+    art: svgWrap(hex(60, 70, TC.b, TC.s) + hex(105, 70, TC.yel, '#fff', 3) + hex(150, 70, TC.b, TC.s) +
+      '<text x="105" y="130" text-anchor="middle" font-size="22">👆👆</text>') },
+  { title: '자동으로 넓혀요',
+    text: '내 지역은 붙어 있는 땅을 자동으로 공격해요. 아래에서부터 파란색이 꽉 차면 내 땅이 돼요.',
+    art: svgWrap(hex(65, 75, TC.yel, '#fff', 3) +
+      `<clipPath id="tut-c1"><polygon points="${hexPoints(145, 75)}"/></clipPath>` + hex(145, 75, TC.b, TC.s) +
+      `<rect x="115" y="80" width="60" height="30" fill="${TC.blue}" clip-path="url(#tut-c1)"/>` +
+      orb(97, 75) + orb(110, 75)) },
+  { title: '지정 공격',
+    text: '내 지역을 꾹 눌러 원하는 곳으로 끌면 그곳을 공격해요. 내 땅으로 끌면 피를 채워 줘요.',
+    art: svgWrap(hex(55, 70, TC.blue, TC.blueS) + hex(155, 70, TC.red, TC.redS) +
+      `<path d="M60 70 L148 70" stroke="${TC.blueS}" stroke-width="3" stroke-dasharray="6 6"/>` +
+      '<text x="62" y="122" font-size="22">👆</text>') },
+  { title: '집중 포화',
+    text: '아무 지역이나 두 번 탭하면 전선의 내 지역이 모두 그곳을 쏴요. 점령할 때까지 계속돼요.',
+    art: svgWrap(hex(45, 45, TC.blue, TC.blueS) + hex(45, 105, TC.blue, TC.blueS) + hex(160, 75, TC.red, TC.blueS, 4) +
+      orb(88, 57) + orb(114, 65) + orb(88, 93) + orb(114, 85)) },
+  { title: '완전 점령과 특수 기술',
+    text: '이웃을 모두 차지하면 초록색이 돼요. 10초 뒤 진한 초록이 되면 탭해서 적 3곳의 피를 깎아요.',
+    art: svgWrap(hex(60, 48, TC.blue, TC.blueS) + hex(150, 48, TC.blue, TC.blueS) + hex(60, 102, TC.blue, TC.blueS) +
+      hex(150, 102, TC.blue, TC.blueS) + hex(105, 75, TC.grn2, TC.grnS, 3) +
+      '<text x="105" y="83" text-anchor="middle" font-size="20">💥</text>') },
+  { title: '적 메인을 무너뜨려요',
+    text: '메인 지역은 피 400이라 단단해요. 주변부터 차지하고, 적 지역을 모두 점령하면 승리! 다음 맵이 열려요.',
+    art: svgWrap(hex(60, 70, TC.yel, '#fff', 3) + hex(150, 70, TC.wine, '#fff', 3) +
+      '<text x="105" y="79" text-anchor="middle" font-size="24">⚔️</text><text x="105" y="135" text-anchor="middle" font-size="22">🏆</text>') }
+];
+let tutorialIndex = 0;
+
+function renderTutorial() {
+  const t = TUTORIAL[tutorialIndex];
+  document.getElementById('tut-art').innerHTML = t.art;
+  document.getElementById('tut-title').textContent = t.title;
+  document.getElementById('tut-text').textContent = t.text;
+  document.getElementById('tut-dots').innerHTML = TUTORIAL.map((_, i) => `<i class="${i === tutorialIndex ? 'on' : ''}"></i>`).join('');
+  document.getElementById('tut-prev').disabled = tutorialIndex === 0;
+  document.getElementById('tut-next').textContent = tutorialIndex === TUTORIAL.length - 1 ? '시작하기' : '다음';
+}
+function openTutorial() {
+  tutorialIndex = 0;
+  renderTutorial();
+  document.getElementById('tutorial').style.display = 'flex';
+}
+function closeTutorial() {
+  document.getElementById('tutorial').style.display = 'none';
+  try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch (e) {}
+}
+function tutorialStep(d) {
+  const n = tutorialIndex + d;
+  if (n >= TUTORIAL.length) { closeTutorial(); return; }
+  tutorialIndex = Math.max(0, n);
+  renderTutorial();
+}
+window.openTutorial = openTutorial;
+window.closeTutorial = closeTutorial;
+window.tutorialStep = tutorialStep;
+
+function renderStageThumbs() {
+  buildCountryRow();
+  buildStageCards();
+  const keys = Object.keys(MAP_CONFIGS);
+  Object.keys(MAP_CONFIGS).forEach(key => {
+    const c = document.getElementById(`thumb-${key.toLowerCase()}`);
+    if (!c) return;
+    fetch(MAP_CONFIGS[key].file).then(r => r.json()).then(data => {
+      const dpr = window.devicePixelRatio || 1;
+      const size = c.clientWidth || 96;
+      c.width = size * dpr;
+      c.height = size * dpr;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      data.zones.forEach(z => z.polygons.forEach(r => r.forEach(([x, y]) => {
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      })));
+      const kx = Math.cos(((minY + maxY) / 2) * Math.PI / 180);
+      const w = (maxX - minX) * kx, h = maxY - minY;
+      const pad = 6 * dpr;
+      const sc = Math.min((c.width - pad * 2) / w, (c.height - pad * 2) / h);
+      const ox = (c.width - w * sc) / 2, oy = (c.height - h * sc) / 2;
+      const g = c.getContext('2d');
+      const path = new Path2D();
+      data.zones.forEach(z => z.polygons.forEach(r => {
+        r.forEach(([x, y], i) => {
+          const px = ox + (x - minX) * kx * sc, py = oy + (maxY - y) * sc;
+          if (i === 0) path.moveTo(px, py); else path.lineTo(px, py);
+        });
+        path.closePath();
+      }));
+      const color = THUMB_PALETTE[keys.indexOf(key) % THUMB_PALETTE.length];
+      g.fillStyle = color;
+      g.strokeStyle = color;
+      g.lineWidth = 2 * dpr;
+      g.lineJoin = 'round';
+      g.fill(path);
+      g.stroke(path);
+    }).catch(() => {});
+  });
+}
+// -------------------------------------------------------------
+// 시작 연출: 지구본이 돌며 한국으로 다가간 뒤 선택한 맵 범위까지 확대 → 게임 지도로 전환
+// (화면을 탭하면 건너뜀, '동작 줄이기' 설정 시 생략)
+// -------------------------------------------------------------
+const INTRO_SPIN_MS = 1100;
+const INTRO_ZOOM_MS = 1700;
+const INTRO_FADE_FROM = 0.72; // 확대 구간의 이 지점부터 게임 지도로 서서히 전환
+let worldLand = null;
+let introAnim = null;
+// world: Natural Earth 110m 육지, korea: 우리 전국 맵을 합친 한국 윤곽(제주도 등 섬 포함)
+fetch('assets/world_land.json').then(r => r.json()).then(d => {
+  worldLand = Array.isArray(d) ? d : d.world.concat(d.korea || []);
+}).catch(() => {});
+
+// 두 색(#rrggbb) 사이 보간
+function mixColor(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const ch = (v, sh) => (v >> sh) & 255;
+  const m = sh => Math.round(ch(pa, sh) + (ch(pb, sh) - ch(pa, sh)) * t);
+  return `rgb(${m(16)},${m(8)},${m(0)})`;
+}
+
+function startIntroZoom(mapKey) {
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const cfg = MAP_CONFIGS[mapKey];
+  if (reduce || !cfg || !worldLand) return;
+  const b = cfg.bounds;
+  introAnim = {
+    start: performance.now(),
+    lon: (b.minLng + b.maxLng) / 2,
+    lat: (b.minLat + b.maxLat) / 2,
+    dLat: b.maxLat - b.minLat
+  };
+}
+
+function skipIntro() {
+  introAnim = null;
+}
+
+const easeInOut = t => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+
+// 육지 윤곽 한 개를 정사영으로 그림: 지구 뒤편으로 넘어가는 구간은 직선이 아니라
+// 지평선(원 둘레)을 따라가게 해서, 확대 시 바다 위에 땅 색이 잘못 칠해지지 않게 함
+function traceOrthoRing(ctx, ring, lon0, lat0, R, cx, cy) {
+  const d2r = Math.PI / 180;
+  const φ0 = lat0 * d2r, λ0 = lon0 * d2r;
+  const sφ0 = Math.sin(φ0), cφ0 = Math.cos(φ0);
+  let started = false, prevHidden = false, prevAng = 0, anyVisible = false;
+  for (let j = 0; j < ring.length; j++) {
+    const φ = ring[j][1] * d2r, dλ = ring[j][0] * d2r - λ0;
+    const cφ = Math.cos(φ), sφ = Math.sin(φ), cdl = Math.cos(dλ);
+    const cosc = sφ0 * sφ + cφ0 * cφ * cdl;
+    const x = cφ * Math.sin(dλ);
+    const y = cφ0 * sφ - sφ0 * cφ * cdl;
+    if (cosc >= 0) {
+      anyVisible = true;
+      const px = cx + x * R, py = cy - y * R;
+      if (!started) { ctx.moveTo(px, py); started = true; }
+      else ctx.lineTo(px, py);
+      prevHidden = false;
+    } else {
+      const ang = Math.atan2(-y, x); // 화면 좌표계 기준 지평선 각도
+      if (!started) {
+        ctx.moveTo(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R);
+        started = true;
+      } else if (prevHidden) {
+        let d = ang - prevAng;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        ctx.arc(cx, cy, R, prevAng, prevAng + d, d < 0);
+      } else {
+        ctx.lineTo(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R);
+      }
+      prevHidden = true;
+      prevAng = ang;
+    }
+  }
+  if (started) ctx.closePath();
+  return anyVisible;
+}
+
+// 정사영(orthographic) 투영: 지구 뒤편 점은 지평선(원 둘레)으로 붙임
+function orthoProject(lon, lat, lon0, lat0, R, cx, cy) {
+  const d2r = Math.PI / 180;
+  const φ = lat * d2r, λ = lon * d2r, φ0 = lat0 * d2r, λ0 = lon0 * d2r;
+  const cosc = Math.sin(φ0) * Math.sin(φ) + Math.cos(φ0) * Math.cos(φ) * Math.cos(λ - λ0);
+  let x = Math.cos(φ) * Math.sin(λ - λ0);
+  let y = Math.cos(φ0) * Math.sin(φ) - Math.sin(φ0) * Math.cos(φ) * Math.cos(λ - λ0);
+  if (cosc < 0) {
+    const n = Math.hypot(x, y) || 1;
+    x /= n; y /= n;
+  }
+  return [cx + x * R, cy - y * R];
+}
+
+// 반환값: 게임 지도 위에 덮을 인트로 불투명도 (0이면 종료)
+function drawIntro(ctx) {
+  if (!introAnim) return;
+  const W = canvas.width, H = canvas.height;
+  const el = performance.now() - introAnim.start;
+  const area = getMapArea();
+  const R0 = Math.min(W, H) * 0.36;
+  const Rf = area.h / (introAnim.dLat * Math.PI / 180);
+  let R, lon0, lat0, alpha = 1, seaBlend = 0;
+
+  if (el < INTRO_SPIN_MS) {
+    const t = easeInOut(el / INTRO_SPIN_MS);
+    lon0 = introAnim.lon - 110 * (1 - t);
+    lat0 = introAnim.lat * t;
+    R = R0;
+  } else {
+    const t = Math.min(1, (el - INTRO_SPIN_MS) / INTRO_ZOOM_MS);
+    const e = easeInOut(t);
+    lon0 = introAnim.lon;
+    lat0 = introAnim.lat;
+    R = R0 * Math.pow(Rf / R0, e);
+    // 확대될수록 바다색을 게임 지도 바탕색으로 서서히 바꿔, 지도로 넘어갈 때 번쩍이지 않게 함
+    seaBlend = Math.min(1, Math.max(0, (t - 0.35) / (INTRO_FADE_FROM - 0.35)));
+    if (t > INTRO_FADE_FROM) alpha = 1 - (t - INTRO_FADE_FROM) / (1 - INTRO_FADE_FROM);
+    if (t >= 1) {
+      introAnim = null;
+      return;
+    }
+  }
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#f6f5f0';
+  ctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = area.y + area.h / 2;
+  // 바다 (지구가 화면보다 훨씬 커지면 원 대신 화면 전체를 칠함: 거대한 원 그리기에서 생기는 깜빡임 방지)
+  const seaColor = mixColor('#bfe5fa', '#f6f5f0', seaBlend);
+  const huge = R > Math.hypot(W, H) * 2;
+  ctx.beginPath();
+  if (huge) ctx.rect(0, 0, W, H);
+  else ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.fillStyle = seaColor;
+  ctx.fill();
+  // 육지
+  ctx.save();
+  ctx.clip();
+  const landPath = new Path2D();
+  for (let i = 0; i < worldLand.length; i++) {
+    // 화면에 보이는 점이 없는 윤곽(지구 뒤편 전체)은 그리지 않음
+    const sub = new Path2D();
+    if (traceOrthoRing(sub, worldLand[i], lon0, lat0, R, cx, cy)) landPath.addPath(sub);
+  }
+  ctx.fillStyle = '#edebe3';
+  ctx.fill(landPath);
+  ctx.strokeStyle = '#cfcdc4';
+  ctx.lineWidth = 1;
+  ctx.stroke(landPath);
+  // 목표 지점 표시 (노란 점)
+  const [tx, ty] = orthoProject(introAnim.lon, introAnim.lat, lon0, lat0, R, cx, cy);
+  ctx.beginPath();
+  ctx.arc(tx, ty, 5, 0, Math.PI * 2);
+  ctx.fillStyle = ZONE_COLORS.main;
+  ctx.fill();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+  ctx.restore();
 }
 
 // Render Loop
@@ -2009,6 +2965,8 @@ function gameLoop(timestamp) {
     lastTime = timestamp;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    updateSurrenderButtonVisibility();
+    updateHomeButtonVisibility();
 
     if (currentState === GAME_STATE.PLAYING) {
       // 작전 소요 시간 측정 (스톱워치 기록계, 배속 연동)
@@ -2043,7 +3001,6 @@ function gameLoop(timestamp) {
       }
       if (enemyFocusReticleTimer > 0) {
         enemyFocusReticleTimer = Math.max(0, enemyFocusReticleTimer - dt * gameSpeed);
-        if (enemyFocusReticleTimer <= 0) currentEnemyFocusZone = null;
       }
 
       // 승리/패배 조건 주기적 체크 (250ms 주기)
@@ -2052,6 +3009,7 @@ function gameLoop(timestamp) {
         checkWinConditions();
       }
 
+      resolveOrbCollisions();
       for (let i = flyingOrbs.length - 1; i >= 0; i--) {
         const orb = flyingOrbs[i];
         if (!orb || orb.isDead || orb.update()) {
@@ -2074,6 +3032,9 @@ function gameLoop(timestamp) {
     drawParticles(ctx);
 
     ctx.restore();
+
+    drawIntro(ctx);
+    drawMinimap(timestamp);
   } catch (err) {
     console.error('gameLoop error:', err);
   } finally {
@@ -2083,3 +3044,9 @@ function gameLoop(timestamp) {
 
 resizeCanvas();
 requestAnimationFrame(gameLoop);
+
+// 홈 화면 초기화: 다음에 할 스테이지 선택, 처음 실행이면 튜토리얼
+selectedModalMapKey = getNextStageKey();
+renderStageThumbs();
+selectModalMap(selectedModalMapKey);
+try { if (localStorage.getItem(TUTORIAL_KEY) !== '1') openTutorial(); } catch (e) { openTutorial(); }

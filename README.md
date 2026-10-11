@@ -92,3 +92,90 @@
 - **시각 편의:**
   - 복잡한 거미줄 네트워크 연결선(회색 선) 숨김 처리.
   - 단일 폰트 체력 표기(`0/50`)로 잔상 제거.
+
+---
+
+## 🛠️ 맵 데이터 정리 (모든 맵 필수)
+
+새 맵을 추가하거나 기존 맵 데이터를 바꾸면 **반드시** 아래 도구를 실행하세요.
+
+```bash
+pip install "shapely>=2.1"
+python tools/build_map.py assets/새맵.json
+```
+
+이 도구가 보장하는 것:
+- 한 행정구역이 여러 조각이면 **하나의 덩어리**로 병합 (구분선 없음, 섬은 별도 유지)
+- 이웃 구역 사이 **틈·겹침 제거**, 이웃끼리 **완전히 같은 경계선 꼭짓점 공유** → 화면에서 경계선이 어긋나지 않음
+- 구역 이름·구슬 출발점을 구역의 **시각적 중앙**(가장 안쪽 지점)에 배치
+- 인접 관계(links)에 실제로 맞닿은 구역 추가 (기존 연결은 유지)
+
+### 맵 구역 단위 원칙
+- 기본은 **행정구역(시·군·구)** 단위로 나눕니다.
+- **광역시**(`--level metro`): 구는 구 단위, 구가 없는 군은 읍·면 단위 (부산·대구·인천·울산)
+- **도**(`--level split --target 25`): 시·군에서 시작해 가장 넓은 시·군을 읍·면·동 경계로 둘로 나누기를 25곳이 될 때까지 반복, 이름은 원래 시·군 중심 기준 8방위("충주시 북서부")
+- 구가 너무 적은 곳(대전·세종·제주, `--level dong`)은 **행정동** 단위
+- 시·도 맵 만들기 (2026-07-01 행정구역 기준, 16개 시·도):
+  ```bash
+  python tools/make_region_map.py HangJeongDong.geojson "부산광역시" "부산광역시 전선" assets/busan_zones.json
+  python tools/add_water.py assets/busan_zones.json && python tools/build_map.py assets/busan_zones.json && python tools/add_water.py --carve assets/busan_zones.json
+  ```
+  먼 섬은 `tools/adjust_islands.py`로 제외(drop)하거나 본토 가까이 옮김(shift).
+- 행정동 맵 만들기:
+  ```bash
+  curl -L -o HangJeongDong.geojson \
+    https://raw.githubusercontent.com/vuski/admdongkor/master/ver20260701/HangJeongDong_ver20260701.geojson
+  python tools/make_dong_map.py HangJeongDong.geojson "경기도 수원시" "수원시 44개 행정동 전선" assets/suwon_exact_zones.json
+  python tools/build_map.py assets/suwon_exact_zones.json
+  ```
+  그다음 `game.js`의 `MAP_CONFIGS`에 전장을 추가하고(`bounds`는 생성된 JSON의 `meta.bounds`), `index.html`에 카드(`modal-map-<키>`)와 버튼(`map-btn-<키>`)을 추가합니다.
+
+### 지도 데이터 출처 (앱 화면에 표시 필수)
+- 통계청 SGIS 행정구역·행정동 경계 (공공누리 제1유형: 출처 표시 시 상업적 이용 가능)
+- vuski/admdongkor 행정동 경계 가공본 (CC BY 4.0) — https://github.com/vuski/admdongkor
+- southkorea/seoul-maps 서울 자치구 경계 (KOSTAT 2013)
+- Natural Earth 110m 육지(시작 연출용 세계 지도, 퍼블릭 도메인) — `assets/world_land.json`
+
+---
+
+## 📱 iOS 앱 빌드 (Capacitor)
+
+웹 게임(`index.html`, `game.js`, `assets/`)을 Capacitor로 감싼 네이티브 iOS 프로젝트가 `ios/`에 있습니다.
+
+### 준비물 (Mac)
+- Xcode 최신 버전 (App Store)
+- Node.js 20 이상
+- Apple 개발자 계정 (실기기 테스트는 무료 Apple ID로도 가능, App Store 출시는 연 $99)
+
+### 실행 순서
+```bash
+git pull
+npm install
+npm run ios:sync      # 웹 파일을 www/로 복사하고 iOS 프로젝트에 반영
+npm run ios:open      # Xcode 열기
+```
+Xcode에서:
+1. 왼쪽 `App` 프로젝트 → **Signing & Capabilities** → Team에 본인 Apple ID 선택
+2. **Bundle Identifier**를 고유한 값으로 변경 (예: `com.본인이름.tapwar`) — `capacitor.config.json`의 `appId`도 같은 값으로
+3. 아이폰을 USB로 연결하고 상단에서 기기 선택 → ▶ 실행
+   (처음 실행 시 아이폰 설정 → 일반 → VPN 및 기기 관리에서 개발자 앱 신뢰 필요)
+
+### 게임 코드를 수정한 뒤
+`npm run ios:sync` 를 다시 실행하면 앱에 반영됩니다.
+
+### 설정
+- 세로 화면 고정, 앱 이름 `TAPWAR`
+- 앱 아이콘: `ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png` (1024×1024)
+- 스플래시: `ios/App/App/Assets.xcassets/Splash.imageset/`
+
+### 큰 물(강·호수) 지정
+외부 데이터 없이 `tools/water_spec.json`에 우리가 직접 정합니다.
+- **호수·하구**: 기준점(`point`+`radius`) 또는 대략 그린 범위(`rough`) 안의 빈 공간(어느 구역에도 속하지 않는 곳)을 물로 채움 → 해안선·경계와 정확히 맞음
+- **강**: `tools/korea_rivers_ne10m.json`(Natural Earth 10m 중심선)을 맵별 폭(`riverWidth`)으로 그림
+- **물 건너 연결 보정**: 자동 판정이 틀리면 `maps[파일].waterLinksAdd / waterLinksRemove`에 구역 이름 쌍으로 지정
+```bash
+python tools/add_water.py assets/*_exact_zones.json          # 호수·강(근사) 추가
+python tools/build_map.py assets/*_exact_zones.json          # 물 건너 연결 계산
+python tools/add_water.py --carve assets/*_exact_zones.json  # 강을 실제 경계선을 따라 다시 그리고 양쪽 구역을 깎아 틈 제거
+```
+- 강은 최종적으로 **강을 사이에 둔 두 구역의 공유 경계선**을 따라 맵별 폭(`carveWidth`)으로 그려지고, 그만큼 구역이 깎여서 강과 구역 사이에 틈이 생기지 않습니다.

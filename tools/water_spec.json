@@ -1,0 +1,169 @@
+{
+  "_설명": "맵별 큰 물(강·호수) 지정. 호수/하구는 기준점 주변의 빈 공간(어느 구역에도 속하지 않는 곳)을 물로 채우고, 강은 중심선을 폭만큼 두껍게 그린다. 새 맵을 만들면 여기에 항목을 추가하고 tools/add_water.py → tools/build_map.py 순으로 실행. 자동 판정이 틀린 곳은 maps[파일].waterLinksAdd / waterLinksRemove 에 구역 이름 쌍으로 직접 지정.",
+  "lakes": [
+    {
+      "name": "시화호",
+      "rough": [
+        [
+          126.615,
+          37.285
+        ],
+        [
+          126.655,
+          37.335
+        ],
+        [
+          126.745,
+          37.362
+        ],
+        [
+          126.83,
+          37.33
+        ],
+        [
+          126.82,
+          37.27
+        ],
+        [
+          126.72,
+          37.255
+        ],
+        [
+          126.63,
+          37.265
+        ]
+      ]
+    },
+    {
+      "name": "남양호",
+      "point": [
+        126.855,
+        37.037
+      ],
+      "radius": 0.08
+    },
+    {
+      "name": "영암호·금호호",
+      "point": [
+        126.441,
+        34.726
+      ],
+      "radius": 0.12
+    },
+    {
+      "name": "영산강 하구",
+      "point": [
+        126.481,
+        34.79
+      ],
+      "radius": 0.08
+    },
+    {
+      "name": "부남호·홍성호",
+      "point": [
+        126.559,
+        36.466
+      ],
+      "radius": 0.1
+    },
+    {
+      "name": "금강 하구",
+      "point": [
+        126.854,
+        36.049
+      ],
+      "radius": 0.1
+    },
+    {
+      "name": "청평호·의암호",
+      "point": [
+        127.532,
+        37.805
+      ],
+      "radius": 0.1
+    },
+    {
+      "name": "춘천호",
+      "point": [
+        127.542,
+        38.007
+      ],
+      "radius": 0.1
+    }
+  ],
+  "rivers": [
+    {
+      "name": "한강",
+      "lines": [
+        "Han",
+        "Namhan"
+      ]
+    },
+    {
+      "name": "낙동강",
+      "lines": [
+        "Nakdong"
+      ]
+    }
+  ],
+  "maps": {
+    "south_korea_exact_zones.json": {
+      "riverWidth": 0.006,
+      "waterEps": 0.006,
+      "waterLinksAdd": [
+        [
+          "김포",
+          "고양"
+        ],
+        [
+          "김포",
+          "파주"
+        ],
+        [
+          "부산",
+          "김해"
+        ]
+      ],
+      "carveWidth": 0.004
+    },
+    "gyeonggi_exact_zones.json": {
+      "riverWidth": 0.004,
+      "waterEps": 0.004,
+      "waterLinksAdd": [
+        [
+          "김포",
+          "고양"
+        ],
+        [
+          "김포",
+          "파주"
+        ]
+      ],
+      "carveWidth": 0.005
+    },
+    "seoul_exact_zones.json": {
+      "riverWidth": 0.009,
+      "waterEps": 0.002,
+      "keepExisting": true,
+      "noRivers": true,
+      "waterLinksAdd": [
+        [
+          "광진구",
+          "강동구"
+        ]
+      ],
+      "waterLinksRemove": [
+        [
+          "용산구",
+          "성동구"
+        ]
+      ],
+      "carveWidth": 0.008
+    }
+  },
+  "defaultMap": {
+    "riverWidth": 0.004,
+    "waterEps": 0.004,
+    "carveWidth": 0.004
+  }
+}

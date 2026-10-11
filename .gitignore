@@ -10,3 +10,10 @@ assets/korean_peninsula.json
 assets/korean_peninsula_50m.json
 assets/korea_cities_full.json
 assets/south_korea_simplified_zones.json
+
+# 맵 정리 도구는 커밋
+!tools/*.py
+
+# Capacitor / Node
+node_modules/
+www/
