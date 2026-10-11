@@ -1438,7 +1438,7 @@ function updateHudVisibility() {
   const key = `${playing}|${choosing}`;
   if (key === lastHudKey) return;
   lastHudKey = key;
-  document.getElementById('top-timer').hidden = !playing;
+  document.getElementById('top-timer').hidden = true; // 진행 시간은 지도 위 맵 이름 아래에 새김
   document.getElementById('speed2-btn').hidden = !playing;
   // 시작 안내는 상단 띠 대신, 처음 한 번 화면 가운데에 글자만 1초 떴다 사라짐
   document.getElementById('status-guide').hidden = true;
@@ -2340,6 +2340,55 @@ function drawSkillGcdSweep(ctx, owner, gcdUntil) {
 }
 
 // 맵 이름을 지도 도화지에 새김: 월드 좌표로 그려 확대·이동하면 지도와 함께 커지고 움직임
+// 7세그먼트 디지털 시계 숫자 (탁상 디지털 시계처럼 숫자 획만). cx: 가운데 x, top: 위 y, h: 숫자 높이
+const SEG_DIGITS = {
+  '0': 'abcdef', '1': 'bc', '2': 'abged', '3': 'abgcd', '4': 'fgbc',
+  '5': 'afgcd', '6': 'afgedc', '7': 'abc', '8': 'abcdefg', '9': 'abcdfg', '-': 'g'
+};
+function drawSevenSegment(ctx, text, cx, top, h) {
+  const w = h * 0.56, t = h * 0.17, gap = t * 0.14, space = h * 0.16, colonW = h * 0.26;
+  let total = 0;
+  for (const ch of text) total += (ch === ':' ? colonW : w) + space;
+  total -= space;
+  const segPath = (x0, y0, x1, y1) => {
+    // 양끝이 뾰족한 육각형 획
+    const p = new Path2D();
+    if (y0 === y1) {
+      x0 += gap; x1 -= gap;
+      p.moveTo(x0, y0); p.lineTo(x0 + t / 2, y0 - t / 2); p.lineTo(x1 - t / 2, y0 - t / 2);
+      p.lineTo(x1, y0); p.lineTo(x1 - t / 2, y0 + t / 2); p.lineTo(x0 + t / 2, y0 + t / 2);
+    } else {
+      y0 += gap; y1 -= gap;
+      p.moveTo(x0, y0); p.lineTo(x0 + t / 2, y0 + t / 2); p.lineTo(x0 + t / 2, y1 - t / 2);
+      p.lineTo(x0, y1); p.lineTo(x0 - t / 2, y1 - t / 2); p.lineTo(x0 - t / 2, y0 + t / 2);
+    }
+    p.closePath();
+    return p;
+  };
+  const paths = [];
+  let x = cx - total / 2;
+  for (const ch of text) {
+    if (ch === ':') {
+      const r = t * 0.55, mx = x + colonW / 2;
+      [top + h * 0.3, top + h * 0.7].forEach(y => { const p = new Path2D(); p.arc(mx, y, r, 0, Math.PI * 2); paths.push(p); });
+      x += colonW + space;
+      continue;
+    }
+    const L = x + t / 2, R = x + w - t / 2, T = top + t / 2, M = top + h / 2, B = top + h - t / 2;
+    const seg = { a: [L, T, R, T], g: [L, M, R, M], d: [L, B, R, B], f: [L, T, L, M], e: [L, M, L, B], b: [R, T, R, M], c: [R, M, R, B] };
+    for (const k of (SEG_DIGITS[ch] || '')) paths.push(segPath(...seg[k]));
+    x += w + space;
+  }
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = t * 0.45;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+  paths.forEach(p => ctx.stroke(p));
+  ctx.fillStyle = '#111111';
+  paths.forEach(p => ctx.fill(p));
+  ctx.restore();
+}
+
 function drawMapTitle(ctx) {
   const cfg = MAP_CONFIGS[currentMapKey];
   if (!cfg || !cfg.label || introAnim) return;
@@ -2357,17 +2406,9 @@ function drawMapTitle(ctx) {
   ctx.fillStyle = 'rgba(30, 41, 59, 0.55)';
   ctx.fillText(cfg.label, tx, area.y);
 
-  // 게임 진행 시간: 맵 이름 아래에 진한 검정 디지털 시계 글꼴로 새김 (게임 시작 후)
+  // 게임 진행 시간: 맵 이름 아래에 진한 검정 7세그먼트(디지털 시계) 숫자로 새김 (게임 시작 후)
   if (currentState === GAME_STATE.PLAYING || currentState === GAME_STATE.GAME_OVER) {
-    const tSize = size * 0.62;
-    ctx.font = `700 ${tSize}px "SF Mono", ui-monospace, Menlo, "Courier New", monospace`;
-    ctx.lineWidth = tSize * 0.14;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-    const ty = area.y + size * 1.12;
-    const t = formatTimeString(gameElapsedTime);
-    ctx.strokeText(t, tx, ty);
-    ctx.fillStyle = '#0b0b0b';
-    ctx.fillText(t, tx, ty);
+    drawSevenSegment(ctx, formatTimeString(gameElapsedTime), tx, area.y + size * 1.15, size * 0.8);
   }
   ctx.restore();
 }
