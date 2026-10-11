@@ -1162,8 +1162,8 @@ function handleZoneDoubleClick(targetZone) {
 
   // 1. 완전점령지역을 제외한 전선의 모든 아군 기지가 이 단 하나의 목표 지역을 동시 타겟으로 지정!
   allPlayerZones.forEach(pZone => {
-    pZone.isManualTarget = true;
-    pZone.targetZones = [targetZone];
+    // 집중 포격은 일회성 연발 사격만 수행. 타겟을 고정하지 않으므로
+    // 사격 후 각 기지는 즉시 인접 지역 자동 공격으로 복귀 (원거리 지속 공격은 드래그 지정 시에만)
 
     // 2. 즉시 일제 집중 포격 (전선 모든 기지에서 3~4발 쾌속 연발 발사!)
     const isPowerZone = (currentPowerZone && currentPowerZone.id === pZone.id);
