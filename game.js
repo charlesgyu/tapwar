@@ -2513,9 +2513,7 @@ const ITEMS = [
   { key: 'crit', name: '크리티컬', desc: '30% 확률로 상대 땅에 3배 피해' },
   { key: 'absorb', name: '흡수', desc: '30% 확률로 상대 공격을 막고 그 2배만큼 회복' }
 ];
-const ITEM_MODE_KEY = 'tapwar_item_mode';
-let itemMode = false;
-try { itemMode = localStorage.getItem(ITEM_MODE_KEY) === '1'; } catch (e) {}
+let itemMode = false; // 시작 버튼(노멀 모드/아이템 모드)으로 정함
 let itemsOf = { player: [], enemy: [] };
 let itemRound = 0;
 let nextItemAt = 0;
@@ -2541,16 +2539,12 @@ function itemIconSvg(key, size = 28) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ITEM_ICON[key]}</svg>`;
 }
 
-function updateItemModeButton() {
-  const b = document.getElementById('item-mode-btn');
-  if (b) { b.textContent = `아이템 모드 ${itemMode ? '켬' : '끔'}`; b.classList.toggle('on', itemMode); }
+// 맵 화면의 노멀 모드 / 아이템 모드 버튼
+function startWithMode(withItems) {
+  itemMode = !!withItems;
+  onStartBtnClick();
 }
-function toggleItemMode() {
-  itemMode = !itemMode;
-  try { localStorage.setItem(ITEM_MODE_KEY, itemMode ? '1' : '0'); } catch (e) {}
-  updateItemModeButton();
-}
-window.toggleItemMode = toggleItemMode;
+window.startWithMode = startWithMode;
 
 function resetItems() {
   itemsOf = { player: [], enemy: [] };
@@ -3537,10 +3531,16 @@ function selectCountry(key) {
   const c = COUNTRIES.find(x => x.key === key);
   const btn = document.getElementById('enter-btn');
   if (btn) btn.classList.toggle('locked', !isCountryOpen(c));
+  // 맵이 하나뿐인 나라는 참전하기 대신 노멀·아이템 모드 버튼
+  const single = getCampaignOrder(key).length === 1;
+  const row = document.getElementById('enter-mode-row');
+  if (btn) btn.hidden = single;
+  if (row) { row.hidden = !single; row.querySelectorAll('.start-btn').forEach(b => b.classList.toggle('locked', !isCountryOpen(c))); }
 }
 
 // 참전하기: 열린 국가면 도시 맵 화면으로, 잠긴 국가면 안내
-function enterCountry() {
+function enterCountry(withItems) {
+  if (typeof withItems === 'boolean') itemMode = withItems;
   const c = COUNTRIES.find(x => x.key === selectedCountryKey);
   if (!isCountryOpen(c)) {
     // TODO(IAP): 출시 후 인앱 구매 시트로 연결
@@ -3574,6 +3574,9 @@ function showStageView() {
   const c = COUNTRIES.find(x => x.key === selectedCountryKey) || COUNTRIES[0];
   document.getElementById('country-view').hidden = true;
   document.getElementById('stage-view').hidden = false;
+  // 맵 카드 화면에서는 튜토리얼·구매 복원 링크 숨김
+  const links = document.getElementById('home-links');
+  if (links) links.hidden = true;
   document.getElementById('country-title').textContent = c.name;
   // 나라가 바뀌면 그 나라 캠페인의 다음 맵을 고름
   if ((MAP_CONFIGS[selectedModalMapKey].country || 'KR') !== c.key) selectedModalMapKey = getNextStageKey();
@@ -3585,6 +3588,8 @@ function showStageView() {
 function showCountryView() {
   document.getElementById('stage-view').hidden = true;
   document.getElementById('country-view').hidden = false;
+  const links = document.getElementById('home-links');
+  if (links) links.hidden = false;
   try { sessionStorage.removeItem('tapwar_in_country'); } catch (e) {}
   requestAnimationFrame(() => selectCountry(selectedCountryKey));
 }
@@ -4426,4 +4431,3 @@ function maybeOpenTutorial() {
   };
   setTimeout(typeNext, 300);
 })();
-updateItemModeButton();
