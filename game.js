@@ -3045,6 +3045,28 @@ function submitMapRanking(countryKey, mapKey, sec) {
   GameCenter.submitScore({ leaderboardId: id, score: Math.round(sec) }).catch(() => {});
 }
 
+// 상위 몇 % (게임 센터에서 내 순위·전체 인원을 받아 계산). 웹·미연결이면 비워 둠
+function rankPercentText(rank, total) {
+  if (!rank || !total) return '';
+  const pct = Math.max(1, Math.ceil(rank / total * 100));
+  return `상위 ${pct}%`;
+}
+function loadRankPercents() {
+  if (!GameCenter) return;
+  const c = COUNTRIES.find(x => x.key === selectedCountryKey) || COUNTRIES[0];
+  getCampaignOrder().forEach(key => {
+    if (!isStageCleared(key)) return;
+    const el = document.getElementById(`rank-${key.toLowerCase()}`);
+    const id = mapLeaderboardId(c.key, key);
+    if (!el || !id) return;
+    GameCenter.getRank({ leaderboardId: id }).then(r => { el.textContent = rankPercentText(r.rank, r.total); }).catch(() => {});
+  });
+  const totalEl = document.getElementById('rank-total');
+  if (totalEl && LEADERBOARDS[c.key]) {
+    GameCenter.getRank({ leaderboardId: LEADERBOARDS[c.key] }).then(r => { totalEl.textContent = rankPercentText(r.rank, r.total); }).catch(() => {});
+  }
+}
+
 // 맵별 순위 보기
 function openMapRanking(mapKey) {
   const c = COUNTRIES.find(x => x.key === selectedCountryKey) || COUNTRIES[0];
@@ -3163,7 +3185,6 @@ function buildStageCards() {
     btn.className = 'stage-card' + (key === selectedModalMapKey ? ' active' : '') +
       (unlocked ? '' : ' locked') + (cleared ? ' cleared' : '');
     btn.onclick = (e) => {
-      if (e.target.closest && e.target.closest('.map-rank-btn')) { openMapRanking(key); return; }
       if (!unlocked) {
         const prev = MAP_CONFIGS[order[i - 1]];
         openSheet('', `${cfg.label} 잠김`, `${prev.label} 맵을 클리어하면 열려요.`);
@@ -3175,7 +3196,7 @@ function buildStageCards() {
       `<canvas class="stage-thumb" id="thumb-${k}"></canvas>` +
       `<span class="stage-title"><span class="stage-name">${cfg.label || key}</span><span class="stage-sub">${cfg.count || ''}</span></span>` +
       `<span class="stage-record" id="modal-${k}-record"></span>` +
-      (cleared ? `<span class="map-rank-btn" role="button" data-map="${key}">순위</span>` : '');
+      (cleared ? `<span class="map-rank-pct" id="rank-${k}"></span>` : '');
     grid.appendChild(btn);
   });
   // 마지막 맵 다음 카드: 이 나라의 글로벌 순위 (총 시간)
@@ -3187,9 +3208,11 @@ function buildStageCards() {
   rank.onclick = openRanking;
   rank.innerHTML = `<span class="ranking-title">순위</span>` +
     `<span class="ranking-time">${allDone ? formatLongTime(total.sum) : `${order.filter(isStageCleared).length}/${order.length}`}</span>` +
-    `<span class="stage-sub">${allDone ? '총 시간' : '모든 맵 클리어 후 참여'}</span>`;
+    `<span class="stage-sub">${allDone ? '총 시간' : '모든 맵 클리어 후 참여'}</span>` +
+    (allDone ? `<span class="map-rank-pct" id="rank-total"></span>` : '');
   grid.appendChild(rank);
   updateRecordDisplays();
+  loadRankPercents();
   // 가로 슬라이드: 선택된(다음에 할) 스테이지가 보이도록 이동
   const sel = document.getElementById(`modal-map-${selectedModalMapKey.toLowerCase()}`);
   if (sel) requestAnimationFrame(() => { grid.scrollLeft = sel.offsetLeft - (grid.clientWidth - sel.offsetWidth) / 2; });
