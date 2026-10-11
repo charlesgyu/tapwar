@@ -2031,7 +2031,9 @@ const ZONE_COLORS = {
   enemyFullStroke: '#991b1b',
   main: '#fde047',
   mainCharged: '#eab308',
-  mainStroke: '#ffffff'
+  mainStroke: '#ffffff',
+  enemyMain: '#be123c',        // 적 메인: 진한 와인 레드 + 흰 테두리
+  enemyMainCharged: '#881337'
 };
 const ZONE_FLASH_MS = 700;
 
@@ -2063,6 +2065,13 @@ function getZoneStyle(zone) {
   if (zone.owner === OWNER.NEUTRAL) {
     const gauge = zone.claimant === OWNER.PLAYER ? ZONE_COLORS.player : ZONE_COLORS.enemy;
     return { base: ZONE_COLORS.base, gauge, ratio: zone.claimant ? hpRatio : 0, stroke: ZONE_COLORS.baseStroke, width: 1.0 };
+  }
+  const isEnemyMain = zone.owner === OWNER.ENEMY && zone === enemyMainZone;
+  if (isEnemyMain) {
+    if (isFull && hpRatio >= 1) {
+      return { base: ZONE_COLORS.enemyMain, gauge: ZONE_COLORS.enemyMainCharged, ratio: chargeRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
+    }
+    return { base: ZONE_COLORS.base, gauge: ZONE_COLORS.enemyMain, ratio: hpRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
   }
   if (isMyMain) {
     if (isFull && hpRatio >= 1) {
@@ -2155,8 +2164,9 @@ function drawExactDistrictsMap(ctx) {
     }
   };
   strokePass(z => z.owner === OWNER.NEUTRAL);
-  strokePass(z => z.owner !== OWNER.NEUTRAL && z !== playerMainZone);
-  strokePass(z => z === playerMainZone && z.owner === OWNER.PLAYER);
+  const isAnyMain = z => (z === playerMainZone && z.owner === OWNER.PLAYER) || (z === enemyMainZone && z.owner === OWNER.ENEMY);
+  strokePass(z => z.owner !== OWNER.NEUTRAL && !isAnyMain(z));
+  strokePass(isAnyMain);
 
   // 3. 선택(드래그 시작) 지역 강조
   if (dragSourceZone && dragSourceZone.path) {
