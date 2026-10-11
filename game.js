@@ -1136,12 +1136,15 @@ class FlyingOrb {
     const power = itemHitPower(attack, own, t);
     const wasRival = t.owner !== OWNER.NEUTRAL && t.owner !== own;
     applyOrbHit(t, own, power, this.sourceZone);
-    // [아이템 관통탄] 맞힌 상대 지역 옆의 상대 지역 하나도 같은 공격력으로 타격
-    if (wasRival && hasItem(own, 'pierce')) {
+    // [아이템 관통탄] 맞닿은 공격·원거리 공격 모두: 맞힌 상대 지역에서 옆의 상대 지역으로 튕겨 나가는 구슬
+    // (공격력 30%, 다시 튕기지는 않음. 도착할 때 파워샷·크리티컬·철벽 등은 그대로 계산)
+    if (wasRival && !this.pierced && hasItem(own, 'pierce')) {
       const next = t.neighbors.filter(n => n !== this.sourceZone && n.owner !== OWNER.NEUTRAL && n.owner !== own);
       if (next.length) {
         const n2 = next[Math.floor(Math.random() * next.length)];
-        applyOrbHit(n2, own, itemHitPower(attack, own, n2), null);
+        const bounce = new FlyingOrb(t, n2, own, this.power * PIERCE_RATIO);
+        bounce.pierced = true;
+        flyingOrbs.push(bounce);
       }
     }
   }
@@ -2498,6 +2501,7 @@ const ITEM_EVERY_SEC = 30;
 const REBUILD_EVERY_SEC = 5;
 const REBUILD_HP = 2;
 const ITEM_CHANCE = 0.3; // 반사·흡수·크리티컬 확률
+const PIERCE_RATIO = 0.3; // 관통탄 튕긴 구슬 공격력
 const ITEM_ICON = {
   double: '<circle cx="6" cy="12" r="3"/><path d="M9 12 L19 5 M9 12 L19 19"/><circle cx="19" cy="5" r="1.6"/><circle cx="19" cy="19" r="1.6"/>',
   rapid: '<path d="M3 8h9M5 12h10M3 16h9"/><circle cx="18" cy="12" r="3"/>',
@@ -2515,7 +2519,7 @@ const ITEMS = [
   { key: 'double', name: '더블샷', desc: '맞닿은 다른 상대 땅에 한 발 더' },
   { key: 'rapid', name: '속사', desc: '상대 땅으로 가는 원거리 구슬이 빠르게 (발사 간격 그대로)' },
   { key: 'power', name: '파워샷', desc: '상대 땅 공격력 2배 (상대 색이 조금이라도 있는 곳)' },
-  { key: 'pierce', name: '관통탄', desc: '맞힌 지역 옆의 상대 지역도 한 번 더 타격' },
+  { key: 'pierce', name: '관통탄', desc: '맞힌 상대 지역에서 옆 상대 지역으로 튕김 (30%)' },
   { key: 'fortress', name: '철벽', desc: '상대 공격을 50%만 받음' },
   { key: 'rebuild', name: '재건', desc: '5초마다 내 모든 지역 피 +2' },
   { key: 'reflect', name: '반사 방패', desc: '30% 확률로 상대 구슬을 쏜 곳으로 되돌림' },
