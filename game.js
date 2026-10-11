@@ -124,7 +124,7 @@ function updateRecordDisplays() {
   if (koreaRecordEl) {
     const k = records.KOREA;
     if (k && k.cleared && k.bestTime !== null) {
-      koreaRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#facc15">${formatTimeString(k.bestTime)}</span> (${k.clearCount}회)`;
+      koreaRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#b45309">${formatTimeString(k.bestTime)}</span> (${k.clearCount}회)`;
     } else {
       koreaRecordEl.innerHTML = `<span style="color:#94a3b8">미평정 (기록 없음)</span>`;
     }
@@ -134,7 +134,7 @@ function updateRecordDisplays() {
   if (seoulRecordEl) {
     const s = records.SEOUL;
     if (s && s.cleared && s.bestTime !== null) {
-      seoulRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#facc15">${formatTimeString(s.bestTime)}</span> (${s.clearCount}회)`;
+      seoulRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#b45309">${formatTimeString(s.bestTime)}</span> (${s.clearCount}회)`;
     } else {
       seoulRecordEl.innerHTML = `<span style="color:#94a3b8">미평정 (기록 없음)</span>`;
     }
@@ -144,7 +144,7 @@ function updateRecordDisplays() {
   if (gyeonggiRecordEl) {
     const g = records.GYEONGGI;
     if (g && g.cleared && g.bestTime !== null) {
-      gyeonggiRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#facc15">${formatTimeString(g.bestTime)}</span> (${g.clearCount}회)`;
+      gyeonggiRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#b45309">${formatTimeString(g.bestTime)}</span> (${g.clearCount}회)`;
     } else {
       gyeonggiRecordEl.innerHTML = `<span style="color:#94a3b8">미평정 (기록 없음)</span>`;
     }
@@ -188,6 +188,49 @@ const ENEMY_FOCUS_FIRE_COOLDOWN_MAX = 5.0; // 5초 쿨타임
 let currentEnemyFocusZone = null;
 let enemyFocusReticleTimer = 0;
 
+// 메인 지역(본진): 게임 시작 시 확보한 최초 거점. 특수 기술의 대상이 되지 않음.
+// 일반 구슬 전투로 함락되면 메인 지역 지위를 잃음.
+let playerMainZone = null;
+let enemyMainZone = null;
+
+const MAIN_ZONE_POWER = 2; // 메인 지역 구슬 공격력
+
+function isMainZone(zone) {
+  return (zone === playerMainZone && zone.owner === OWNER.PLAYER) ||
+         (zone === enemyMainZone && zone.owner === OWNER.ENEMY);
+}
+
+// 메인 지역 전용 원거리 타겟: 거리와 무관하게 가장 가까운 적 거점(철벽 제외) ➔ 중립 구역 순
+function pickMainZoneLongRangeTarget(zone) {
+  let best = null;
+  let bestDist = Infinity;
+  let bestIsEnemy = false;
+  for (let i = 0; i < rawZones.length; i++) {
+    const t = rawZones[i];
+    if (t === zone || t.owner === zone.owner || t.isHidden) continue;
+    const isEnemy = t.owner !== OWNER.NEUTRAL;
+    if (isEnemy && isFullyConquered(t)) continue;
+    if (bestIsEnemy && !isEnemy) continue;
+    const d = Math.hypot(t.cx - zone.cx, t.cy - zone.cy);
+    if ((isEnemy && !bestIsEnemy) || d < bestDist) {
+      best = t;
+      bestDist = d;
+      bestIsEnemy = isEnemy;
+    }
+  }
+  return best;
+}
+
+// 특수 기술 대상 선정 및 피해 적용 (아군/적군 공용)
+// - 완전점령(🛡️)과 메인 지역은 대상에서 제외
+// - 메인 지역이 살아 있으면 대상 후보 전부(최대 3곳)를 공격
+// - 메인 지역을 잃은 상태라면 최후 1곳은 남겨둠(피만 깎고 중립화하지 않음)
+function pickSpecialSkillTargets(candidates, mainAlive) {
+  if (mainAlive) return candidates.slice(0, Math.min(3, candidates.length));
+  const count = candidates.length <= 1 ? 1 : Math.min(3, candidates.length - 1);
+  return candidates.slice(0, count);
+}
+
 function useSpecialSkill() {
   if (currentState !== GAME_STATE.PLAYING) return;
 
@@ -206,9 +249,10 @@ function useSpecialSkill() {
 
   // [규칙]: 특수 기술은 적의 완전점령지역(🛡️)을 제외하고, 아군 영토와 가장 인접한 적군의 일반 점령지 중 무작위 3곳 공격!
   const playerZones = rawZones.filter(z => z.owner === OWNER.PLAYER);
-  const enemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY && !isFullyConquered(z));
+  const enemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY && !isFullyConquered(z) && !isMainZone(z));
+  const enemyMainAlive = !!(enemyMainZone && enemyMainZone.owner === OWNER.ENEMY);
   if (enemyZones.length === 0) {
-    document.getElementById('status-guide').innerText = '공격 가능한 적의 일반 점령지가 없습니다! (적의 모든 기지가 완전점령 철벽 상태)';
+    document.getElementById('status-guide').innerText = '공격 가능한 적의 일반 점령지가 없습니다! (완전점령 철벽 기지와 적 메인 지역은 특수 기술 면역)';
     return;
   }
 
@@ -244,14 +288,13 @@ function useSpecialSkill() {
   const nearestCandidates = sortedEnemyZones.slice(0, candidatePoolSize);
   const shuffledCandidates = [...nearestCandidates].sort(() => Math.random() - 0.5);
 
-  const targetCount = enemyZones.length <= 1 ? 1 : Math.min(3, enemyZones.length - 1);
-  const targetEnemyZones = shuffledCandidates.slice(0, Math.max(1, targetCount));
+  const targetEnemyZones = pickSpecialSkillTargets(shuffledCandidates, enemyMainAlive);
 
   targetEnemyZones.forEach(z => {
     // [규칙]: 피 10 감소 및 점령 요건(피 꽉 참) 미달로 점령 해제(중립화)!
     z.orbs = Math.max(0, z.orbs - 10);
-    // 적 영토가 단 1곳만 남은 최후 거점은 피만 깎이고 구슬 전투로만 전멸되도록 보호
-    if (enemyZones.length > 1) {
+    // 메인 지역을 잃은 상태에서 최후 1곳만 남았다면 피만 깎이고 구슬 전투로만 전멸되도록 보호
+    if (enemyMainAlive || enemyZones.length > 1) {
       z.owner = OWNER.NEUTRAL;
     }
     z.targetZones = [];
@@ -298,20 +341,20 @@ function useEnemySpecialSkill() {
   if (enemySpecialSkillCooldown > 0) return;
 
   // 적군 AI의 특수 기술도 플레이어의 완전점령지역(🛡️)은 공격하지 못하고 일반 점령지만 공격!
-  const playerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && !isFullyConquered(z));
+  const playerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && !isFullyConquered(z) && !isMainZone(z));
+  const playerMainAlive = !!(playerMainZone && playerMainZone.owner === OWNER.PLAYER);
   if (playerZones.length === 0) return;
 
   enemySpecialSkillCooldown = ENEMY_SPECIAL_SKILL_COOLDOWN_MAX;
 
   // 무작위 아군 점령지 3곳 선택 (완전점령지 제외)
   const shuffled = [...playerZones].sort(() => Math.random() - 0.5);
-  const targetCount = playerZones.length <= 1 ? 1 : Math.min(3, playerZones.length - 1);
-  const targetPlayerZones = shuffled.slice(0, Math.max(1, targetCount));
+  const targetPlayerZones = pickSpecialSkillTargets(shuffled, playerMainAlive);
 
   targetPlayerZones.forEach(z => {
     // [규칙]: 아군 점령지 피 10 감소 및 점령 해제(중립화)!
     z.orbs = Math.max(0, z.orbs - 10);
-    if (playerZones.length > 1) {
+    if (playerMainAlive || playerZones.length > 1) {
       z.owner = OWNER.NEUTRAL;
     }
     z.targetZones = [];
@@ -396,6 +439,7 @@ function updateSpecialSkillHUD(dt) {
   }
 }
 
+const ZONE_MAX_HP = 50;
 let currentMapKey = 'KOREA';
 
 const MAP_CONFIGS = {
@@ -469,6 +513,8 @@ function loadSelectedMap(mapKey) {
   focusRings = [];
   currentFocusZone = null;
   currentEnemyFocusZone = null;
+  playerMainZone = null;
+  enemyMainZone = null;
   currentPowerZone = null;
   currentEnemyPowerZone = null;
   specialSkillCooldown = 0;
@@ -497,7 +543,7 @@ function loadSelectedMap(mapKey) {
       rawLinks = data.links;
       rawZones = data.zones.map(z => ({
         ...z,
-        maxOrbs: z.maxOrbs || 50,
+        maxOrbs: ZONE_MAX_HP, // 모든 지역 피 50 고정 (주요 도시 가중치 없음)
         cx: 0,
         cy: 0,
         owner: OWNER.NEUTRAL,
@@ -653,7 +699,15 @@ function isFullyConquered(zone) {
 
 // Smart Auto-Target Selection:
 function pickAutoTarget(zone) {
+  // 메인 지역은 공격을 멈추지 않음: 인접 목표가 없으면 거리와 무관한 원거리 목표로 계속 사격
+  if (isMainZone(zone)) {
+    return pickAdjacentTarget(zone) || pickMainZoneLongRangeTarget(zone);
+  }
   if (isFullyConquered(zone)) return null;
+  return pickAdjacentTarget(zone);
+}
+
+function pickAdjacentTarget(zone) {
 
   const neighbors = zone.neighbors;
   if (!neighbors || neighbors.length === 0) return null;
@@ -1085,7 +1139,7 @@ function handleZoneDoubleClick(targetZone) {
   }
 
   // 점령 중인 아군의 전선 거점 탐색 (완전점령지역은 사격 제외! 목표가 아군 거점이면 자기 자신 제외)
-  const allPlayerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && z.id !== targetZone.id && !isFullyConquered(z));
+  const allPlayerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && z.id !== targetZone.id && (!isFullyConquered(z) || isMainZone(z)));
 
   if (allPlayerZones.length === 0) {
     document.getElementById('status-guide').innerText = `⚠️ 출격 가능한 전선 아군 점령지가 없습니다! (완전점령지역은 집중포화 제외)`;
@@ -1113,7 +1167,7 @@ function handleZoneDoubleClick(targetZone) {
 
     // 2. 즉시 일제 집중 포격 (전선 모든 기지에서 3~4발 쾌속 연발 발사!)
     const isPowerZone = (currentPowerZone && currentPowerZone.id === pZone.id);
-    const power = isPowerZone ? (1 + playerBuffs.powerLevel * 2) : 1;
+    const power = isMainZone(pZone) ? MAIN_ZONE_POWER : (isPowerZone ? (1 + playerBuffs.powerLevel * 2) : 1);
 
     for (let i = 0; i < 4; i++) {
       setTimeout(() => {
@@ -1178,6 +1232,7 @@ function onPointerDown(e) {
       targetZone.owner = OWNER.PLAYER;
       targetZone.orbs = targetZone.maxOrbs;
       lastSelectedPlayerZone = targetZone;
+      playerMainZone = targetZone;
 
       // Assign initial auto target for starter
       const initTarget = pickAutoTarget(targetZone);
@@ -1199,6 +1254,7 @@ function onPointerDown(e) {
           const aiTarget = pickAutoTarget(eZone);
           if (aiTarget) eZone.targetZones = [aiTarget];
           chosenEnemies.push(eZone);
+          if (!enemyMainZone) enemyMainZone = eZone;
         }
       }
 
@@ -1279,9 +1335,16 @@ canvas.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 canvas.addEventListener('contextmenu', e => e.preventDefault());
-canvas.addEventListener('mousedown', onPointerDown);
-window.addEventListener('mousemove', onPointerMove);
-window.addEventListener('mouseup', onPointerUp);
+// 터치 후 브라우저가 자동 생성하는 호환 마우스 이벤트(mousedown/mouseup)는 무시
+// (무시하지 않으면 탭 1회가 touchstart + mousedown 2번으로 처리되어 더블탭 집중 포격이 오발동)
+let lastTouchTime = 0;
+const TOUCH_MOUSE_GUARD_MS = 800;
+function isEmulatedMouse() {
+  return performance.now() - lastTouchTime < TOUCH_MOUSE_GUARD_MS;
+}
+canvas.addEventListener('mousedown', (e) => { if (!isEmulatedMouse()) onPointerDown(e); });
+window.addEventListener('mousemove', (e) => { if (!isEmulatedMouse()) onPointerMove(e); });
+window.addEventListener('mouseup', (e) => { if (!isEmulatedMouse()) onPointerUp(e); });
 
 // Mobile Multi-Touch (Pinch Zoom & Pan) Variables
 let initialPinchDist = null;
@@ -1290,6 +1353,7 @@ let initialPanMidX = 0;
 let initialPanMidY = 0;
 
 canvas.addEventListener('touchstart', (e) => {
+  lastTouchTime = performance.now();
   if (e.touches.length === 2) {
     const t1 = e.touches[0];
     const t2 = e.touches[1];
@@ -1326,6 +1390,7 @@ window.addEventListener('touchmove', (e) => {
 }, { passive: false });
 
 window.addEventListener('touchend', (e) => {
+  lastTouchTime = performance.now();
   if (e.touches.length < 2) {
     initialPinchDist = null;
   }
@@ -1412,23 +1477,7 @@ function onStartBtnClick() {
 }
 window.onStartBtnClick = onStartBtnClick;
 
-// Explicit DOM Event listeners for robust click handling
-const startBtnEl = document.getElementById('start-btn');
-if (startBtnEl) {
-  startBtnEl.addEventListener('click', onStartBtnClick);
-}
-const mKoreaCard = document.getElementById('modal-map-korea');
-if (mKoreaCard) {
-  mKoreaCard.addEventListener('click', () => selectModalMap('KOREA'));
-}
-const mSeoulCard = document.getElementById('modal-map-seoul');
-if (mSeoulCard) {
-  mSeoulCard.addEventListener('click', () => selectModalMap('SEOUL'));
-}
-const mGyeonggiCard = document.getElementById('modal-map-gyeonggi');
-if (mGyeonggiCard) {
-  mGyeonggiCard.addEventListener('click', () => selectModalMap('GYEONGGI'));
-}
+// 시작 버튼/전장 카드 클릭은 index.html의 onclick 속성으로만 처리 (중복 리스너 등록 시 클릭 1회가 2번 실행됨)
 
 // Rapid Tap Burst from player's advancing bases
 function triggerPlayerTapBurst() {
@@ -1507,7 +1556,7 @@ function triggerEnemyFocusFire() {
   if (enemyFocusFireCooldown > 0) return;
 
   // 완전점령지역이 아닌 전선 교전 중인 적 거점들
-  const activeEnemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY && !isFullyConquered(z));
+  const activeEnemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY && (!isFullyConquered(z) || isMainZone(z)));
   if (activeEnemyZones.length === 0) return;
 
   // 적 거점과 맞닿은 아군 거점 중 완전점령되지 않은 거점 우선 탐색
@@ -1551,7 +1600,7 @@ function triggerEnemyFocusFire() {
     eZone.targetZones = [target];
 
     const isEnemyPower = (currentEnemyPowerZone && currentEnemyPowerZone.id === eZone.id);
-    const power = isEnemyPower ? (1 + enemyBuffs.powerLevel * 2) : 1;
+    const power = isMainZone(eZone) ? MAIN_ZONE_POWER : (isEnemyPower ? (1 + enemyBuffs.powerLevel * 2) : 1);
 
     for (let i = 0; i < salvoCount; i++) {
       setTimeout(() => {
@@ -1582,7 +1631,7 @@ function updateAI(currentTime) {
   const enemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY);
   enemyZones.forEach(eZone => {
     // Never stop or get stuck if NOT fully conquered!
-    if (isFullyConquered(eZone)) {
+    if (isFullyConquered(eZone) && !isMainZone(eZone)) {
       eZone.targetZones = [];
       return;
     }
@@ -1615,7 +1664,7 @@ function updateOrbSpawners(currentTime) {
     if (zone.owner === OWNER.NEUTRAL) return;
 
     // '완전 점령' Check: 수동 지정(전국 집중포화 등)이 아닌 경우에만 잉여 생산 중단!
-    if (isFullyConquered(zone) && !zone.isManualTarget) {
+    if (isFullyConquered(zone) && !zone.isManualTarget && !isMainZone(zone)) {
       zone.targetZones = [];
       return;
     }
@@ -1639,7 +1688,9 @@ function updateOrbSpawners(currentTime) {
       zone.lastShotTime = currentTime;
       
       let power = 1;
-      if (zone.owner === OWNER.PLAYER) {
+      if (isMainZone(zone)) {
+        power = MAIN_ZONE_POWER;
+      } else if (zone.owner === OWNER.PLAYER) {
         const isPowerZone = (currentPowerZone && currentPowerZone.id === zone.id);
         power = isPowerZone ? (1 + playerBuffs.powerLevel * 2) : 1;
       } else {
@@ -1697,25 +1748,25 @@ function gameOver(isWin) {
   const mapName = MAP_CONFIGS[currentMapKey] ? MAP_CONFIGS[currentMapKey].name : currentMapKey;
   
   if (isWin) {
-    title.style.color = '#38bdf8';
+    title.style.color = '#2563eb';
     title.innerText = '🎉 [전면 승리] 적군 섬멸 완료!';
 
     const recordResult = saveBattleRecord(currentMapKey, gameElapsedTime);
     const bestStr = formatTimeString(recordResult.bestTime);
 
-    let recordMsg = `<div style="font-size: 15px; margin-bottom: 12px; color: #f1f5f9;">⏱️ 작전 소요 시간: <b style="color: #38bdf8; font-size: 18px;">${timeStr}</b></div>`;
+    let recordMsg = `<div style="font-size: 15px; margin-bottom: 12px; color: #0f172a;">⏱️ 작전 소요 시간: <b style="color: #2563eb; font-size: 18px;">${timeStr}</b></div>`;
     if (recordResult.isNewBest) {
-      recordMsg += `<div style="background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e; color: #4ade80; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; font-weight: 700;">🥇 전장 최고 기록 경신! 신기록 달성 (${timeStr})</div>`;
+      recordMsg += `<div style="background: #dcfce7; border: 1px solid #22c55e; color: #15803d; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; font-weight: 700;">🥇 전장 최고 기록 경신! 신기록 달성 (${timeStr})</div>`;
     } else {
-      recordMsg += `<div style="color: #94a3b8; font-size: 13px; margin-bottom: 10px;">🏆 전장 최고 기록: <b style="color: #facc15;">${bestStr}</b></div>`;
+      recordMsg += `<div style="color: #475569; font-size: 13px; margin-bottom: 10px;">🏆 전장 최고 기록: <b style="color: #b45309;">${bestStr}</b></div>`;
     }
-    recordMsg += `<div style="font-size: 12px; color: #94a3b8; line-height: 1.5;">🎖️ [${mapName}] 누적 평정: <b>${recordResult.clearCount}회</b><br>적의 모든 거점을 격파하고 전선을 완전히 평정했습니다!</div>`;
+    recordMsg += `<div style="font-size: 12px; color: #475569; line-height: 1.5;">🎖️ [${mapName}] 누적 평정: <b>${recordResult.clearCount}회</b><br>적의 모든 거점을 격파하고 전선을 완전히 평정했습니다!</div>`;
 
     desc.innerHTML = recordMsg;
   } else {
     title.style.color = '#ef4444';
     title.innerText = '💀 본진 함락... 작전 실패!';
-    desc.innerHTML = `<div style="font-size: 14px; color: #94a3b8; margin-bottom: 10px;">작전 진행 시간: <b>${timeStr}</b></div><div style="font-size: 13px; color: #cbd5e1;">적의 공세에 아군의 모든 거점이 함락되었습니다.<br>전열을 가다듬고 다시 도전하세요!</div>`;
+    desc.innerHTML = `<div style="font-size: 14px; color: #475569; margin-bottom: 10px;">작전 진행 시간: <b>${timeStr}</b></div><div style="font-size: 13px; color: #334155;">적의 공세에 아군의 모든 거점이 함락되었습니다.<br>전열을 가다듬고 다시 도전하세요!</div>`;
   }
   if (modal) modal.style.display = 'flex';
 }
@@ -1920,7 +1971,8 @@ function drawZoneBadges(ctx) {
     ctx.textBaseline = 'bottom';
 
     let prefix = '';
-    if (isPlayerPowerZone || isEnemyPowerZone) prefix = '⚡';
+    if (isMainZone(zone)) prefix = '👑';
+    else if (isPlayerPowerZone || isEnemyPowerZone) prefix = '⚡';
     else if (isFull) {
       prefix = '🛡️';
     }
@@ -1967,7 +2019,7 @@ function gameLoop(timestamp) {
         const timerEl = document.getElementById('match-timer');
         if (timerEl) {
           timerEl.innerText = timerStr;
-          timerEl.style.color = '#facc15';
+          timerEl.style.color = '#b45309';
         }
       }
 
