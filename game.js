@@ -241,6 +241,8 @@ const EXP_MAIN_POWER = 5;   // [실험] 메인 지역 공격력 (완전점령 �
 function canRangeAttack(zone) {
   // [이탈리아 '모든 길은 로마로'] 처음부터 모든 점령 지역이 원거리 공격 가능
   if (currentCountryKey() === 'IT') return zone.owner !== OWNER.NEUTRAL;
+  // [아이템 장거리 사격] 모든 내 지역 원거리 가능
+  if (zone.owner !== OWNER.NEUTRAL && hasItem(zone.owner, 'longrange')) return true;
   // 완전점령 후 충전 게이지(10초)가 다 차야 원거리 가능
   if (EXPERIMENT_NO_SKILL) return zone.owner !== OWNER.NEUTRAL && isFullyConquered(zone) && zone.chargeState === 'ready';
   return isUnleashed(zone);
@@ -490,8 +492,8 @@ function updateSkillCharges(dt) {
       const fortress = z.owner !== OWNER.NEUTRAL && isFullyConquered(z);
       if (fortress && !z.fortressHp) {
         z.fortressHp = true;
-        z.maxOrbs = FULL_ZONE_HP;
-        z.orbs = FULL_ZONE_HP;
+        z.maxOrbs = hasItem(z.owner, 'fortress') ? 150 : FULL_ZONE_HP; // [아이템 철벽]
+        z.orbs = z.maxOrbs;
       } else if (!fortress && z.fortressHp) {
         z.fortressHp = false;
         if (z.owner !== OWNER.NEUTRAL) {
@@ -767,6 +769,7 @@ function loadSelectedMap(mapKey) {
   enemyFocusFireCooldown = 0;
   gameElapsedTime = 0;
   resetCountryEvent();
+  resetItems();
   enemyCommandTimer = ENEMY_COMMAND_SEC;
   lastEnemyCommandCheck = 0;
   lastTimerText = '';
@@ -1073,7 +1076,8 @@ class FlyingOrb {
     this.dist = Math.hypot(dx, dy);
     this.speed = (this.owner === OWNER.PLAYER) ? baseOrbSpeed : ENEMY_CONFIG.enemyOrbSpeed;
     // [원거리] 맞닿지 않은 곳으로 가는 구슬은 2배 느림
-    if (isRangedShot(sourceZone, targetZone)) this.speed /= RANGED_SLOW;
+    // [아이템 속사] 원거리 느려짐 없음, 오히려 1.5배
+    if (isRangedShot(sourceZone, targetZone)) this.speed = hasItem(owner, 'rapid') ? this.speed * 1.5 : this.speed / RANGED_SLOW;
     this.progress = 0;
     this.curve = (Math.random() - 0.5) * 16;
     this.isDead = false;
@@ -1102,7 +1106,22 @@ class FlyingOrb {
   }
 
   arrive() {
-    applyOrbHit(this.targetZone, this.owner, this.power, this.sourceZone);
+    const t = this.targetZone, own = this.owner;
+    // [아이템 반사 방패] 상대 구슬 5발 중 1발을 쏜 곳으로 되돌림
+    if ((t.owner === OWNER.PLAYER || t.owner === OWNER.ENEMY) && t.owner !== own && (own === OWNER.PLAYER || own === OWNER.ENEMY) &&
+        hasItem(t.owner, 'reflect') && Math.random() < 0.2 && this.sourceZone) {
+      flyingOrbs.push(new FlyingOrb(t, this.sourceZone, t.owner, this.power));
+      return;
+    }
+    // [아이템 점령 가속] 빈 땅 게이지 2배
+    const power = (t.owner === OWNER.NEUTRAL && hasItem(own, 'claim')) ? this.power * 2 : this.power;
+    const wasRival = t.owner !== OWNER.NEUTRAL && t.owner !== own;
+    applyOrbHit(t, own, power, this.sourceZone);
+    // [아이템 관통탄] 맞힌 상대 지역 옆의 상대 지역 하나도 타격
+    if (wasRival && hasItem(own, 'pierce')) {
+      const next = t.neighbors.filter(n => n !== this.sourceZone && n.owner !== OWNER.NEUTRAL && n.owner !== own);
+      if (next.length) applyOrbHit(next[Math.floor(Math.random() * next.length)], own, this.power, null);
+    }
   }
 
   draw(ctx) {
@@ -1561,6 +1580,7 @@ function beginGameAtZone(zone) {
 
   currentState = GAME_STATE.PLAYING;
   document.getElementById('status-guide').innerText = `${zone.name} 기지 확보! 작전 개시! (적 전면 섬멸 작전)`;
+  if (itemMode) { nextItemAt = 0; openItemPick(); }
 }
 
 const START_GUIDE_TEXT = '본진을 선택하세요';
@@ -2308,7 +2328,10 @@ function updateOrbSpawners(currentTime) {
     const slow = zone.slowUntil && gameElapsedTime < zone.slowUntil ? 2 : 1;
     // [원거리] 맞닿지 않은 곳을 쏘는 지역은 발사 간격 2배
     const ranged = zone.targetZones.some(t => isRangedShot(zone, t));
-    const interval = baseInterval * (ranged ? RANGED_INTERVAL_MULT : 1) * slow / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
+    // [아이템 속사] 원거리 간격 늘어남 없음 / [아이템 방해 공작] 상대가 가졌으면 생산 20% 느림
+    const rangedMult = ranged && !hasItem(zone.owner, 'rapid') ? RANGED_INTERVAL_MULT : 1;
+    const sabotage = hasItem(itemRival(zone.owner), 'sabotage') ? 1.25 : 1;
+    const interval = baseInterval * rangedMult * sabotage * slow / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
 
     if (currentTime - zone.lastShotTime >= interval) {
       zone.lastShotTime = currentTime;
@@ -2326,9 +2349,15 @@ function updateOrbSpawners(currentTime) {
 
       // [미국 자본주의] 호황 지역은 구슬 공격력 5
       if (zone.boostUntil && gameElapsedTime < zone.boostUntil) power = Math.max(power, COUNTRY_EVENT_CFG.US.power);
+      if (hasItem(zone.owner, 'power')) power *= 2; // [아이템 파워샷]
       zone.targetZones.forEach(target => {
         flyingOrbs.push(new FlyingOrb(zone, target, zone.owner, power));
       });
+      // [아이템 더블샷] 맞닿은 다른 곳으로 한 발 더
+      if (hasItem(zone.owner, 'double') && zone.targetZones.length === 1) {
+        const others = zone.neighbors.filter(n => n !== zone.targetZones[0] && isAutoAttackable(n, zone.owner, zone));
+        if (others.length) flyingOrbs.push(new FlyingOrb(zone, others[Math.floor(Math.random() * others.length)], zone.owner, power));
+      }
     }
   });
 }
@@ -2427,6 +2456,155 @@ function drawTank(ctx) {
 }
 let countryEventNext = 0;
 let quakeUntilMs = 0;
+// -------------------------------------------------------------
+// 아이템 모드: 시작할 때 카드 3장 중 1장, 이후 30초마다 또 1장 (총 4번). 이미 고른 카드는 다시 안 나옴.
+// 적도 같은 때 무작위로 1장씩 고름. 고른 카드는 화면 아래에 아이콘으로 (나: 파랑, 적: 빨강)
+// 아이템 모드 판은 기록·순위에 남기지 않음
+// -------------------------------------------------------------
+const ITEM_ROUNDS = 4;
+const ITEM_EVERY_SEC = 30;
+const ITEM_ICON = {
+  double: '<circle cx="6" cy="12" r="3"/><path d="M9 12 L19 5 M9 12 L19 19"/><circle cx="19" cy="5" r="1.6"/><circle cx="19" cy="19" r="1.6"/>',
+  rapid: '<path d="M3 8h9M5 12h10M3 16h9"/><circle cx="18" cy="12" r="3"/>',
+  power: '<circle cx="12" cy="12" r="6"/><path d="M12 9v6M9 12h6"/>',
+  pierce: '<path d="M3 12h17M15 7l5 5-5 5"/><rect x="9" y="6" width="3" height="12" rx="1"/>',
+  fortress: '<path d="M4 20V9l3 2V7l2.5 2L12 6l2.5 3L17 7v4l3-2v11z"/>',
+  rebuild: '<path d="M12 21s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 11c0 5.5-7 10-7 10z"/>',
+  reflect: '<path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/><path d="M15 10l-3 3-3-3"/>',
+  longrange: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>',
+  claim: '<path d="M6 21V4M6 4h11l-3 4 3 4H6"/>',
+  sabotage: '<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/>'
+};
+const ITEMS = [
+  { key: 'double', name: '더블샷', desc: '한 번에 두 발, 서로 다른 곳으로' },
+  { key: 'rapid', name: '속사', desc: '원거리 구슬이 느려지지 않고 더 빠르게' },
+  { key: 'power', name: '파워샷', desc: '구슬 공격력 2배' },
+  { key: 'pierce', name: '관통탄', desc: '맞힌 지역 옆의 상대 지역도 한 번 더 타격' },
+  { key: 'fortress', name: '철벽', desc: '완전점령 지역 피 150' },
+  { key: 'rebuild', name: '재건', desc: '30초마다 내 모든 지역 피 가득' },
+  { key: 'reflect', name: '반사 방패', desc: '상대 구슬 5발 중 1발을 되돌려 보냄' },
+  { key: 'longrange', name: '장거리 사격', desc: '모든 내 지역이 원거리 공격 가능' },
+  { key: 'claim', name: '점령 가속', desc: '빈 땅 점령 게이지 2배로 참' },
+  { key: 'sabotage', name: '방해 공작', desc: '상대 생산 속도 20% 느리게' }
+];
+const ITEM_MODE_KEY = 'tapwar_item_mode';
+let itemMode = false;
+try { itemMode = localStorage.getItem(ITEM_MODE_KEY) === '1'; } catch (e) {}
+let itemsOf = { player: [], enemy: [] };
+let itemRound = 0;
+let nextItemAt = 0;
+let rebuildAt = { player: 0, enemy: 0 };
+let itemChoices = [];
+
+function hasItem(owner, key) { return itemMode && !!itemsOf[owner] && itemsOf[owner].includes(key); }
+function itemRival(owner) { return owner === OWNER.PLAYER ? OWNER.ENEMY : OWNER.PLAYER; }
+function itemIconSvg(key, size = 28) {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ITEM_ICON[key]}</svg>`;
+}
+
+function updateItemModeButton() {
+  const b = document.getElementById('item-mode-btn');
+  if (b) { b.textContent = `아이템 모드 ${itemMode ? '켬' : '끔'}`; b.classList.toggle('on', itemMode); }
+}
+function toggleItemMode() {
+  itemMode = !itemMode;
+  try { localStorage.setItem(ITEM_MODE_KEY, itemMode ? '1' : '0'); } catch (e) {}
+  updateItemModeButton();
+}
+window.toggleItemMode = toggleItemMode;
+
+function resetItems() {
+  itemsOf = { player: [], enemy: [] };
+  itemRound = 0;
+  nextItemAt = 0;
+  rebuildAt = { player: 0, enemy: 0 };
+  const m = document.getElementById('item-modal');
+  if (m) m.style.display = 'none';
+  renderItemBar();
+}
+
+function shuffled(a) {
+  const r = a.slice();
+  for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; }
+  return r;
+}
+
+// 카드 고르기: 게임을 멈추고 내 카드 3장을 보여줌. 적은 같은 때 무작위로 1장
+function openItemPick() {
+  if (!itemMode || itemRound >= ITEM_ROUNDS) return;
+  currentState = GAME_STATE.PAUSED;
+  const toast = document.getElementById('center-toast');
+  if (toast) toast.classList.remove('show');
+  itemChoices = shuffled(ITEMS.filter(it => !itemsOf.player.includes(it.key))).slice(0, 3);
+  const m = document.getElementById('item-modal');
+  const list = document.getElementById('item-choices');
+  document.getElementById('item-round').textContent = `${itemRound + 1}/${ITEM_ROUNDS}`;
+  list.innerHTML = '';
+  itemChoices.forEach(it => {
+    const b = document.createElement('button');
+    b.className = 'item-card';
+    b.innerHTML = `<span class="item-icon">${itemIconSvg(it.key, 40)}</span><span class="item-name">${it.name}</span><span class="item-desc">${it.desc}</span>`;
+    b.onclick = () => chooseItem(it.key);
+    list.appendChild(b);
+  });
+  m.style.display = 'flex';
+}
+
+function gainItem(owner, key) {
+  itemsOf[owner].push(key);
+  if (key === 'rebuild') rebuildAt[owner] = gameElapsedTime + ITEM_EVERY_SEC;
+}
+
+function chooseItem(key) {
+  if (currentState !== GAME_STATE.PAUSED) return;
+  gainItem(OWNER.PLAYER, key);
+  const pool = ITEMS.filter(it => !itemsOf.enemy.includes(it.key));
+  const ek = pool[Math.floor(Math.random() * pool.length)].key;
+  gainItem(OWNER.ENEMY, ek);
+  itemRound++;
+  nextItemAt = gameElapsedTime + ITEM_EVERY_SEC;
+  document.getElementById('item-modal').style.display = 'none';
+  currentState = GAME_STATE.PLAYING;
+  renderItemBar();
+  const mine = ITEMS.find(it => it.key === key).name, theirs = ITEMS.find(it => it.key === ek).name;
+  document.getElementById('status-guide').innerText = `[${mine}] 선택! 적은 [${theirs}]을(를) 골랐습니다.`;
+  flashCenterText(`적: ${theirs}`);
+}
+window.chooseItem = chooseItem;
+
+// 화면 아래 고른 카드: 왼쪽 나(파랑), 오른쪽 적(빨강). 아이콘을 누르면 이름·설명
+function renderItemBar() {
+  const bar = document.getElementById('item-bar');
+  if (!bar) return;
+  const show = itemMode && (itemsOf.player.length + itemsOf.enemy.length) > 0 && currentState !== GAME_STATE.SELECT_START;
+  bar.hidden = !show;
+  if (!show) return;
+  const chips = (owner, cls) => itemsOf[owner].map(k => {
+    const it = ITEMS.find(x => x.key === k);
+    return `<span class="item-chip ${cls}" title="${it.name}: ${it.desc}" onclick="showItemInfo('${k}', '${owner}')">${itemIconSvg(k, 20)}</span>`;
+  }).join('');
+  bar.innerHTML = `<div class="item-side mine">${chips(OWNER.PLAYER, 'mine')}</div><div class="item-vs">VS</div><div class="item-side theirs">${chips(OWNER.ENEMY, 'theirs')}</div>`;
+}
+function showItemInfo(key, owner) {
+  const it = ITEMS.find(x => x.key === key);
+  if (it) document.getElementById('status-guide').innerText = `${owner === OWNER.PLAYER ? '내' : '적'} 아이템 [${it.name}]: ${it.desc}`;
+  flashCenterText(`${owner === OWNER.PLAYER ? '나' : '적'}: ${it.name}`);
+}
+window.showItemInfo = showItemInfo;
+
+// 매 프레임: 다음 카드 시간, 재건(30초마다 전체 회복)
+function updateItems() {
+  if (!itemMode) return;
+  [OWNER.PLAYER, OWNER.ENEMY].forEach(owner => {
+    if (hasItem(owner, 'rebuild') && gameElapsedTime >= rebuildAt[owner]) {
+      rebuildAt[owner] = gameElapsedTime + ITEM_EVERY_SEC;
+      rawZones.forEach(z => { if (z.owner === owner) z.orbs = z.maxOrbs; });
+      if (owner === OWNER.PLAYER) flashCenterText('재건!');
+    }
+  });
+  if (itemRound < ITEM_ROUNDS && gameElapsedTime >= nextItemAt) openItemPick();
+}
+
 function resetCountryEvent() {
   const c = COUNTRY_EVENT_CFG[(MAP_CONFIGS[currentMapKey] || {}).country];
   countryEventNext = c ? c.every : 0;
@@ -2639,6 +2817,8 @@ window.retryStage = retryStage;
 
 function gameOver(isWin, isSurrender = false) {
   currentState = GAME_STATE.GAME_OVER;
+  const im = document.getElementById('item-modal');
+  if (im) im.style.display = 'none';
   const toast = document.getElementById('center-toast');
   if (toast) toast.classList.remove('show');
   const modal = document.getElementById('end-modal');
@@ -2659,7 +2839,8 @@ function gameOver(isWin, isSurrender = false) {
     title.style.color = '#1e293b';
     title.innerText = '축하합니다.';
 
-    const recordResult = saveBattleRecord(currentMapKey, gameElapsedTime);
+    // 아이템 모드 판은 기록·순위에 남기지 않음
+    const recordResult = itemMode ? { bestTime: (getBattleRecords()[currentMapKey] || {}).bestTime ?? gameElapsedTime, isNewBest: false } : saveBattleRecord(currentMapKey, gameElapsedTime);
     const bestStr = formatTimeString(recordResult.bestTime);
     desc.innerHTML =
       `<div class="end-sub">${label}${josaEulReul(label)} 점령했습니다.</div>` +
@@ -2667,8 +2848,12 @@ function gameOver(isWin, isSurrender = false) {
       `<div class="end-record">${timeStr}</div>` +
       (recordResult.isNewBest ? `<div class="end-best new">최고 기록</div>` : `<div class="end-best">최고 기록 ${bestStr}</div>`) +
       `<div class="end-total">${(COUNTRIES.find(x => x.key === selectedCountryKey) || COUNTRIES[0]).name} 총 시간 ${formatLongTime(getCampaignTotalTime().sum)}</div>`;
-    submitMapRanking(selectedCountryKey || 'KR', currentMapKey, gameElapsedTime);
-    submitCountryRanking(selectedCountryKey || 'KR');
+    if (!itemMode) {
+      submitMapRanking(selectedCountryKey || 'KR', currentMapKey, gameElapsedTime);
+      submitCountryRanking(selectedCountryKey || 'KR');
+    } else {
+      desc.innerHTML += `<div class="end-total">아이템 모드 판은 기록에 남지 않아요</div>`;
+    }
 
     // 캠페인 다음 맵 (클리어로 열림)
     const order = getCampaignOrder();
@@ -4083,6 +4268,7 @@ function gameLoop(timestamp) {
       updateOrbSpawners(timestamp);
       updateSpecialSkillHUD(dt);
       updateCountryEvent();
+      updateItems();
       updateParticles();
       updateFocusRings();
 
@@ -4201,3 +4387,4 @@ function maybeOpenTutorial() {
   };
   setTimeout(typeNext, 300);
 })();
+updateItemModeButton();

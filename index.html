@@ -788,6 +788,34 @@
     .splash-caret { width: 4px; height: 0.9em; background: #1e293b; margin-left: 4px; animation: caret 0.6s steps(1) infinite; }
     @keyframes caret { 50% { opacity: 0; } }
     /* 화면 가운데 글자만 2초 떴다 사라지는 안내 */
+    .item-mode-btn.on { color: #2563eb; }
+    #item-bar {
+      position: fixed; left: 50%; transform: translateX(-50%);
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 64px);
+      display: flex; align-items: center; gap: 8px; z-index: 40;
+      background: rgba(255,255,255,0.92); border: 1.5px solid #e2e8f0; border-radius: 16px;
+      padding: 6px 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); max-width: calc(100vw - 32px);
+    }
+    #item-bar[hidden] { display: none; }
+    .item-side { display: flex; gap: 4px; }
+    .item-vs { font-size: 11px; font-weight: 900; color: #94a3b8; }
+    .item-chip { width: 30px; height: 30px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .item-chip.mine { color: #2563eb; background: #dbeafe; }
+    .item-chip.theirs { color: #b91c1c; background: #fee2e2; }
+    #item-modal { z-index: 300; }
+    .item-pick { max-width: 420px; width: calc(100vw - 32px); text-align: center; }
+    .item-pick-title { font-size: 22px; font-weight: 900; color: #1e293b; }
+    .item-pick-title span { color: #94a3b8; font-size: 16px; margin-left: 4px; }
+    .item-pick-sub { font-size: 13px; color: #64748b; margin: 6px 0 14px; }
+    .item-choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .item-card {
+      display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 6px;
+      border: 2px solid #1e293b; border-radius: 16px; background: #fff; cursor: pointer; font-family: inherit;
+    }
+    .item-card:active { transform: scale(0.97); }
+    .item-icon { color: #2563eb; }
+    .item-name { font-size: 15px; font-weight: 900; color: #1e293b; }
+    .item-desc { font-size: 11px; color: #64748b; line-height: 1.35; word-break: keep-all; }
     #center-toast {
       position: fixed; left: 0; right: 0; top: 50%;
       transform: translateY(-50%);
@@ -859,6 +887,16 @@
 
     <!-- 앱 첫 실행 연출: TAPWAR 가 가운데에서 타이핑되듯 완성된 뒤 홈으로 -->
     <div id="center-toast" aria-live="polite"></div>
+    <!-- 아이템 모드: 고른 카드 (나 파랑 · 적 빨강) -->
+    <div id="item-bar" hidden></div>
+    <!-- 아이템 모드: 카드 3장 중 1장 고르기 (고르는 동안 게임 멈춤) -->
+    <div class="modal-overlay" id="item-modal" style="display:none">
+      <div class="modal-card item-pick">
+        <div class="item-pick-title">아이템 카드 <span id="item-round">1/4</span></div>
+        <div class="item-pick-sub">한 장을 고르세요. 적도 한 장을 고릅니다.</div>
+        <div class="item-choices" id="item-choices"></div>
+      </div>
+    </div>
     <div id="splash" aria-hidden="true"><h1 class="splash-text"><span id="splash-text"></span><i class="splash-caret"></i></h1></div>
 
     <!-- Start Choice Modal (Mini Metro Style) -->
@@ -893,6 +931,8 @@
           <button class="link-btn" onclick="openTutorial()">튜토리얼</button>
           <span aria-hidden="true">·</span>
           <button class="link-btn" onclick="restorePurchases()">구매 복원</button>
+          <span aria-hidden="true">·</span>
+          <button class="link-btn item-mode-btn" id="item-mode-btn" onclick="toggleItemMode()">아이템 모드 끔</button>
         </div>
         <!-- 지도 데이터 출처(라이선스상 표시 필수): 첫 화면에는 ⓘ 버튼만, 누르면 표시 -->
         <button class="info-btn" id="info-btn" aria-label="지도 출처" onclick="document.getElementById('map-credit').hidden = !document.getElementById('map-credit').hidden">i</button>
