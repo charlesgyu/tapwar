@@ -1144,8 +1144,11 @@ let lastTapZoneId = null;
 function handleZoneDoubleClick(targetZone) {
   if (!targetZone || currentState !== GAME_STATE.PLAYING) return;
 
-  // [지정 공격 규칙]: 내 점령지역은 집중 포격 대상이 아님
-  if (targetZone.owner === OWNER.PLAYER) return;
+  // [방어 지원]: 내 점령지역에 집중 포격하면 아군 구슬이 들어가 피를 회복(최대 50)
+  if (targetZone.owner === OWNER.PLAYER && targetZone.orbs >= targetZone.maxOrbs) {
+    document.getElementById('status-guide').innerText = `🛡️ [${targetZone.name}]은(는) 이미 피가 가득 찼습니다!`;
+    return;
+  }
 
   // [면역 규칙]: 완전 점령된 적 기지는 일반 공격 절대 불가!
   if (targetZone.owner === OWNER.ENEMY && isFullyConquered(targetZone)) {
@@ -1193,7 +1196,9 @@ function handleZoneDoubleClick(targetZone) {
     }
   });
 
-  document.getElementById('status-guide').innerText = `🔥 [${targetZone.name}] 집중 포격! 전선의 아군 ${allPlayerZones.length}개 거점에서 일제 사격 (3~4발 연발)!`;
+  document.getElementById('status-guide').innerText = targetZone.owner === OWNER.PLAYER
+    ? `🛡️ [${targetZone.name}] 방어 지원! 아군 ${allPlayerZones.length}개 거점에서 구슬 보급 (3~4발 연발)!`
+    : `🔥 [${targetZone.name}] 집중 포격! 전선의 아군 ${allPlayerZones.length}개 거점에서 일제 사격 (3~4발 연발)!`;
 }
 
 function getEventCoords(e) {
@@ -1327,8 +1332,9 @@ function onPointerUp(e) {
 
   if (isDragging && dragSourceZone) {
     const endZone = findZoneAtWorld(worldMousePos.x, worldMousePos.y);
-    // [지정 공격 규칙]: 내 점령지역을 제외한 모든 지역(적군·중립, 거리 무관) 지정 가능
-    if (endZone && endZone.id !== dragSourceZone.id && endZone.owner !== dragSourceZone.owner) {
+    // [지정 공격 규칙]: 모든 지역(적군·중립·아군, 거리 무관) 지정 가능
+    // 아군 지역 지정 = 방어 지원(피 회복). 피가 가득 차면 자동 공격으로 복귀
+    if (endZone && endZone.id !== dragSourceZone.id) {
       // 완전 점령된 적 기지는 일반 공격 불가!
       if (endZone.owner !== dragSourceZone.owner && endZone.owner !== OWNER.NEUTRAL && isFullyConquered(endZone)) {
         document.getElementById('status-guide').innerText = `🛡️ [${endZone.name}]은(는) 완전 점령된 철벽 기지입니다! [즉시 점령] 아이템으로만 공략 가능합니다.`;
