@@ -228,6 +228,8 @@ const EXP_MAIN_POWER = 5;   // [실험] 메인 지역 공격력 (완전점령 �
 // 원거리 공격(맞닿지 않은 지역 공격) 가능 여부
 // [실험] 완전점령 지역만 원거리 가능 (메인도 완전점령이어야 원거리). 일반 지역·메인은 맞닿은 곳만
 function canRangeAttack(zone) {
+  // [이탈리아 '모든 길은 로마로'] 처음부터 모든 점령 지역이 원거리 공격 가능
+  if (currentCountryKey() === 'IT') return zone.owner !== OWNER.NEUTRAL;
   // 완전점령 후 충전 게이지(10초)가 다 차야 원거리 가능
   if (EXPERIMENT_NO_SKILL) return zone.owner !== OWNER.NEUTRAL && isFullyConquered(zone) && zone.chargeState === 'ready';
   return isUnleashed(zone);
@@ -1116,8 +1118,10 @@ function drawFlyingOrbs(ctx) {
   ctx.lineWidth = 1.2 * k;
   const passes = [
     [OWNER.PLAYER, false, '#2563eb'], [OWNER.PLAYER, true, '#1e3a8a'],
-    [OWNER.ENEMY, false, '#dc2626'], [OWNER.ENEMY, true, '#7f1d1d']
+    [OWNER.ENEMY, false, '#dc2626'], [OWNER.ENEMY, true, '#7f1d1d'],
+    [REBEL, false, '#7c3aed']
   ];
+  const fog = currentCountryKey() === 'GB'; // [영국 안개] 적 구슬은 막 출발할 때 방향만 살짝 보임
   passes.forEach(([owner, full, color]) => {
     ctx.fillStyle = color;
     ctx.beginPath();
@@ -1125,6 +1129,7 @@ function drawFlyingOrbs(ctx) {
     for (let i = 0; i < flyingOrbs.length; i++) {
       const orb = flyingOrbs[i];
       if (orb.isDead || orb.owner !== owner || !!orb.fromFull !== full) continue;
+      if (fog && owner === OWNER.ENEMY && orb.progress > FOG_VISIBLE_PROGRESS) continue;
       const r = (orb.power > 1 ? 4.5 : 3.2) * k;
       ctx.moveTo(orb.x + r, orb.y);
       ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
@@ -1203,6 +1208,13 @@ function createImmuneShieldParticles() {}
 // COMBAT & REAL-TIME RELAY RE-TARGETING
 // -------------------------------------------------------------
 function applyOrbHit(zone, hitOwner, power, sourceZone) {
+  // [프랑스 혁명] 반란군(중립 지역) 구슬: 점령 지역의 피를 깎고, 0 이 되면 중립으로
+  if (hitOwner === REBEL) {
+    if (zone.owner === OWNER.NEUTRAL || gameElapsedTime < zone.protectedUntil) return;
+    zone.orbs -= power;
+    if (zone.orbs <= 0) neutralizeZone(zone);
+    return;
+  }
   if (zone.owner === hitOwner) {
     // If friendly zone, reinforce defense
     zone.orbs = Math.min(zone.maxOrbs, zone.orbs + power);
@@ -2282,14 +2294,94 @@ function updateOrbSpawners(currentTime) {
 const COUNTRY_EVENT_CFG = {
   JP: { every: 45, share: 0.15, min: 2, toast: '지진!', color: '#92400e' },
   CN: { every: 60, share: 0.2, min: 2, duration: 10, toast: '모래폭풍', color: '#d97706' },
-  US: { every: 60, share: 0.15, min: 2, duration: 10, power: 5, toast: '자본주의 호황', color: '#eab308' }
+  US: { every: 60, share: 0.15, min: 2, duration: 10, power: 5, toast: '자본주의 호황', color: '#eab308' },
+  FR: { every: 60, duration: 10, fireEvery: 1.0, toast: '혁명!', color: '#7c3aed' },
+  DE: { every: 60, tankSec: 3.5, width: 0.07, toast: '전차 돌파!', color: '#3f6212' }
 };
+const REBEL = 'rebel';
+const FOG_VISIBLE_PROGRESS = 0.12;
+let revoltUntil = 0, revoltNextShot = 0;
+let tankAnim = null; // { x0, y0, x1, y1, t0(게임 시간), dur, hit:Set }
+
+function currentCountryKey() {
+  return (MAP_CONFIGS[currentMapKey] || {}).country || 'KR';
+}
+
+// 지역을 중립으로 되돌림 (전차·반란)
+function neutralizeZone(z) {
+  if (isMainZone(z)) return;
+  z.owner = OWNER.NEUTRAL;
+  z.maxOrbs = ZONE_MAX_HP;
+  z.orbs = 0;
+  z.claimant = null;
+  z.targetZones = [];
+  z.isManualTarget = false;
+  z.fortressHp = false;
+  z.chargeState = null;
+  z.unleashed = false;
+  if (typeof removePlayerFocus === 'function' && playerFocusList.includes(z)) removePlayerFocus(z);
+  rawZones.forEach(o => { if (o.owner !== OWNER.NEUTRAL && o.targetZones.includes(z) && !o.isManualTarget) reRouteZone(o); });
+}
+
+// 혁명 중: 점령 지역과 맞닿은 중립 지역이 주기마다 주변 점령 지역 하나를 공격
+function updateRevolt() {
+  if (gameElapsedTime >= revoltUntil || gameElapsedTime < revoltNextShot) return;
+  revoltNextShot = gameElapsedTime + COUNTRY_EVENT_CFG.FR.fireEvery;
+  rawZones.forEach(z => {
+    if (z.owner !== OWNER.NEUTRAL || z.isHidden) return;
+    const tg = z.neighbors.filter(n => n.owner !== OWNER.NEUTRAL);
+    if (tg.length === 0) return;
+    flyingOrbs.push(new FlyingOrb(z, tg[Math.floor(Math.random() * tg.length)], REBEL, 1));
+  });
+}
+
+// 전차: 맵을 가로질러 지나가며 경로 근처 지역을 중립으로
+function startTank() {
+  const area = getMapArea();
+  const ang = Math.random() * Math.PI;
+  const cx = area.x + area.w / 2, cy = area.y + area.h / 2, L = Math.hypot(area.w, area.h) / 2;
+  const off = (Math.random() - 0.5) * 0.6;
+  const ox = -Math.sin(ang) * off * L, oy = Math.cos(ang) * off * L;
+  tankAnim = { x0: cx - Math.cos(ang) * L + ox, y0: cy - Math.sin(ang) * L + oy, x1: cx + Math.cos(ang) * L + ox, y1: cy + Math.sin(ang) * L + oy,
+               t0: gameElapsedTime, dur: COUNTRY_EVENT_CFG.DE.tankSec, hit: new Set(), w: Math.min(area.w, area.h) * COUNTRY_EVENT_CFG.DE.width };
+}
+function updateTank() {
+  if (!tankAnim) return;
+  const k = (gameElapsedTime - tankAnim.t0) / tankAnim.dur;
+  if (k >= 1) { tankAnim = null; return; }
+  const x = tankAnim.x0 + (tankAnim.x1 - tankAnim.x0) * k, y = tankAnim.y0 + (tankAnim.y1 - tankAnim.y0) * k;
+  rawZones.forEach(z => {
+    if (tankAnim.hit.has(z) || z.owner === OWNER.NEUTRAL) return;
+    if (Math.hypot(z.cx - x, z.cy - y) < tankAnim.w) {
+      tankAnim.hit.add(z);
+      if (!isMainZone(z)) { neutralizeZone(z); flashZone(z, COUNTRY_EVENT_CFG.DE.color); }
+    }
+  });
+}
+function drawTank(ctx) {
+  if (!tankAnim) return;
+  const k = Math.min(1, (gameElapsedTime - tankAnim.t0) / tankAnim.dur);
+  const x = tankAnim.x0 + (tankAnim.x1 - tankAnim.x0) * k, y = tankAnim.y0 + (tankAnim.y1 - tankAnim.y0) * k;
+  const ang = Math.atan2(tankAnim.y1 - tankAnim.y0, tankAnim.x1 - tankAnim.x0);
+  const s = tankAnim.w * 0.9;
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(ang);
+  ctx.fillStyle = 'rgba(63, 98, 18, 0.18)';
+  ctx.fillRect(-s * 6, -s * 0.8, s * 6, s * 1.6); // 지나온 자국
+  ctx.fillStyle = '#3f6212'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 / view.scale;
+  ctx.beginPath(); ctx.roundRect(-s, -s * 0.7, s * 2, s * 1.4, s * 0.25); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#4d7c0f';
+  ctx.beginPath(); ctx.arc(0, 0, s * 0.45, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.fillRect(0, -s * 0.12, s * 1.5, s * 0.24);
+  ctx.restore();
+}
 let countryEventNext = 0;
 let quakeUntilMs = 0;
 function resetCountryEvent() {
   const c = COUNTRY_EVENT_CFG[(MAP_CONFIGS[currentMapKey] || {}).country];
   countryEventNext = c ? c.every : 0;
   quakeUntilMs = 0;
+  revoltUntil = 0; revoltNextShot = 0; tankAnim = null;
 }
 function pickEventZones(c) {
   const owned = rawZones.filter(z => z.owner !== OWNER.NEUTRAL && !isMainZone(z) && !z.isHidden);
@@ -2300,8 +2392,12 @@ function pickEventZones(c) {
 function updateCountryEvent() {
   const country = (MAP_CONFIGS[currentMapKey] || {}).country;
   const c = COUNTRY_EVENT_CFG[country];
+  if (country === 'FR') updateRevolt();
+  if (country === 'DE') updateTank();
   if (!c || !countryEventNext || gameElapsedTime < countryEventNext) return;
   countryEventNext = gameElapsedTime + c.every;
+  if (country === 'FR') { revoltUntil = gameElapsedTime + c.duration; revoltNextShot = gameElapsedTime; flashCenterText(c.toast); return; }
+  if (country === 'DE') { startTank(); flashCenterText(c.toast); return; }
   const zones = pickEventZones(c);
   if (zones.length === 0) return;
   zones.forEach(z => {
@@ -2326,7 +2422,8 @@ function drawCountryEventMarks(ctx) {
     const z = rawZones[i];
     if (!z.path) continue;
     let color = null;
-    if (z.slowUntil && t < z.slowUntil) color = COUNTRY_EVENT_CFG.CN.color;
+    if (t < revoltUntil && z.owner === OWNER.NEUTRAL && z.neighbors.some(n => n.owner !== OWNER.NEUTRAL)) color = COUNTRY_EVENT_CFG.FR.color;
+    else if (z.slowUntil && t < z.slowUntil) color = COUNTRY_EVENT_CFG.CN.color;
     else if (z.boostUntil && t < z.boostUntil) color = COUNTRY_EVENT_CFG.US.color;
     if (!color) continue;
     ctx.save();
@@ -3911,6 +4008,7 @@ function gameLoop(timestamp) {
     drawExactDistrictsMap(ctx);
     drawMapTitle(ctx);
     drawCountryEventMarks(ctx);
+    drawTank(ctx);
     drawFocusRings(ctx);
     drawFlyingOrbs(ctx);
     drawParticles(ctx);
