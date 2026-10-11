@@ -615,6 +615,15 @@
     .purchase-price { font-size: 22px; font-weight: 900; color: #1e293b; margin: -6px 0 16px; font-variant-numeric: tabular-nums; }
     .purchase-close { display: block; margin: 10px auto 0; }
     #confirm-base .tut-nav { margin-top: 4px; }
+    /* 본진 확인 창: 뒤의 지도와 선택한 지역(노란색)이 비쳐 보이도록 흐림 없이 옅게 */
+    #confirm-base {
+      background: rgba(30, 41, 59, 0.12);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      align-items: flex-end;
+      padding-bottom: max(28px, env(safe-area-inset-bottom));
+    }
+    #confirm-base .sheet-card { box-shadow: 0 12px 40px rgba(30, 41, 59, 0.22); }
     .sheet-card, .tutorial-card {
       max-width: 340px;
       border-radius: 26px;
