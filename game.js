@@ -1077,7 +1077,7 @@ class FlyingOrb {
     this.speed = (this.owner === OWNER.PLAYER) ? baseOrbSpeed : ENEMY_CONFIG.enemyOrbSpeed;
     // [원거리] 맞닿지 않은 곳으로 가는 구슬은 2배 느림
     // [아이템 속사] 원거리 느려짐 없음, 오히려 1.5배
-    if (isRangedShot(sourceZone, targetZone)) this.speed = hasItem(owner, 'rapid') ? this.speed * 1.5 : this.speed / RANGED_SLOW;
+    if (isRangedShot(sourceZone, targetZone)) this.speed = (hasItem(owner, 'rapid') && isRivalMarked(targetZone, owner)) ? this.speed * 1.5 : this.speed / RANGED_SLOW;
     this.progress = 0;
     this.curve = (Math.random() - 0.5) * 16;
     this.isDead = false;
@@ -1113,12 +1113,10 @@ class FlyingOrb {
       flyingOrbs.push(new FlyingOrb(t, this.sourceZone, t.owner, this.power));
       return;
     }
-    // [아이템 점령 가속] 빈 땅 게이지 2배
-    // [아이템 파워샷] 상대 땅(또는 상대 게이지가 조금이라도 찬 중립 땅)에만 2배 / [점령 가속] 빈 땅 2배
-    // [아이템 철벽] 맞는 쪽이 철벽이면 상대 구슬 50%
+    // [아이템] 카드는 중립 땅에는 효과 없음 (상대 색이 조금이라도 있으면 상대 땅으로 침)
+    // [아이템 파워샷] 상대 땅에만 2배 / [아이템 철벽] 맞는 쪽이 철벽이면 상대 구슬 50%
     let base = this.power;
     if (hasItem(own, 'power') && isRivalMarked(t, own)) base *= 2;
-    else if (t.owner === OWNER.NEUTRAL && hasItem(own, 'claim')) base *= 2;
     const power = itemHitPower(base, own, t);
     const wasRival = t.owner !== OWNER.NEUTRAL && t.owner !== own;
     applyOrbHit(t, own, power, this.sourceZone);
@@ -2339,7 +2337,8 @@ function updateOrbSpawners(currentTime) {
     // [아이템 방해 공작] 상대가 가졌으면 생산 20% 느림 (속사는 구슬 속도만, 발사 간격은 그대로)
     const rangedMult = ranged ? RANGED_INTERVAL_MULT : 1;
     const sabotage = hasItem(itemRival(zone.owner), 'sabotage') ? 1.25 : 1;
-    const interval = baseInterval * rangedMult * sabotage * slow / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
+    const supply = hasItem(zone.owner, 'supply') ? 0.8 : 1; // [아이템 보급] 내 생산 20% 빠르게
+    const interval = baseInterval * rangedMult * sabotage * supply * slow / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
 
     if (currentTime - zone.lastShotTime >= interval) {
       zone.lastShotTime = currentTime;
@@ -2362,7 +2361,7 @@ function updateOrbSpawners(currentTime) {
       });
       // [아이템 더블샷] 맞닿은 다른 곳으로 한 발 더
       if (hasItem(zone.owner, 'double') && zone.targetZones.length === 1) {
-        const others = zone.neighbors.filter(n => n !== zone.targetZones[0] && isAutoAttackable(n, zone.owner, zone));
+        const others = zone.neighbors.filter(n => n !== zone.targetZones[0] && isAutoAttackable(n, zone.owner, zone) && isRivalMarked(n, zone.owner));
         if (others.length) flyingOrbs.push(new FlyingOrb(zone, others[Math.floor(Math.random() * others.length)], zone.owner, power));
       }
     }
@@ -2479,19 +2478,19 @@ const ITEM_ICON = {
   rebuild: '<path d="M12 21s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 11c0 5.5-7 10-7 10z"/>',
   reflect: '<path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/><path d="M15 10l-3 3-3-3"/>',
   longrange: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>',
-  claim: '<path d="M6 21V4M6 4h11l-3 4 3 4H6"/>',
+  supply: '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 19h16"/>',
   sabotage: '<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/>'
 };
 const ITEMS = [
-  { key: 'double', name: '더블샷', desc: '한 번에 두 발, 서로 다른 곳으로' },
-  { key: 'rapid', name: '속사', desc: '원거리 구슬이 빠르게 날아감 (발사 간격은 그대로)' },
+  { key: 'double', name: '더블샷', desc: '맞닿은 다른 상대 땅에 한 발 더' },
+  { key: 'rapid', name: '속사', desc: '상대 땅으로 가는 원거리 구슬이 빠르게 (발사 간격 그대로)' },
   { key: 'power', name: '파워샷', desc: '상대 땅 공격력 2배 (상대 색이 조금이라도 있는 곳)' },
   { key: 'pierce', name: '관통탄', desc: '맞힌 지역 옆의 상대 지역도 한 번 더 타격' },
   { key: 'fortress', name: '철벽', desc: '상대 공격을 50%만 받음' },
   { key: 'rebuild', name: '재건', desc: '30초마다 내 모든 지역 피 가득' },
   { key: 'reflect', name: '반사 방패', desc: '상대 구슬 5발 중 1발을 되돌려 보냄' },
   { key: 'longrange', name: '장거리 사격', desc: '모든 내 지역이 원거리 공격 가능' },
-  { key: 'claim', name: '점령 가속', desc: '빈 땅 점령 게이지 2배로 참' },
+  { key: 'supply', name: '보급', desc: '내 생산 속도 20% 빠르게' },
   { key: 'sabotage', name: '방해 공작', desc: '상대 생산 속도 20% 느리게' }
 ];
 const ITEM_MODE_KEY = 'tapwar_item_mode';
