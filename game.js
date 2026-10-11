@@ -903,9 +903,12 @@ function pickAutoTarget(zone) {
   // [자동 공격 규칙]: 모든 점령지역(메인 포함)은 맞닿은 지역만 무작위로 공격.
   // 메인 지역은 공격을 멈추지 않으므로, 자기와 맞닿은 목표가 없으면
   // 내 점령지역 전체와 맞닿아 있는 전선 지역 중 무작위 1곳을 원거리 공격.
-  // [실험] 지시(지정 공격·집중 포화)가 없으면 원거리 가능 지역도 맞닿은 곳만 자동 공격 (힘겨루기).
-  // 맞닿은 공격 대상이 없는 완전점령 지역은 지시가 있을 때만 원거리로 쏨
-  if (EXPERIMENT_NO_SKILL) return pickAdjacentTarget(zone);
+  // 원거리 가능(완전점령 + 게이지 완충) 지역: 맞닿은 목표가 없으면 내 영토와 맞닿은 전선 지역(내 땅 아닌 곳) 중
+  // 무작위 1곳을 자동으로 원거리 공격. 적 한가운데처럼 내 영토와 떨어진 곳은 지시(지정·집중 포화)할 때만
+  if (EXPERIMENT_NO_SKILL) {
+    if (canRangeAttack(zone)) return pickAdjacentTarget(zone) || pickMainZoneFrontierTarget(zone);
+    return pickAdjacentTarget(zone);
+  }
   if (canRangeAttack(zone)) {
     return pickAdjacentTarget(zone) || pickMainZoneFrontierTarget(zone);
   }
