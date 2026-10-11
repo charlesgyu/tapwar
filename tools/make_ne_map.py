@@ -60,6 +60,7 @@ COMMON_KO = {'CHN': '중국', 'PRK': '북한', 'KOR': '한국', 'TWN': '대만',
 
 
 # 데이터상 실효 지배 기준으로 들어간 곳을 국제적으로 인정된 나라로 (크림·세바스토폴 → 우크라이나)
+SUBNAME = {}  # regions 모드: 1급 행정구역 id → 한글 이름
 DEJURE = {'UA-43': 'UKR', 'UA-40': 'UKR'}
 KO_FIX = {'키예프': '키이우', '세바스토폴': '세바스토폴', '크림 자치 공화국': '크림'}
 
@@ -120,7 +121,7 @@ def main():
     from shapely.ops import unary_union
 
     ap = argparse.ArgumentParser()
-    ap.add_argument('mode', choices=['us', 'europe', 'world', 'country'])
+    ap.add_argument('mode', choices=['us', 'europe', 'world', 'country', 'regions'])
     ap.add_argument('src1'); ap.add_argument('src2')
     ap.add_argument('title'); ap.add_argument('out')
     ap.add_argument('--units', default='')
@@ -128,6 +129,8 @@ def main():
     ap.add_argument('--exclude', default='', help='뺄 나라 A3')
     ap.add_argument('--extra', default='', help='대륙과 상관없이 넣을 나라 A3')
     ap.add_argument('--target', type=int, default=0)
+    ap.add_argument('--groups', default='', help='regions 모드: 묶음 값 목록(| 구분)')
+    ap.add_argument('--group-field', default='region', help='regions 모드: region(큰 지방) 또는 name(1급 행정구역)')
     ap.add_argument('--by-region', action='store_true', help='country 모드: 1급 행정구역을 region(큰 지방) 단위로 묶음')
     ap.add_argument('--island-radius', type=float, default=1.5)
     ap.add_argument('--min-area', type=float, default=0.0)
@@ -174,6 +177,37 @@ def main():
             else:
                 nm = p.get('name_ko') or p['name']
                 subs.append((sid, KO_FIX.get(nm, nm), sid, clean(shape(f['geometry']))))
+    elif a.mode == 'regions':
+        # 한 나라의 지방 맵: 큰 지방(region 또는 1급 행정구역)이 시작 구역, 하위 단위(1급 행정구역 또는 src2 파일)로 나눔
+        want = [g for g in a.groups.split('|') if g]
+        bases = []
+        for f in json.load(open(a.src1, encoding='utf-8'))['features']:
+            p = f['properties']
+            if adm0_of(p) not in units:
+                continue
+            gv = p.get(a.group_field)
+            if gv not in want:
+                continue
+            gname = REGION_KO.get(gv, gv) if a.group_field == 'region' else (p.get('name_ko') or gv)
+            gname = KO_FIX.get(gname, gname)
+            sid = p.get('iso_3166_2') or p['name']
+            sub_name = p.get('name_ko') or p['name']
+            SUBNAME[sid] = KO_FIX.get(sub_name, sub_name)
+            bases.append((gv, gname, sid, clean(shape(f['geometry']))))
+        if a.src2 == '-':
+            subs = bases
+        else:
+            from shapely.strtree import STRtree
+            bg = [b[3] for b in bases]
+            tree = STRtree(bg)
+            for f in json.load(open(a.src2, encoding='utf-8'))['features']:
+                g = clean(shape(f['geometry']))
+                if g.is_empty:
+                    continue
+                pt = g.representative_point()
+                hit = next((bases[i] for i in tree.query(pt) if bases[i][3].contains(pt)), None)
+                if hit:
+                    subs.append((hit[0], hit[1], f['properties'].get('shapeID') or f['properties'].get('shapeName'), g))
     elif a.mode == 'europe':
         ko = {f['properties']['ADM0_A3']: f['properties']['NAME_KO'] for f in json.load(open(a.src2, encoding='utf-8'))['features']}
         for f in json.load(open(a.src1, encoding='utf-8'))['features']:
@@ -249,12 +283,18 @@ def main():
         groups = {k: g for k, g in groups.items()
                   if sum(Polygon(r).area for r in g['polygons']) >= a.min_area}
 
-    if a.mode == 'country':
+    if a.mode in ('country', 'regions'):
         groups = merge_enclaves(groups)
     if a.mode == 'country' and a.target and len(groups) > a.target:
         groups = merge_until(groups, a.target)
     elif a.target and len(groups) < a.target:
         groups = split_until(groups, a.target)
+        # 하위 단위 하나만 남은 구역은 그 단위의 실제 이름 (예: 바르셀로나)
+        if a.mode == 'regions' and a.src2 == '-':
+            for g in groups.values():
+                ids = {d['id'] for d in g['dongs']}
+                if len(ids) == 1 and next(iter(ids)) in SUBNAME:
+                    g['name'] = SUBNAME[next(iter(ids))]
 
     zones = []
     for g in groups.values():
@@ -264,7 +304,7 @@ def main():
     xs = [x for z in zones for r in z['polygons'] for x, _ in r]; ys = [y for z in zones for r in z['polygons'] for _, y in r]
     bounds = {'minLng': round(min(xs) - a.margin, 3), 'maxLng': round(max(xs) + a.margin, 3),
               'minLat': round(min(ys) - a.margin, 3), 'maxLat': round(max(ys) + a.margin, 3)}
-    src = {'us': 'US Census 카운티 경계(plotly/datasets) · Natural Earth'}.get(a.mode, 'Natural Earth')
+    src = {'us': 'US Census 카운티 경계(plotly/datasets) · Natural Earth'}.get(a.mode, 'Natural Earth' + ('' if a.src2 in ('-', '') or a.mode != 'regions' else ' · © GeoBasis-DE / BKG (dl-de/by-2-0)'))
     out = {'meta': {'name': a.title, 'bounds': bounds, 'level': a.mode, 'source': src}, 'zones': zones, 'links': []}
     json.dump(out, open(a.out, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
     print(f'{a.out}: {a.mode} {len(zones)}개 bounds={bounds}')
