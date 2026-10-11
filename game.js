@@ -208,6 +208,9 @@ let enemyFocusReticleTimer = 0;
 // 일반 구슬 전투로 함락되면 메인 지역 지위를 잃음.
 let playerMainZone = null;
 let enemyMainZone = null;
+// [이탈리아 '최고의 지휘관'] 양쪽에 무작위로 하나씩 더 생기는 본진 (zone.mainOwner 로 주인 기록)
+const extraMains = new Set();
+function isExtraMainOf(zone, owner) { return extraMains.has(zone) && zone.mainOwner === owner && zone.owner === owner; }
 let enemy2MainZone = null;
 // 3파전(나 vs 적 vs 적2 보라): 지금은 어느 맵도 쓰지 않음 (전세계도 1:1). 다시 쓰려면 여기서 켜기
 function isThreeWay() { return false; }
@@ -224,6 +227,7 @@ const MAIN_ZONE_HP = 400;   // 메인 지역 피 (일반 지역 50). 처음부�
 function isMainZone(zone) {
   return (zone === playerMainZone && zone.owner === OWNER.PLAYER) ||
          (zone === enemyMainZone && zone.owner === OWNER.ENEMY) ||
+         (extraMains.has(zone) && zone.mainOwner === zone.owner) ||
          (zone === enemy2MainZone && zone.owner === OWNER.ENEMY2);
 }
 
@@ -239,8 +243,6 @@ const EXP_MAIN_POWER = 5;   // [실험] 메인 지역 공격력 (완전점령 �
 // 원거리 공격(맞닿지 않은 지역 공격) 가능 여부
 // [실험] 완전점령 지역만 원거리 가능 (메인도 완전점령이어야 원거리). 일반 지역·메인은 맞닿은 곳만
 function canRangeAttack(zone) {
-  // [이탈리아 '모든 길은 로마로'] 처음부터 모든 점령 지역이 원거리 공격 가능
-  if (currentCountryKey() === 'IT') return zone.owner !== OWNER.NEUTRAL;
   // [아이템 장거리 사격] 모든 내 지역 원거리 가능
   if (zone.owner !== OWNER.NEUTRAL && hasItem(zone.owner, 'longrange')) return true;
   // 완전점령 후 충전 게이지(10초)가 다 차야 원거리 가능
@@ -755,6 +757,7 @@ function loadSelectedMap(mapKey) {
   currentEnemyFocusZone = null;
   playerMainZone = null;
   enemyMainZone = null;
+  extraMains.clear();
   enemy2MainZone = null;
   resetAi2();
   playerSkillGcdUntil = 0;
@@ -1325,6 +1328,7 @@ function applyOrbHit(zone, hitOwner, power, sourceZone) {
     zone.orbs -= power;
     if (zone.orbs <= 0) {
       zone.owner = OWNER.NEUTRAL;
+      extraMains.delete(zone);
       zone.maxOrbs = ZONE_MAX_HP; // 메인이었다면 중립이 되면서 일반 지역(피 50)으로
       zone.claimant = hitOwner;
       zone.targetZones = [];
@@ -1388,6 +1392,7 @@ let nextConquestThreshold = 3; // 3 -> 6 -> 12 -> 24 -> 48 -> 96... 배수로 �
 let isInstantConquerMode = false;
 
 function conquerZone(conqueredZone, newOwner, conqueredBySource) {
+  extraMains.delete(conqueredZone); // 빼앗긴 추가 본진은 본진 지위를 잃음
   conqueredZone.owner = newOwner;
   conqueredZone.maxOrbs = ZONE_MAX_HP; // 함락된 메인은 메인 지위를 잃고 일반 지역(피 50)이 됨
   conqueredZone.orbs = conqueredZone.maxOrbs; // Full garrison upon capture
@@ -1588,6 +1593,22 @@ function beginGameAtZone(zone) {
       chosenEnemies.push(eZone);
       if (!enemyMainZone) enemyMainZone = eZone;
     }
+  }
+
+  // [이탈리아 '최고의 지휘관'] 나·적 모두 무작위 빈 땅에 본진 하나씩 더 (이미 점령된 땅과 맞닿지 않은 곳)
+  if (currentCountryKey() === 'IT') {
+    [OWNER.PLAYER, OWNER.ENEMY].forEach(owner => {
+      const free = rawZones.filter(z => z.owner === OWNER.NEUTRAL && !z.isHidden && z.neighbors.length >= 2 &&
+        !z.neighbors.some(n => n.owner !== OWNER.NEUTRAL));
+      const z = free[Math.floor(Math.random() * free.length)];
+      if (!z) return;
+      z.owner = owner;
+      z.mainOwner = owner;
+      z.maxOrbs = MAIN_ZONE_HP; z.orbs = MAIN_ZONE_HP;
+      extraMains.add(z);
+      const t = pickAutoTarget(z);
+      z.targetZones = t ? [t] : [];
+    });
   }
 
   // [3파전] 두 번째 적 본진: 나·첫 적 본진 양쪽에서 가장 먼 곳
@@ -2677,7 +2698,7 @@ const COUNTRY_CONCEPT = {
   US: ['자본주의 호황', '1분마다 무작위 점령 지역들의 공격력이 10초 동안 강해져요'],
   FR: ['혁명', '1분마다 10초 동안 점령 지역과 맞닿은 중립 지역이 주변을 공격해요'],
   DE: ['전차 돌파', '1분마다 전차가 지나가고, 지나간 지역은 중립이 돼요 (본진 제외)'],
-  IT: ['모든 길은 로마로', '처음부터 모든 점령 지역이 원거리 공격을 할 수 있어요'],
+  IT: ['최고의 지휘관', '본진이 무작위로 하나 더 생겨요 (적도 마찬가지)'],
   ES: ['대항해시대', '1분마다 양쪽의 완전점령 지역 한 곳이 대포를 쏴요 (공격력 20)'],
   GB: ['안개', '적의 구슬은 처음 방향만 보이고 어디로 가는지는 보이지 않아요']
 };
@@ -3030,7 +3051,7 @@ function fillZoneFromBottom(ctx, zone, ratio, color) {
 function getZoneStyle(zone) {
   const isFull = isFullyConquered(zone);
   const isPlayer = zone.owner === OWNER.PLAYER;
-  const isMyMain = isPlayer && zone === playerMainZone;
+  const isMyMain = isPlayer && (zone === playerMainZone || isExtraMainOf(zone, OWNER.PLAYER));
   const hpRatio = zone.orbs / zone.maxOrbs;
   const chargeRatio = zone.chargeState === 'ready' ? 1 : (zone.chargeState === 'charging' ? zone.chargeTime / SKILL_CHARGE_SEC : 0);
 
@@ -3048,7 +3069,7 @@ function getZoneStyle(zone) {
       ? { base: ZONE_COLORS.enemy2Full, gauge: ZONE_COLORS.enemy2FullCharged, ratio: chargeRatio, stroke: ZONE_COLORS.enemy2FullStroke, width: 2.0 }
       : { base: ZONE_COLORS.base, gauge: ZONE_COLORS.enemy2, ratio: hpRatio, stroke: ZONE_COLORS.enemy2Stroke, width: 2.0 };
   }
-  const isEnemyMain = zone.owner === OWNER.ENEMY && zone === enemyMainZone;
+  const isEnemyMain = zone.owner === OWNER.ENEMY && (zone === enemyMainZone || isExtraMainOf(zone, OWNER.ENEMY));
   if (isEnemyMain) {
     if (isFull && hpRatio >= 1) {
       return { base: ZONE_COLORS.enemyMain, gauge: ZONE_COLORS.enemyMainCharged, ratio: chargeRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
