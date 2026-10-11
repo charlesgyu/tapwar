@@ -193,9 +193,32 @@ let enemyFocusReticleTimer = 0;
 let playerMainZone = null;
 let enemyMainZone = null;
 
+const MAIN_ZONE_POWER = 2; // 메인 지역 구슬 공격력
+
 function isMainZone(zone) {
   return (zone === playerMainZone && zone.owner === OWNER.PLAYER) ||
          (zone === enemyMainZone && zone.owner === OWNER.ENEMY);
+}
+
+// 메인 지역 전용 원거리 타겟: 거리와 무관하게 가장 가까운 적 거점(철벽 제외) ➔ 중립 구역 순
+function pickMainZoneLongRangeTarget(zone) {
+  let best = null;
+  let bestDist = Infinity;
+  let bestIsEnemy = false;
+  for (let i = 0; i < rawZones.length; i++) {
+    const t = rawZones[i];
+    if (t === zone || t.owner === zone.owner || t.isHidden) continue;
+    const isEnemy = t.owner !== OWNER.NEUTRAL;
+    if (isEnemy && isFullyConquered(t)) continue;
+    if (bestIsEnemy && !isEnemy) continue;
+    const d = Math.hypot(t.cx - zone.cx, t.cy - zone.cy);
+    if ((isEnemy && !bestIsEnemy) || d < bestDist) {
+      best = t;
+      bestDist = d;
+      bestIsEnemy = isEnemy;
+    }
+  }
+  return best;
 }
 
 // 특수 기술 대상 선정 및 피해 적용 (아군/적군 공용)
@@ -675,7 +698,15 @@ function isFullyConquered(zone) {
 
 // Smart Auto-Target Selection:
 function pickAutoTarget(zone) {
+  // 메인 지역은 공격을 멈추지 않음: 인접 목표가 없으면 거리와 무관한 원거리 목표로 계속 사격
+  if (isMainZone(zone)) {
+    return pickAdjacentTarget(zone) || pickMainZoneLongRangeTarget(zone);
+  }
   if (isFullyConquered(zone)) return null;
+  return pickAdjacentTarget(zone);
+}
+
+function pickAdjacentTarget(zone) {
 
   const neighbors = zone.neighbors;
   if (!neighbors || neighbors.length === 0) return null;
@@ -1107,7 +1138,7 @@ function handleZoneDoubleClick(targetZone) {
   }
 
   // 점령 중인 아군의 전선 거점 탐색 (완전점령지역은 사격 제외! 목표가 아군 거점이면 자기 자신 제외)
-  const allPlayerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && z.id !== targetZone.id && !isFullyConquered(z));
+  const allPlayerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && z.id !== targetZone.id && (!isFullyConquered(z) || isMainZone(z)));
 
   if (allPlayerZones.length === 0) {
     document.getElementById('status-guide').innerText = `⚠️ 출격 가능한 전선 아군 점령지가 없습니다! (완전점령지역은 집중포화 제외)`;
@@ -1135,7 +1166,7 @@ function handleZoneDoubleClick(targetZone) {
 
     // 2. 즉시 일제 집중 포격 (전선 모든 기지에서 3~4발 쾌속 연발 발사!)
     const isPowerZone = (currentPowerZone && currentPowerZone.id === pZone.id);
-    const power = isPowerZone ? (1 + playerBuffs.powerLevel * 2) : 1;
+    const power = isMainZone(pZone) ? MAIN_ZONE_POWER : (isPowerZone ? (1 + playerBuffs.powerLevel * 2) : 1);
 
     for (let i = 0; i < 4; i++) {
       setTimeout(() => {
@@ -1303,9 +1334,16 @@ canvas.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 canvas.addEventListener('contextmenu', e => e.preventDefault());
-canvas.addEventListener('mousedown', onPointerDown);
-window.addEventListener('mousemove', onPointerMove);
-window.addEventListener('mouseup', onPointerUp);
+// 터치 후 브라우저가 자동 생성하는 호환 마우스 이벤트(mousedown/mouseup)는 무시
+// (무시하지 않으면 탭 1회가 touchstart + mousedown 2번으로 처리되어 더블탭 집중 포격이 오발동)
+let lastTouchTime = 0;
+const TOUCH_MOUSE_GUARD_MS = 800;
+function isEmulatedMouse() {
+  return performance.now() - lastTouchTime < TOUCH_MOUSE_GUARD_MS;
+}
+canvas.addEventListener('mousedown', (e) => { if (!isEmulatedMouse()) onPointerDown(e); });
+window.addEventListener('mousemove', (e) => { if (!isEmulatedMouse()) onPointerMove(e); });
+window.addEventListener('mouseup', (e) => { if (!isEmulatedMouse()) onPointerUp(e); });
 
 // Mobile Multi-Touch (Pinch Zoom & Pan) Variables
 let initialPinchDist = null;
@@ -1314,6 +1352,7 @@ let initialPanMidX = 0;
 let initialPanMidY = 0;
 
 canvas.addEventListener('touchstart', (e) => {
+  lastTouchTime = performance.now();
   if (e.touches.length === 2) {
     const t1 = e.touches[0];
     const t2 = e.touches[1];
@@ -1350,6 +1389,7 @@ window.addEventListener('touchmove', (e) => {
 }, { passive: false });
 
 window.addEventListener('touchend', (e) => {
+  lastTouchTime = performance.now();
   if (e.touches.length < 2) {
     initialPinchDist = null;
   }
@@ -1531,7 +1571,7 @@ function triggerEnemyFocusFire() {
   if (enemyFocusFireCooldown > 0) return;
 
   // 완전점령지역이 아닌 전선 교전 중인 적 거점들
-  const activeEnemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY && !isFullyConquered(z));
+  const activeEnemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY && (!isFullyConquered(z) || isMainZone(z)));
   if (activeEnemyZones.length === 0) return;
 
   // 적 거점과 맞닿은 아군 거점 중 완전점령되지 않은 거점 우선 탐색
@@ -1575,7 +1615,7 @@ function triggerEnemyFocusFire() {
     eZone.targetZones = [target];
 
     const isEnemyPower = (currentEnemyPowerZone && currentEnemyPowerZone.id === eZone.id);
-    const power = isEnemyPower ? (1 + enemyBuffs.powerLevel * 2) : 1;
+    const power = isMainZone(eZone) ? MAIN_ZONE_POWER : (isEnemyPower ? (1 + enemyBuffs.powerLevel * 2) : 1);
 
     for (let i = 0; i < salvoCount; i++) {
       setTimeout(() => {
@@ -1606,7 +1646,7 @@ function updateAI(currentTime) {
   const enemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY);
   enemyZones.forEach(eZone => {
     // Never stop or get stuck if NOT fully conquered!
-    if (isFullyConquered(eZone)) {
+    if (isFullyConquered(eZone) && !isMainZone(eZone)) {
       eZone.targetZones = [];
       return;
     }
@@ -1639,7 +1679,7 @@ function updateOrbSpawners(currentTime) {
     if (zone.owner === OWNER.NEUTRAL) return;
 
     // '완전 점령' Check: 수동 지정(전국 집중포화 등)이 아닌 경우에만 잉여 생산 중단!
-    if (isFullyConquered(zone) && !zone.isManualTarget) {
+    if (isFullyConquered(zone) && !zone.isManualTarget && !isMainZone(zone)) {
       zone.targetZones = [];
       return;
     }
@@ -1663,7 +1703,9 @@ function updateOrbSpawners(currentTime) {
       zone.lastShotTime = currentTime;
       
       let power = 1;
-      if (zone.owner === OWNER.PLAYER) {
+      if (isMainZone(zone)) {
+        power = MAIN_ZONE_POWER;
+      } else if (zone.owner === OWNER.PLAYER) {
         const isPowerZone = (currentPowerZone && currentPowerZone.id === zone.id);
         power = isPowerZone ? (1 + playerBuffs.powerLevel * 2) : 1;
       } else {
