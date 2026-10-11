@@ -221,7 +221,10 @@ function pickMainZoneFrontierTarget(zone) {
 function buildSkillTargetList(victimOwner) {
   const attackerOwner = victimOwner === OWNER.PLAYER ? OWNER.ENEMY : OWNER.PLAYER;
   const attackers = rawZones.filter(z => z.owner === attackerOwner);
-  const victims = rawZones.filter(z => z.owner === victimOwner && !isMainZone(z));
+  // 피해 대상: 상대 점령지(메인 제외) + 상대가 점령 중인 중립 지역(줄다리기 게이지가 상대 색으로 조금이라도 찬 곳)
+  const victims = rawZones.filter(z => !z.isHidden &&
+    ((z.owner === victimOwner && !isMainZone(z)) ||
+     (z.owner === OWNER.NEUTRAL && z.claimant === victimOwner && z.orbs > 0)));
   victims.forEach(v => {
     let minDist = Infinity;
     let touching = false;
@@ -248,6 +251,15 @@ function buildSkillTargetList(victimOwner) {
 const SKILL_DAMAGE = 10;
 // 특수 기술 피해: 소유는 유지한 채 피만 깎음. 0 이하가 되면 중립(공격한 쪽 우세 게이지 0)
 function applySkillDamage(zone, attacker) {
+  // 점령 중인 중립 지역: 상대 게이지를 10 깎고, 넘치는 만큼은 공격한 쪽 게이지로 넘어감
+  if (zone.owner === OWNER.NEUTRAL) {
+    zone.orbs -= SKILL_DAMAGE;
+    if (zone.orbs <= 0) {
+      zone.claimant = -zone.orbs > 0 ? attacker : null;
+      zone.orbs = Math.max(0, -zone.orbs);
+    }
+    return;
+  }
   zone.orbs -= SKILL_DAMAGE;
   if (zone.orbs <= 0) {
     zone.owner = OWNER.NEUTRAL;
