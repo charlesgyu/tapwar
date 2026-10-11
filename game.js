@@ -1107,25 +1107,41 @@ class FlyingOrb {
 
   arrive() {
     const t = this.targetZone, own = this.owner;
-    // [아이템 반사 방패] 상대 구슬 5발 중 1발을 쏜 곳으로 되돌림
-    if ((t.owner === OWNER.PLAYER || t.owner === OWNER.ENEMY) && t.owner !== own && (own === OWNER.PLAYER || own === OWNER.ENEMY) &&
-        hasItem(t.owner, 'reflect') && Math.random() < 0.2 && this.sourceZone) {
-      flyingOrbs.push(new FlyingOrb(t, this.sourceZone, t.owner, this.power));
-      return;
-    }
+    const fighters = o => o === OWNER.PLAYER || o === OWNER.ENEMY;
+    const rivalHit = fighters(own) && fighters(t.owner) && t.owner !== own;
     // [아이템] 카드는 중립 땅에는 효과 없음 (상대 색이 조금이라도 있으면 상대 땅으로 침)
-    // [아이템 파워샷] 상대 땅에만 2배 / [아이템 철벽] 맞는 쪽이 철벽이면 상대 구슬 50%
-    let base = this.power;
-    if (hasItem(own, 'power') && isRivalMarked(t, own)) base *= 2;
-    const power = itemHitPower(base, own, t);
+    // 공격 쪽: 파워샷(상대 땅 2배) → 이 공격의 '공격력'
+    let attack = this.power;
+    if (hasItem(own, 'power') && isRivalMarked(t, own)) attack *= 2;
+    if (rivalHit) {
+      // [아이템 반사 방패] 30% 확률로 쏜 곳으로 그대로 되돌림 (되돌린 구슬은 다시 반사되지 않음)
+      if (!this.reflected && this.sourceZone && hasItem(t.owner, 'reflect') && Math.random() < ITEM_CHANCE) {
+        const back = new FlyingOrb(t, this.sourceZone, t.owner, this.power);
+        back.reflected = true;
+        flyingOrbs.push(back);
+        return;
+      }
+      // [아이템 흡수] 30% 확률로 막고, 내 피를 상대 공격력의 2배만큼 채움
+      if (hasItem(t.owner, 'absorb') && Math.random() < ITEM_CHANCE) {
+        t.orbs = Math.min(t.maxOrbs, t.orbs + attack * 2);
+        return;
+      }
+    }
+    // [아이템 크리티컬] 상대 땅에 30% 확률로 3배 (반사된 구슬도 해당)
+    if (hasItem(own, 'crit') && isRivalMarked(t, own) && Math.random() < ITEM_CHANCE) {
+      attack *= 3;
+      flashZone(t, '#f59e0b');
+    }
+    // 맞는 쪽: 철벽(상대 구슬 50%)
+    const power = itemHitPower(attack, own, t);
     const wasRival = t.owner !== OWNER.NEUTRAL && t.owner !== own;
     applyOrbHit(t, own, power, this.sourceZone);
-    // [아이템 관통탄] 맞힌 상대 지역 옆의 상대 지역 하나도 타격
+    // [아이템 관통탄] 맞힌 상대 지역 옆의 상대 지역 하나도 같은 공격력으로 타격
     if (wasRival && hasItem(own, 'pierce')) {
       const next = t.neighbors.filter(n => n !== this.sourceZone && n.owner !== OWNER.NEUTRAL && n.owner !== own);
       if (next.length) {
         const n2 = next[Math.floor(Math.random() * next.length)];
-        applyOrbHit(n2, own, itemHitPower(hasItem(own, 'power') ? this.power * 2 : this.power, own, n2), null);
+        applyOrbHit(n2, own, itemHitPower(attack, own, n2), null);
       }
     }
   }
@@ -2334,11 +2350,10 @@ function updateOrbSpawners(currentTime) {
     const slow = zone.slowUntil && gameElapsedTime < zone.slowUntil ? 2 : 1;
     // [원거리] 맞닿지 않은 곳을 쏘는 지역은 발사 간격 2배
     const ranged = zone.targetZones.some(t => isRangedShot(zone, t));
-    // [아이템 방해 공작] 상대가 가졌으면 생산 20% 느림 (속사는 구슬 속도만, 발사 간격은 그대로)
+    // 속사는 구슬 속도만, 발사 간격은 그대로
     const rangedMult = ranged ? RANGED_INTERVAL_MULT : 1;
-    const sabotage = hasItem(itemRival(zone.owner), 'sabotage') ? 1.25 : 1;
-    const supply = hasItem(zone.owner, 'supply') ? 0.8 : 1; // [아이템 보급] 내 생산 20% 빠르게
-    const interval = baseInterval * rangedMult * sabotage * supply * slow / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
+    const supply = hasItem(zone.owner, 'supply') ? 1 / 1.3 : 1; // [아이템 보급] 내 생산 30% 빠르게
+    const interval = baseInterval * rangedMult * supply * slow / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
 
     if (currentTime - zone.lastShotTime >= interval) {
       zone.lastShotTime = currentTime;
@@ -2469,6 +2484,7 @@ let quakeUntilMs = 0;
 // -------------------------------------------------------------
 const ITEM_ROUNDS = 4;
 const ITEM_EVERY_SEC = 30;
+const ITEM_CHANCE = 0.3; // 반사·흡수·크리티컬 확률
 const ITEM_ICON = {
   double: '<circle cx="6" cy="12" r="3"/><path d="M9 12 L19 5 M9 12 L19 19"/><circle cx="19" cy="5" r="1.6"/><circle cx="19" cy="19" r="1.6"/>',
   rapid: '<path d="M3 8h9M5 12h10M3 16h9"/><circle cx="18" cy="12" r="3"/>',
@@ -2479,7 +2495,8 @@ const ITEM_ICON = {
   reflect: '<path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/><path d="M15 10l-3 3-3-3"/>',
   longrange: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4"/>',
   supply: '<path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 19h16"/>',
-  sabotage: '<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/>'
+  crit: '<path d="M12 2l2.4 6.6L21 9l-5.2 4.3L17.6 21 12 17.3 6.4 21l1.8-7.7L3 9l6.6-.4z"/>',
+  absorb: '<circle cx="12" cy="12" r="8"/><path d="M12 7v10M7 12h10"/>'
 };
 const ITEMS = [
   { key: 'double', name: '더블샷', desc: '맞닿은 다른 상대 땅에 한 발 더' },
@@ -2488,10 +2505,11 @@ const ITEMS = [
   { key: 'pierce', name: '관통탄', desc: '맞힌 지역 옆의 상대 지역도 한 번 더 타격' },
   { key: 'fortress', name: '철벽', desc: '상대 공격을 50%만 받음' },
   { key: 'rebuild', name: '재건', desc: '30초마다 내 모든 지역 피 가득' },
-  { key: 'reflect', name: '반사 방패', desc: '상대 구슬 5발 중 1발을 되돌려 보냄' },
+  { key: 'reflect', name: '반사 방패', desc: '30% 확률로 상대 구슬을 쏜 곳으로 되돌림' },
   { key: 'longrange', name: '장거리 사격', desc: '모든 내 지역이 원거리 공격 가능' },
-  { key: 'supply', name: '보급', desc: '내 생산 속도 20% 빠르게' },
-  { key: 'sabotage', name: '방해 공작', desc: '상대 생산 속도 20% 느리게' }
+  { key: 'supply', name: '보급', desc: '내 생산 속도 30% 빠르게' },
+  { key: 'crit', name: '크리티컬', desc: '30% 확률로 상대 땅에 3배 피해' },
+  { key: 'absorb', name: '흡수', desc: '30% 확률로 상대 공격을 막고 그 2배만큼 회복' }
 ];
 const ITEM_MODE_KEY = 'tapwar_item_mode';
 let itemMode = false;
