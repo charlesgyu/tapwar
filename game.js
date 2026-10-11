@@ -1114,8 +1114,12 @@ class FlyingOrb {
       return;
     }
     // [아이템 점령 가속] 빈 땅 게이지 2배
+    // [아이템 파워샷] 상대 땅(또는 상대 게이지가 조금이라도 찬 중립 땅)에만 2배 / [점령 가속] 빈 땅 2배
     // [아이템 철벽] 맞는 쪽이 철벽이면 상대 구슬 50%
-    const power = itemHitPower((t.owner === OWNER.NEUTRAL && hasItem(own, 'claim')) ? this.power * 2 : this.power, own, t);
+    let base = this.power;
+    if (hasItem(own, 'power') && isRivalMarked(t, own)) base *= 2;
+    else if (t.owner === OWNER.NEUTRAL && hasItem(own, 'claim')) base *= 2;
+    const power = itemHitPower(base, own, t);
     const wasRival = t.owner !== OWNER.NEUTRAL && t.owner !== own;
     applyOrbHit(t, own, power, this.sourceZone);
     // [아이템 관통탄] 맞힌 상대 지역 옆의 상대 지역 하나도 타격
@@ -1123,7 +1127,7 @@ class FlyingOrb {
       const next = t.neighbors.filter(n => n !== this.sourceZone && n.owner !== OWNER.NEUTRAL && n.owner !== own);
       if (next.length) {
         const n2 = next[Math.floor(Math.random() * next.length)];
-        applyOrbHit(n2, own, itemHitPower(this.power, own, n2), null);
+        applyOrbHit(n2, own, itemHitPower(hasItem(own, 'power') ? this.power * 2 : this.power, own, n2), null);
       }
     }
   }
@@ -2353,7 +2357,6 @@ function updateOrbSpawners(currentTime) {
 
       // [미국 자본주의] 호황 지역은 구슬 공격력 5
       if (zone.boostUntil && gameElapsedTime < zone.boostUntil) power = Math.max(power, COUNTRY_EVENT_CFG.US.power);
-      if (hasItem(zone.owner, 'power')) power *= 2; // [아이템 파워샷]
       zone.targetZones.forEach(target => {
         flyingOrbs.push(new FlyingOrb(zone, target, zone.owner, power));
       });
@@ -2482,7 +2485,7 @@ const ITEM_ICON = {
 const ITEMS = [
   { key: 'double', name: '더블샷', desc: '한 번에 두 발, 서로 다른 곳으로' },
   { key: 'rapid', name: '속사', desc: '원거리 구슬이 빠르게 날아감 (발사 간격은 그대로)' },
-  { key: 'power', name: '파워샷', desc: '구슬 공격력 2배' },
+  { key: 'power', name: '파워샷', desc: '상대 땅 공격력 2배 (상대 색이 조금이라도 있는 곳)' },
   { key: 'pierce', name: '관통탄', desc: '맞힌 지역 옆의 상대 지역도 한 번 더 타격' },
   { key: 'fortress', name: '철벽', desc: '상대 공격을 50%만 받음' },
   { key: 'rebuild', name: '재건', desc: '30초마다 내 모든 지역 피 가득' },
@@ -2507,6 +2510,11 @@ function itemHitPower(power, attacker, target) {
   const victim = target.owner;
   if (victim !== OWNER.NEUTRAL && victim !== attacker && hasItem(victim, 'fortress')) return power * 0.5;
   return power;
+}
+// 상대 색이 조금이라도 있는 지역: 상대 땅, 또는 상대 게이지가 찬 중립 땅
+function isRivalMarked(t, attacker) {
+  if (t.owner !== OWNER.NEUTRAL) return t.owner !== attacker;
+  return !!t.claimant && t.claimant !== attacker && t.orbs > 0;
 }
 function hasItem(owner, key) { return itemMode && !!itemsOf[owner] && itemsOf[owner].includes(key); }
 function itemRival(owner) { return owner === OWNER.PLAYER ? OWNER.ENEMY : OWNER.PLAYER; }
