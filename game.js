@@ -1526,15 +1526,27 @@ window.closePurchase = closePurchase;
 window.buyProduct = buyProduct;
 
 // 게임 중 ×2 버튼: 구매했으면 1배속↔2배속 전환, 아니면 결제 화면
+// [테스트용] true 이면 배속 버튼이 결제 없이 1배 → 2배 → 4배 → 1배로 바뀜. 정식 출시 전 false 로 (4배속 없음, 2배속은 유료)
+const DEV_TEST_SPEED = true;
+
 function onSpeed2Click() {
+  const btn = document.getElementById('speed2-btn');
+  if (DEV_TEST_SPEED) {
+    const next = gameSpeed === 1 ? 2 : gameSpeed === 2 ? 4 : 1;
+    setGameSpeed(next);
+    btn.textContent = `×${next}`; // 현재 배속 표시
+    btn.classList.toggle('on', next > 1);
+    return;
+  }
   if (!isOwned('speed2')) {
     openPurchase('speed2');
     return;
   }
   setGameSpeed(gameSpeed === 2 ? 1 : 2);
-  document.getElementById('speed2-btn').classList.toggle('on', gameSpeed === 2);
+  btn.classList.toggle('on', gameSpeed === 2);
 }
 window.onSpeed2Click = onSpeed2Click;
+if (DEV_TEST_SPEED) { const b = document.getElementById('speed2-btn'); if (b) b.textContent = `×${gameSpeed}`; }
 
 // 상단 플레이 시간·본진 안내·×2 버튼 표시 상태
 let lastHudKey = '';
