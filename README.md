@@ -190,5 +190,6 @@ python tools/add_water.py --carve assets/*_exact_zones.json  # 강을 실제 경
   2. App Store Connect → 앱 → **서비스(Services) → Game Center** → 순위표 추가
      - 유형: 클래식, 점수 형식: **경과 시간(초 단위)**, 정렬: **낮은 점수 우선**
      - 순위표 ID 예: `tapwar.leaderboard.kr.totaltime`
-  3. 만든 ID를 `game.js`의 `LEADERBOARDS.KR`에 넣기 (다른 나라는 `JP`, `CN` … 키로 추가)
+  3. 맵별 순위표도 같은 방식으로 추가: ID는 나라 ID의 `totaltime` 자리에 맵 키 소문자 (예: `tapwar.leaderboard.kr.ulsan`, `...kr.busan`, … `...kr.korea`)
+  4. 만든 ID를 `game.js`의 `LEADERBOARDS.KR`에 넣기 (다른 나라는 `JP`, `CN` … 키로 추가)
 - 웹 미리보기에서는 게임 센터가 없으므로 '순위 보기'가 안내 창만 띄웁니다.

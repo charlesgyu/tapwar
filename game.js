@@ -2363,6 +2363,7 @@ function gameOver(isWin, isSurrender = false) {
       `<div class="end-record">${timeStr}</div>` +
       (recordResult.isNewBest ? `<div class="end-best new">최고 기록</div>` : `<div class="end-best">최고 기록 ${bestStr}</div>`) +
       `<div class="end-total">대한민국 총 시간 ${formatLongTime(getCampaignTotalTime().sum)}</div>`;
+    submitMapRanking(selectedCountryKey || 'KR', currentMapKey, gameElapsedTime);
     submitCountryRanking(selectedCountryKey || 'KR');
 
     // 캠페인 다음 맵 (클리어로 열림)
@@ -3031,7 +3032,30 @@ const GameCenter = (window.Capacitor && window.Capacitor.isNativePlatform && win
   window.Capacitor.registerPlugin) ? window.Capacitor.registerPlugin('GameCenter') : null;
 if (GameCenter) GameCenter.authenticate().catch(() => {});
 
-// 나라의 모든 맵을 깼으면 총 시간을 순위표에 제출
+// 맵별 순위표 ID: 나라 순위표 ID 뒤에 맵 키 (예: tapwar.leaderboard.kr.ulsan). App Store Connect 에서 같은 이름으로 만들 것
+function mapLeaderboardId(countryKey, mapKey) {
+  const base = LEADERBOARDS[countryKey];
+  return base ? base.replace(/totaltime$/, mapKey.toLowerCase()) : null;
+}
+
+// 맵을 이길 때마다: 그 맵 기록을 맵별 순위표에 제출 (게임 센터가 최고 기록만 남김)
+function submitMapRanking(countryKey, mapKey, sec) {
+  const id = mapLeaderboardId(countryKey, mapKey);
+  if (!id || !GameCenter) return;
+  GameCenter.submitScore({ leaderboardId: id, score: Math.round(sec) }).catch(() => {});
+}
+
+// 맵별 순위 보기
+function openMapRanking(mapKey) {
+  const c = COUNTRIES.find(x => x.key === selectedCountryKey) || COUNTRIES[0];
+  const id = mapLeaderboardId(c.key, mapKey);
+  if (GameCenter && id) { GameCenter.showLeaderboard({ leaderboardId: id }).catch(() => {}); return; }
+  const r = getBattleRecords()[mapKey];
+  openSheet('', `${MAP_CONFIGS[mapKey].label} 순위`, `내 최고 기록 ${r && r.bestTime != null ? formatTimeString(r.bestTime) : '-'}\n맵별 순위는 아이폰 앱(게임 센터)에서 볼 수 있어요.`);
+}
+window.openMapRanking = openMapRanking;
+
+// 나라의 모든 맵을 깼으면 총 시간을 순위표에 제출 (맵 기록을 줄이면 총 시간도 줄어 다시 제출 → 순위 갱신)
 function submitCountryRanking(countryKey) {
   const id = LEADERBOARDS[countryKey];
   const order = getCampaignOrder();
@@ -3138,7 +3162,8 @@ function buildStageCards() {
     btn.id = `modal-map-${k}`;
     btn.className = 'stage-card' + (key === selectedModalMapKey ? ' active' : '') +
       (unlocked ? '' : ' locked') + (cleared ? ' cleared' : '');
-    btn.onclick = () => {
+    btn.onclick = (e) => {
+      if (e.target.closest && e.target.closest('.map-rank-btn')) { openMapRanking(key); return; }
       if (!unlocked) {
         const prev = MAP_CONFIGS[order[i - 1]];
         openSheet('', `${cfg.label} 잠김`, `${prev.label} 맵을 클리어하면 열려요.`);
@@ -3149,7 +3174,8 @@ function buildStageCards() {
     btn.innerHTML = `<span class="stage-no">${i + 1}</span>` +
       `<canvas class="stage-thumb" id="thumb-${k}"></canvas>` +
       `<span class="stage-title"><span class="stage-name">${cfg.label || key}</span><span class="stage-sub">${cfg.count || ''}</span></span>` +
-      `<span class="stage-record" id="modal-${k}-record"></span>`;
+      `<span class="stage-record" id="modal-${k}-record"></span>` +
+      (cleared ? `<span class="map-rank-btn" role="button" data-map="${key}">순위</span>` : '');
     grid.appendChild(btn);
   });
   // 마지막 맵 다음 카드: 이 나라의 글로벌 순위 (총 시간)
