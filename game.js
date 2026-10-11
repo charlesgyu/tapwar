@@ -640,26 +640,37 @@ const MAP_CONFIGS = {
   US_SOUTHATLANTIC: { country: 'US', name: '남동부 해안', label: '남동부 해안', count: 25, file: 'assets/us_southatlantic_zones.json', maxScale: 8 },
   US_MOUNTAIN: { country: 'US', name: '로키 산맥', label: '로키 산맥', count: 25, file: 'assets/us_mountain_zones.json', maxScale: 8 },
   US_USA: { country: 'US', name: '미국 본토', label: '미국 본토', count: 194, file: 'assets/us_usa_zones.json', maxScale: 40 },
-  // EU — tools/build_*_maps.sh 로 생성
-  EU_BRITAIN: { country: 'EU', name: '영국·아일랜드', label: '영국·아일랜드', count: 18, file: 'assets/eu_britain_zones.json', maxScale: 8 },
-  EU_BALKAN: { country: 'EU', name: '발칸', label: '발칸', count: 20, file: 'assets/eu_balkan_zones.json', maxScale: 8 },
-  EU_CENTRAL: { country: 'EU', name: '중부 유럽', label: '중부 유럽', count: 22, file: 'assets/eu_central_zones.json', maxScale: 8 },
-  EU_EAST: { country: 'EU', name: '동유럽', label: '동유럽', count: 24, file: 'assets/eu_east_zones.json', maxScale: 8 },
-  EU_NORTH: { country: 'EU', name: '북유럽', label: '북유럽', count: 24, file: 'assets/eu_north_zones.json', maxScale: 8 },
-  EU_WEST: { country: 'EU', name: '서유럽', label: '서유럽', count: 25, file: 'assets/eu_west_zones.json', maxScale: 8 },
-  EU_C_DEU: { country: 'EU', name: '독일', label: '독일', count: 15, file: 'assets/eu_c_deu_zones.json', maxScale: 8 },
-  EU_C_POL: { country: 'EU', name: '폴란드', label: '폴란드', count: 16, file: 'assets/eu_c_pol_zones.json', maxScale: 8 },
-  EU_C_PRT: { country: 'EU', name: '포르투갈', label: '포르투갈', count: 18, file: 'assets/eu_c_prt_zones.json', maxScale: 8 },
-  EU_C_SWE: { country: 'EU', name: '스웨덴', label: '스웨덴', count: 21, file: 'assets/eu_c_swe_zones.json', maxScale: 8 },
-  EU_C_NOR: { country: 'EU', name: '노르웨이', label: '노르웨이', count: 19, file: 'assets/eu_c_nor_zones.json', maxScale: 8 },
-  EU_C_UKR: { country: 'EU', name: '우크라이나', label: '우크라이나', count: 26, file: 'assets/eu_c_ukr_zones.json', maxScale: 8 },
-  EU_C_HUN: { country: 'EU', name: '헝가리', label: '헝가리', count: 20, file: 'assets/eu_c_hun_zones.json', maxScale: 8 },
-  EU_C_ROU: { country: 'EU', name: '루마니아', label: '루마니아', count: 24, file: 'assets/eu_c_rou_zones.json', maxScale: 8 },
-  EU_C_ESP: { country: 'EU', name: '스페인', label: '스페인', count: 16, file: 'assets/eu_c_esp_zones.json', maxScale: 8 },
-  EU_C_ITA: { country: 'EU', name: '이탈리아', label: '이탈리아', count: 20, file: 'assets/eu_c_ita_zones.json', maxScale: 8 },
-  EU_C_FRA: { country: 'EU', name: '프랑스', label: '프랑스', count: 13, file: 'assets/eu_c_fra_zones.json', maxScale: 8 },
-  EU_C_GBR: { country: 'EU', name: '영국', label: '영국', count: 16, file: 'assets/eu_c_gbr_zones.json', maxScale: 8 },
-  EU_SOUTH: { country: 'EU', name: '남유럽', label: '남유럽', count: 25, file: 'assets/eu_south_zones.json', maxScale: 8 },
+  // 프랑스 — tools/build_europe_nation_maps.sh 로 생성 (전국 = 지방 합침)
+  FR_NORTH: { country: 'FR', name: '프랑스 북부', label: '프랑스 북부', count: 20, file: 'assets/fr_north_zones.json', maxScale: 8 },
+  FR_WEST: { country: 'FR', name: '프랑스 서부', label: '프랑스 서부', count: 20, file: 'assets/fr_west_zones.json', maxScale: 8 },
+  FR_SOUTH: { country: 'FR', name: '프랑스 남부', label: '프랑스 남부', count: 18, file: 'assets/fr_south_zones.json', maxScale: 8 },
+  FR_EAST: { country: 'FR', name: '프랑스 동부', label: '프랑스 동부', count: 18, file: 'assets/fr_east_zones.json', maxScale: 8 },
+  FR_FRANCE: { country: 'FR', name: '프랑스 전국', label: '프랑스 전국', count: 76, file: 'assets/fr_france_zones.json', maxScale: 20 },
+  // 독일 — tools/build_europe_nation_maps.sh 로 생성 (전국 = 지방 합침)
+  DE_NORTH: { country: 'DE', name: '독일 북부', label: '독일 북부', count: 20, file: 'assets/de_north_zones.json', maxScale: 8 },
+  DE_EAST: { country: 'DE', name: '독일 동부', label: '독일 동부', count: 20, file: 'assets/de_east_zones.json', maxScale: 8 },
+  DE_WEST: { country: 'DE', name: '독일 서부', label: '독일 서부', count: 20, file: 'assets/de_west_zones.json', maxScale: 8 },
+  DE_SOUTH: { country: 'DE', name: '독일 남부', label: '독일 남부', count: 20, file: 'assets/de_south_zones.json', maxScale: 8 },
+  DE_GERMANY: { country: 'DE', name: '독일 전국', label: '독일 전국', count: 80, file: 'assets/de_germany_zones.json', maxScale: 20 },
+  // 이탈리아 — tools/build_europe_nation_maps.sh 로 생성 (전국 = 지방 합침)
+  IT_NORTHWEST: { country: 'IT', name: '이탈리아 북서부', label: '이탈리아 북서부', count: 18, file: 'assets/it_northwest_zones.json', maxScale: 8 },
+  IT_NORTHEAST: { country: 'IT', name: '이탈리아 북동부', label: '이탈리아 북동부', count: 18, file: 'assets/it_northeast_zones.json', maxScale: 8 },
+  IT_CENTER: { country: 'IT', name: '이탈리아 중부', label: '이탈리아 중부', count: 18, file: 'assets/it_center_zones.json', maxScale: 8 },
+  IT_SOUTH: { country: 'IT', name: '이탈리아 남부', label: '이탈리아 남부', count: 20, file: 'assets/it_south_zones.json', maxScale: 8 },
+  IT_ISLANDS: { country: 'IT', name: '이탈리아 섬', label: '이탈리아 섬', count: 14, file: 'assets/it_islands_zones.json', maxScale: 8 },
+  IT_ITALY: { country: 'IT', name: '이탈리아 전국', label: '이탈리아 전국', count: 88, file: 'assets/it_italy_zones.json', maxScale: 20 },
+  // 스페인 — tools/build_europe_nation_maps.sh 로 생성 (전국 = 지방 합침)
+  ES_NORTH: { country: 'ES', name: '스페인 북부', label: '스페인 북부', count: 14, file: 'assets/es_north_zones.json', maxScale: 8 },
+  ES_EAST: { country: 'ES', name: '스페인 동부', label: '스페인 동부', count: 9, file: 'assets/es_east_zones.json', maxScale: 8 },
+  ES_CENTER: { country: 'ES', name: '스페인 중부', label: '스페인 중부', count: 15, file: 'assets/es_center_zones.json', maxScale: 8 },
+  ES_SOUTH: { country: 'ES', name: '스페인 남부', label: '스페인 남부', count: 10, file: 'assets/es_south_zones.json', maxScale: 8 },
+  ES_SPAIN: { country: 'ES', name: '스페인 전국', label: '스페인 전국', count: 48, file: 'assets/es_spain_zones.json', maxScale: 20 },
+  // 영국 — tools/build_europe_nation_maps.sh 로 생성 (전국 = 지방 합침)
+  GB_SOUTH: { country: 'GB', name: '잉글랜드 남부', label: '잉글랜드 남부', count: 20, file: 'assets/gb_south_zones.json', maxScale: 8 },
+  GB_MIDDLE: { country: 'GB', name: '잉글랜드 중북부', label: '잉글랜드 중북부', count: 20, file: 'assets/gb_middle_zones.json', maxScale: 8 },
+  GB_SCOTLAND: { country: 'GB', name: '스코틀랜드', label: '스코틀랜드', count: 16, file: 'assets/gb_scotland_zones.json', maxScale: 8 },
+  GB_WALESNI: { country: 'GB', name: '웨일스·북아일랜드', label: '웨일스·북아일랜드', count: 14, file: 'assets/gb_walesni_zones.json', maxScale: 8 },
+  GB_UK: { country: 'GB', name: '영국 전국', label: '영국 전국', count: 70, file: 'assets/gb_uk_zones.json', maxScale: 20 },
   // WD — tools/build_*_maps.sh 로 생성
   WD_AMERICA: { country: 'WD', name: '아메리카', label: '아메리카', count: 29, file: 'assets/w_america_zones.json', maxScale: 14 },
   WD_AFRICA: { country: 'WD', name: '아프리카', label: '아프리카', count: 49, file: 'assets/w_africa_zones.json', maxScale: 14 },
@@ -2943,11 +2954,15 @@ const COUNTRIES = [
   { key: 'JP', flag: '🇯🇵', name: '일본', open: false, paid: true },
   { key: 'CN', flag: '🇨🇳', name: '중국', open: false, paid: true },
   { key: 'US', flag: '🇺🇸', name: '미국', open: false, paid: true },
-  { key: 'EU', flag: '🇪🇺', name: '유럽', open: false, paid: true },
+  { key: 'FR', flag: '🇫🇷', name: '프랑스', open: false, paid: true },
+  { key: 'DE', flag: '🇩🇪', name: '독일', open: false, paid: true },
+  { key: 'IT', flag: '🇮🇹', name: '이탈리아', open: false, paid: true },
+  { key: 'ES', flag: '🇪🇸', name: '스페인', open: false, paid: true },
+  { key: 'GB', flag: '🇬🇧', name: '영국', open: false, paid: true },
   { key: 'WD', flag: '🌏', name: '대륙', open: false, paid: true }
 ];
 const DEV_UNLOCK_KEY = 'tapwar_dev_unlock_all';
-// [테스트용] 유료 나라(일본·중국·미국·유럽·전세계)를 구매 없이 열기. 출시 전 false (인앱 구매 'country_jp' 등으로 열림)
+// [테스트용] 유료 나라(일본·중국·미국·유럽 5개국·대륙)를 구매 없이 열기. 출시 전 false (인앱 구매 'country_jp' 등으로 열림)
 const DEV_TEST_COUNTRIES = true;
 function isCountryOpen(c) {
   return !!c && (c.open || (c.paid && (DEV_TEST_COUNTRIES || isOwned(`country_${c.key.toLowerCase()}`))));
@@ -3097,7 +3112,11 @@ const LEADERBOARDS = {
   JP: 'tapwar.leaderboard.jp.totaltime',
   CN: 'tapwar.leaderboard.cn.totaltime',
   US: 'tapwar.leaderboard.us.totaltime',
-  EU: 'tapwar.leaderboard.eu.totaltime',
+  FR: 'tapwar.leaderboard.fr.totaltime',
+  DE: 'tapwar.leaderboard.de.totaltime',
+  IT: 'tapwar.leaderboard.it.totaltime',
+  ES: 'tapwar.leaderboard.es.totaltime',
+  GB: 'tapwar.leaderboard.gb.totaltime',
   WD: 'tapwar.leaderboard.wd.totaltime'
 };
 const GameCenter = (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() &&
