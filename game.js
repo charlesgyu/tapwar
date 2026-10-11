@@ -1358,6 +1358,8 @@ function handleZoneDoubleClick(targetZone) {
     pZone.isManualTarget = true;
     pZone.targetZones = [targetZone];
   });
+  // 집중 포화 지정 순간: 목표 지역 테두리 번쩍 (내 지역 보급이면 초록)
+  flashZone(targetZone, targetZone.owner === OWNER.PLAYER ? ZONE_COLORS.playerFullCharged : ZONE_COLORS.playerStroke);
 
   document.getElementById('status-guide').innerText = targetZone.owner === OWNER.PLAYER
     ? `🛡️ [${targetZone.name}] 방어 지원! 아군 ${allPlayerZones.length}개 거점에서 피가 찰 때까지 보급!`
@@ -1788,6 +1790,7 @@ function triggerEnemyFocusFire() {
     eZone.isManualTarget = true;
     eZone.targetZones = [target];
   });
+  flashZone(target, ZONE_COLORS.enemyStroke); // 적 집중 포화 목표 번쩍
 
   document.getElementById('status-guide').innerText = `🚨 [적군 집중포화 경보!]: 적 기지 ${firingBases.length}곳에서 [${target.name}]에 일제 사격을 개시했습니다!`;
 }
