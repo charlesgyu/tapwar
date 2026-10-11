@@ -2571,6 +2571,18 @@ function buildCountryRow() {
   });
 }
 
+// 마우스 휠(세로)로도 스테이지 슬라이드를 가로로 넘길 수 있게
+(function setupStageWheel() {
+  const grid = document.getElementById('stage-grid');
+  if (!grid) return;
+  grid.addEventListener('wheel', e => {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.preventDefault();
+      grid.scrollLeft += e.deltaY;
+    }
+  }, { passive: false });
+})();
+
 // 시작 화면 스테이지 카드 (캠페인 순서, 잠김·클리어 표시)
 function buildStageCards() {
   const grid = document.getElementById('stage-grid');

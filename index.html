@@ -549,14 +549,15 @@
       font-variant-numeric: tabular-nums;
     }
     .stage-card.locked { cursor: pointer; }
-    .stage-card.locked .stage-thumb { filter: grayscale(1) opacity(0.35); }
-    .stage-card.locked .stage-name, .stage-card.locked .stage-sub { color: #c4c0b8; }
+    /* 잠긴 맵도 어떤 맵인지 알아볼 수 있게: 색은 살짝 흐리게, 자물쇠는 오른쪽 위에 작게 */
+    .stage-card.locked .stage-thumb { filter: saturate(0.55) opacity(0.7); }
+    .stage-card.locked .stage-name { color: #78716c; }
+    .stage-card.locked .stage-sub { color: #c4c0b8; }
     .stage-lock {
       position: absolute;
-      top: 52px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 20px;
+      top: 7px;
+      right: 9px;
+      font-size: 13px;
     }
     .stage-card.cleared .stage-no::after { content: ' ✓'; color: #16a34a; }
     .home-links {
