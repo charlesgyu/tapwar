@@ -179,3 +179,16 @@ python tools/build_map.py assets/*_exact_zones.json          # 물 건너 연결
 python tools/add_water.py --carve assets/*_exact_zones.json  # 강을 실제 경계선을 따라 다시 그리고 양쪽 구역을 깎아 틈 제거
 ```
 - 강은 최종적으로 **강을 사이에 둔 두 구역의 공유 경계선**을 따라 맵별 폭(`carveWidth`)으로 그려지고, 그만큼 구역이 깎여서 강과 구역 사이에 틈이 생기지 않습니다.
+
+## 나라별 글로벌 순위 (Apple 게임 센터)
+
+나라의 모든 맵을 클리어하면 **총 시간**(맵별 최고 기록의 합)이 그 나라 순위표에 제출됩니다. 낮을수록 높은 순위.
+
+- 코드: `ios/App/App/GameCenterPlugin.swift`(게임 센터 연결), `ios/App/App/MainViewController.swift`(플러그인 등록), `game.js`의 `LEADERBOARDS`
+- 설정 순서
+  1. Xcode → App 타깃 → **Signing & Capabilities** → `+ Capability` → **Game Center** 추가
+  2. App Store Connect → 앱 → **서비스(Services) → Game Center** → 순위표 추가
+     - 유형: 클래식, 점수 형식: **경과 시간(초 단위)**, 정렬: **낮은 점수 우선**
+     - 순위표 ID 예: `tapwar.leaderboard.kr.totaltime`
+  3. 만든 ID를 `game.js`의 `LEADERBOARDS.KR`에 넣기 (다른 나라는 `JP`, `CN` … 키로 추가)
+- 웹 미리보기에서는 게임 센터가 없으므로 '순위 보기'가 안내 창만 띄웁니다.
