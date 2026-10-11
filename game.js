@@ -1130,7 +1130,7 @@ function drawFlyingOrbs(ctx) {
       const orb = flyingOrbs[i];
       if (orb.isDead || orb.owner !== owner || !!orb.fromFull !== full) continue;
       if (fog && owner === OWNER.ENEMY && orb.progress > FOG_VISIBLE_PROGRESS) continue;
-      const r = (orb.power > 1 ? 4.5 : 3.2) * k;
+      const r = (orb.isCannon ? 9.6 : orb.power > 1 ? 4.5 : 3.2) * k;
       ctx.moveTo(orb.x + r, orb.y);
       ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
       count++;
@@ -2296,6 +2296,7 @@ const COUNTRY_EVENT_CFG = {
   CN: { every: 60, share: 0.2, min: 2, duration: 10, toast: '모래폭풍', color: '#d97706' },
   US: { every: 60, share: 0.15, min: 2, duration: 10, power: 5, toast: '자본주의 호황', color: '#eab308' },
   FR: { every: 60, duration: 10, fireEvery: 1.0, toast: '혁명!', color: '#7c3aed' },
+  ES: { every: 60, power: 20, toast: '대항해시대 포격!', color: '#b45309' },
   DE: { every: 60, tankSec: 3.5, width: 0.07, toast: '전차 돌파!', color: '#3f6212' }
 };
 const REBEL = 'rebel';
@@ -2383,6 +2384,23 @@ function resetCountryEvent() {
   quakeUntilMs = 0;
   revoltUntil = 0; revoltNextShot = 0; tankAnim = null;
 }
+// 대항해시대: 양쪽 각각 무작위 완전점령 지역 1곳이 전선으로 대포(큰 구슬, 공격력 20) 발사
+function fireCannons(c) {
+  let fired = false;
+  [OWNER.PLAYER, OWNER.ENEMY].forEach(owner => {
+    const full = rawZones.filter(z => z.owner === owner && !z.isHidden && isFullyConquered(z));
+    if (full.length === 0) return;
+    const src = full[Math.floor(Math.random() * full.length)];
+    const tg = pickMainZoneFrontierTarget(src);
+    if (!tg) return;
+    const orb = new FlyingOrb(src, tg, owner, c.power);
+    orb.isCannon = true;
+    flyingOrbs.push(orb);
+    flashZone(src, c.color);
+    fired = true;
+  });
+  if (fired) flashCenterText(c.toast);
+}
 function pickEventZones(c) {
   const owned = rawZones.filter(z => z.owner !== OWNER.NEUTRAL && !isMainZone(z) && !z.isHidden);
   const n = Math.min(owned.length, Math.max(c.min, Math.round(owned.length * c.share)));
@@ -2398,6 +2416,7 @@ function updateCountryEvent() {
   countryEventNext = gameElapsedTime + c.every;
   if (country === 'FR') { revoltUntil = gameElapsedTime + c.duration; revoltNextShot = gameElapsedTime; flashCenterText(c.toast); return; }
   if (country === 'DE') { startTank(); flashCenterText(c.toast); return; }
+  if (country === 'ES') { fireCannons(c); return; }
   const zones = pickEventZones(c);
   if (zones.length === 0) return;
   zones.forEach(z => {
