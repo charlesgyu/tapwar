@@ -223,6 +223,7 @@ function isRangedShot(src, tgt) {
 
 const MAIN_ZONE_POWER = 2; // 메인 지역 구슬 공격력
 const MAIN_ZONE_HP = 400;   // 메인 지역 피 (일반 지역 50). 처음부터 메인을 노리기보다 주변을 먼저 공략하도록
+const EXTRA_MAIN_HP = MAIN_ZONE_HP / 2; // 이탈리아·전세계 추가 본진
 
 function isMainZone(zone) {
   return (zone === playerMainZone && zone.owner === OWNER.PLAYER) ||
@@ -1595,17 +1596,18 @@ function beginGameAtZone(zone) {
     }
   }
 
-  // [이탈리아 '최고의 지휘관'] 나·적 모두 무작위 빈 땅에 본진 2개씩 더 → 총 3개로 시작
-  // (이미 점령된 땅과 맞닿지 않은 곳). 전세계도 시작할 때 이 컨셉 적용
-  if (currentCountryKey() === 'IT' || currentCountryKey() === 'WD') {
-    [OWNER.PLAYER, OWNER.ENEMY, OWNER.PLAYER, OWNER.ENEMY].forEach(owner => {
+  // [이탈리아 '최고의 지휘관'] 나·적 모두 무작위 빈 땅에 본진 1개씩 더 → 총 2개 (전세계는 2개씩 더 → 총 3개)
+  // 이미 점령된 땅과 맞닿지 않은 곳. 추가 본진의 피는 원래 본진의 절반
+  const extraCount = currentCountryKey() === 'IT' ? 1 : currentCountryKey() === 'WD' ? 2 : 0;
+  for (let e = 0; e < extraCount; e++) {
+    [OWNER.PLAYER, OWNER.ENEMY].forEach(owner => {
       const free = rawZones.filter(z => z.owner === OWNER.NEUTRAL && !z.isHidden && z.neighbors.length >= 2 &&
         !z.neighbors.some(n => n.owner !== OWNER.NEUTRAL));
       const z = free[Math.floor(Math.random() * free.length)];
       if (!z) return;
       z.owner = owner;
       z.mainOwner = owner;
-      z.maxOrbs = MAIN_ZONE_HP; z.orbs = MAIN_ZONE_HP;
+      z.maxOrbs = EXTRA_MAIN_HP; z.orbs = EXTRA_MAIN_HP;
       extraMains.add(z);
       const t = pickAutoTarget(z);
       z.targetZones = t ? [t] : [];
@@ -2712,7 +2714,7 @@ const COUNTRY_CONCEPT = {
   US: ['자본주의 호황', '1분마다 무작위 점령 지역들의 공격력이 10초 동안 강해져요'],
   FR: ['혁명', '1분마다 10초 동안 점령 지역과 맞닿은 중립 지역이 주변을 공격해요'],
   DE: ['전차 돌파', '1분마다 전차가 지나가고, 지나간 지역은 중립이 돼요 (본진 제외)'],
-  IT: ['최고의 지휘관', '본진 3개로 시작해요. 2개는 무작위 위치에 생겨요 (적도 마찬가지)'],
+  IT: ['최고의 지휘관', '본진 2개로 시작해요. 하나는 무작위 위치에 생겨요'],
   WD: ['세계 대전', '본진 3개로 시작하고, 30초마다 나라 컨셉 하나가 무작위로 일어나요. 카드는 5장 골라요'],
   ES: ['대항해시대', '1분마다 양쪽의 완전점령 지역 한 곳이 대포를 쏴요 (공격력 20)'],
   GB: ['안개', '적의 구슬은 처음 방향만 보이고 어디로 가는지는 보이지 않아요']
