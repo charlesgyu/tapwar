@@ -776,6 +776,9 @@
     #enter-btn.locked { opacity: 0.45; }
     #enter-btn[hidden] { display: none; }
     .home-links[hidden] { display: none; }
+    .country-concept { margin: -4px auto 16px; max-width: 320px; font-size: 13px; line-height: 1.45; color: #64748b; text-align: center; word-break: keep-all; }
+    .country-concept b { color: #1e293b; }
+    .country-concept[hidden] { display: none; }
     #splash {
       position: fixed; inset: 0; z-index: 400;
       background: #ffffff;
@@ -928,6 +931,7 @@
         <div class="home-view" id="stage-view" hidden>
           <button class="back-btn" aria-label="국가 선택으로" onclick="showCountryView()">‹</button>
           <h1 class="start-logo" id="country-title">대한민국</h1>
+          <div class="country-concept" id="country-concept" hidden></div>
           <div class="stage-progress" id="stage-progress">0/17</div>
           <div class="stage-total-time" id="stage-total-time"></div>
           <div class="stage-wrap">
