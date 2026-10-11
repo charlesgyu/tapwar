@@ -2639,7 +2639,7 @@ function buildCountryRow() {
   COUNTRIES.forEach(c => {
     const b = document.createElement('button');
     b.className = 'country-chip' + (c.open ? ' active' : ' locked');
-    b.textContent = `${c.flag} ${c.name}${c.open ? '' : ' 🔒'}`;
+    b.innerHTML = `<span class="flag-bg" aria-hidden="true">${c.flag}</span><span class="chip-name">${c.name}</span>`;
     b.onclick = () => {
       if (c.open) return;
       // TODO(IAP): 출시 후 인앱 구매 시트로 연결
