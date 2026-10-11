@@ -276,7 +276,6 @@ function pickMainZoneFrontierTarget(zone) {
   }
   if (frontier.size === 0) return null;
   const list = [...frontier];
-  if (zone.owner === OWNER.ENEMY) return pickBestAiTarget(list);
   return list[Math.floor(Math.random() * list.length)];
 }
 
@@ -688,6 +687,8 @@ function loadSelectedMap(mapKey) {
   focusFireCooldown = 0;
   enemyFocusFireCooldown = 0;
   gameElapsedTime = 0;
+  enemyCommandTimer = ENEMY_COMMAND_SEC;
+  lastEnemyCommandCheck = 0;
   lastTimerText = '';
   currentState = GAME_STATE.SELECT_START;
   startGuideShown = false;
@@ -966,7 +967,6 @@ function pickAdjacentTarget(zone) {
   // 맞닿아 있는 적군·중립 지역 중 무작위 1곳 (적 철벽 기지 제외)
   const targets = neighbors.filter(n => isAutoAttackable(n, zone.owner, zone));
   if (targets.length === 0) return null;
-  if (zone.owner === OWNER.ENEMY) return pickBestAiTarget(targets); // 적 AI는 전략 점수 우선
   return targets[Math.floor(Math.random() * targets.length)];
 }
 
@@ -2010,6 +2010,33 @@ function triggerEnemyItemSelection() {
 }
 
 // 적군 AI 집중포화 (아군 전선 거점을 향해 일제 사격)
+// [적 지정 공격] 사람이 손으로 하듯 한 번에 한 지역만, 정해진 간격으로
+const ENEMY_COMMAND_SEC = 1.5;
+// [난이도] 적 생산 속도 배율 (1 = 플레이어와 같음). 방치하면 적이 아슬아슬하게 이기도록 맞춘 값
+const ENEMY_PRODUCTION = 1.1;
+let enemyCommandTimer = ENEMY_COMMAND_SEC;
+let lastEnemyCommandCheck = 0;
+function issueEnemyCommand() {
+  if (currentState !== GAME_STATE.PLAYING) return;
+  let bestZone = null, bestTarget = null, bestScore = 1;
+  rawZones.forEach(z => {
+    if (z.owner !== OWNER.ENEMY || z.isManualTarget) return;
+    if (isFullyConquered(z) && !isUnleashed(z)) return;
+    const opts = canRangeAttack(z)
+      ? rawZones.filter(t => t.owner !== OWNER.ENEMY && rawZones.some(e => e.owner === OWNER.ENEMY && e.neighbors.includes(t)))
+      : z.neighbors;
+    opts.forEach(t => {
+      if (t.owner === OWNER.ENEMY || !canAttackTarget(z, t)) return;
+      const sc = aiTargetScore(t) + Math.random() * 0.2;
+      const cur = z.targetZones[0] ? aiTargetScore(z.targetZones[0]) : 0;
+      if (sc - cur > bestScore) { bestScore = sc - cur; bestZone = z; bestTarget = t; }
+    });
+  });
+  if (!bestZone) return;
+  bestZone.isManualTarget = true;
+  bestZone.targetZones = [bestTarget];
+}
+
 function triggerEnemyFocusFire() {
   if (currentState !== GAME_STATE.PLAYING) return;
   if (enemyFocusFireCooldown > 0) return;
@@ -2076,6 +2103,14 @@ function updateAI(currentTime) {
   // 2. 적군 집중포화 사용 검토 (쿨타임 완료 시 아군 거점에 일제 사격)
   triggerEnemyFocusFire();
 
+  // 2-1. 지정 공격: 사람처럼 일정 간격(ENEMY_COMMAND_SEC)마다 한 지역에만 지시
+  enemyCommandTimer -= (currentTime - (lastEnemyCommandCheck || currentTime)) / 1000 * gameSpeed;
+  lastEnemyCommandCheck = currentTime;
+  if (enemyCommandTimer <= 0) {
+    enemyCommandTimer = ENEMY_COMMAND_SEC;
+    issueEnemyCommand();
+  }
+
   // 3. 일반 전선 전진 및 재배치
   const enemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY);
   enemyZones.forEach(eZone => {
@@ -2112,7 +2147,7 @@ function updateOrbSpawners(currentTime) {
 
   // 완전점령 1개당 100ms(0.1초) 단축, 최소 500ms(0.5초) 한계
   const playerBaseInterval = Math.max(500, playerBuffs.interval - playerFullCount * 100);
-  const enemyBaseInterval = Math.max(500, enemyBuffs.interval - enemyFullCount * 100);
+  const enemyBaseInterval = Math.max(500, enemyBuffs.interval - enemyFullCount * 100) / ENEMY_PRODUCTION;
 
   rawZones.forEach(zone => {
     if (zone.owner === OWNER.NEUTRAL) return;
