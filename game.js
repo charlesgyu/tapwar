@@ -610,7 +610,7 @@ const MAP_CONFIGS = {
   GYEONGNAM: { name: '경남', label: '경남', count: 25, file: 'assets/gyeongnam_zones.json', maxScale: 8 },
   JEJU: { name: '제주', label: '제주', count: 43, file: 'assets/jeju_zones.json', maxScale: 8 },
   // 일본 (country: 'JP') — tools/build_japan_maps.sh 로 생성
-  JP_HOKKAIDO: { country: 'JP', name: '홋카이도', label: '홋카이도', count: 14, file: 'assets/jp_hokkaido_zones.json', maxScale: 8 },
+  JP_HOKKAIDO: { country: 'JP', name: '홋카이도', label: '홋카이도', count: 14, file: 'assets/jp_hokkaido_zones.json', maxScale: 8, enemyStrength: 0.8 }, // 일본 첫 맵: 적 생산 0.8배로 쉽게
   JP_SHIKOKU: { country: 'JP', name: '시코쿠', label: '시코쿠', count: 16, file: 'assets/jp_shikoku_zones.json', maxScale: 8 },
   JP_CHUGOKU: { country: 'JP', name: '주고쿠', label: '주고쿠', count: 20, file: 'assets/jp_chugoku_zones.json', maxScale: 8 },
   JP_TOHOKU: { country: 'JP', name: '도호쿠', label: '도호쿠', count: 25, file: 'assets/jp_tohoku_zones.json', maxScale: 8 },
@@ -2020,7 +2020,7 @@ function triggerEnemyItemSelection() {
 // [적 지정 공격] 사람이 손으로 하듯 한 번에 한 지역만, 정해진 간격으로
 const ENEMY_COMMAND_SEC = 1.5;
 // [난이도] 적 생산 속도 배율 (1 = 플레이어와 같음). 방치하면 적이 아슬아슬하게 이기도록 맞춘 값
-const ENEMY_PRODUCTION = 1.0;
+const ENEMY_PRODUCTION = 1.0; // 맵별 보정은 MAP_CONFIGS[].enemyStrength (곱함)
 let enemyCommandTimer = ENEMY_COMMAND_SEC;
 let lastEnemyCommandCheck = 0;
 function issueEnemyCommand() {
@@ -2154,7 +2154,8 @@ function updateOrbSpawners(currentTime) {
 
   // 완전점령 1개당 100ms(0.1초) 단축, 최소 500ms(0.5초) 한계
   const playerBaseInterval = Math.max(500, playerBuffs.interval - playerFullCount * 100);
-  const enemyBaseInterval = Math.max(500, enemyBuffs.interval - enemyFullCount * 100) / ENEMY_PRODUCTION;
+  const mapCfg = MAP_CONFIGS[currentMapKey] || {};
+  const enemyBaseInterval = Math.max(500, enemyBuffs.interval - enemyFullCount * 100) / (ENEMY_PRODUCTION * (mapCfg.enemyStrength || 1));
 
   rawZones.forEach(zone => {
     if (zone.owner === OWNER.NEUTRAL) return;
