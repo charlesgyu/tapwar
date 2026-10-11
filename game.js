@@ -2593,6 +2593,46 @@ function skipIntro() {
 
 const easeInOut = t => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
+// 육지 윤곽 한 개를 정사영으로 그림: 지구 뒤편으로 넘어가는 구간은 직선이 아니라
+// 지평선(원 둘레)을 따라가게 해서, 확대 시 바다 위에 땅 색이 잘못 칠해지지 않게 함
+function traceOrthoRing(ctx, ring, lon0, lat0, R, cx, cy) {
+  const d2r = Math.PI / 180;
+  const φ0 = lat0 * d2r, λ0 = lon0 * d2r;
+  const sφ0 = Math.sin(φ0), cφ0 = Math.cos(φ0);
+  let started = false, prevHidden = false, prevAng = 0, anyVisible = false;
+  for (let j = 0; j < ring.length; j++) {
+    const φ = ring[j][1] * d2r, dλ = ring[j][0] * d2r - λ0;
+    const cφ = Math.cos(φ), sφ = Math.sin(φ), cdl = Math.cos(dλ);
+    const cosc = sφ0 * sφ + cφ0 * cφ * cdl;
+    const x = cφ * Math.sin(dλ);
+    const y = cφ0 * sφ - sφ0 * cφ * cdl;
+    if (cosc >= 0) {
+      anyVisible = true;
+      const px = cx + x * R, py = cy - y * R;
+      if (!started) { ctx.moveTo(px, py); started = true; }
+      else ctx.lineTo(px, py);
+      prevHidden = false;
+    } else {
+      const ang = Math.atan2(-y, x); // 화면 좌표계 기준 지평선 각도
+      if (!started) {
+        ctx.moveTo(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R);
+        started = true;
+      } else if (prevHidden) {
+        let d = ang - prevAng;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        ctx.arc(cx, cy, R, prevAng, prevAng + d, d < 0);
+      } else {
+        ctx.lineTo(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R);
+      }
+      prevHidden = true;
+      prevAng = ang;
+    }
+  }
+  if (started) ctx.closePath();
+  return anyVisible;
+}
+
 // 정사영(orthographic) 투영: 지구 뒤편 점은 지평선(원 둘레)으로 붙임
 function orthoProject(lon, lat, lon0, lat0, R, cx, cy) {
   const d2r = Math.PI / 180;
@@ -2653,20 +2693,17 @@ function drawIntro(ctx) {
   // 육지
   ctx.save();
   ctx.clip();
-  ctx.beginPath();
+  const landPath = new Path2D();
   for (let i = 0; i < worldLand.length; i++) {
-    const ring = worldLand[i];
-    for (let j = 0; j < ring.length; j++) {
-      const [x, y] = orthoProject(ring[j][0], ring[j][1], lon0, lat0, R, cx, cy);
-      if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
+    // 화면에 보이는 점이 없는 윤곽(지구 뒤편 전체)은 그리지 않음
+    const sub = new Path2D();
+    if (traceOrthoRing(sub, worldLand[i], lon0, lat0, R, cx, cy)) landPath.addPath(sub);
   }
   ctx.fillStyle = '#edebe3';
-  ctx.fill();
+  ctx.fill(landPath);
   ctx.strokeStyle = '#cfcdc4';
   ctx.lineWidth = 1;
-  ctx.stroke();
+  ctx.stroke(landPath);
   // 목표 지점 표시 (노란 점)
   const [tx, ty] = orthoProject(introAnim.lon, introAnim.lat, lon0, lat0, R, cx, cy);
   ctx.beginPath();
