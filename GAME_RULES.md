@@ -1,4 +1,4 @@
-> **[실험 중]** 특수 기술 없음. 완전점령 지역은 곧바로 메인 지역처럼 공격(원거리 + 공격력 2). 충전 게이지 표시는 유지. 특수 기술 버전은 `save/special-skill` 브랜치에 저장, `game.js`의 `EXPERIMENT_NO_SKILL`을 `false`로 바꾸면 복귀.
+> **[실험 중]** 특수 기술 없음. 완전점령 지역은 곧바로 메인 지역처럼 공격(원거리 + 공격력 2). 충전 게이지 표시는 유지. 완전점령 지역은 피 100(풀리면 50), 상대의 완전점령 지역은 내 완전점령 지역만 공격 가능(양쪽 동일). 특수 기술 버전은 `save/special-skill` 브랜치에 저장, `game.js`의 `EXPERIMENT_NO_SKILL`을 `false`로 바꾸면 복귀.
 
 # 📜 TAPWAR (탭워) 공식 게임 설정 및 룰북 (System Design Manifesto)
 
