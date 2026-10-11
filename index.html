@@ -430,6 +430,7 @@
     }
     .start-card .stage-grid::-webkit-scrollbar { display: none; }
     .stage-wrap { position: relative; }
+    .start-card .stage-grid { position: relative; } /* 카드 offsetLeft 기준을 슬라이드 안쪽으로 */
     .slide-arrow {
       position: absolute;
       top: 50%;
@@ -685,6 +686,25 @@
     .tut-prev { white-space: nowrap; min-width: 72px; }
     .tutorial-card .start-btn { flex: 1; border-radius: 999px; background: #fde047; box-shadow: 0 5px 0 #eab308; font-size: 16px; }
     .sheet-card .start-btn { border-radius: 999px; background: #fde047; box-shadow: 0 5px 0 #eab308; }
+    /* 홈 화면 크게: 휴대폰 화면을 넉넉히 채우도록 */
+    .start-card {
+      width: calc(100vw - 20px);
+      max-width: 460px;
+      min-height: min(760px, 88vh);
+      padding: 36px 24px 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      box-sizing: border-box;
+    }
+    .start-logo { font-size: 50px; margin-bottom: 30px; align-self: center; }
+    .country-chip { font-size: 15px; padding: 13px 20px; }
+    .start-card .stage-grid { margin-inline: -24px; padding-inline: calc(50% + 24px - var(--stage-card-w) / 2); scroll-padding-inline: 0; --stage-card-w: min(250px, 62vw); }
+    .start-card .stage-grid .stage-card { flex: 0 0 var(--stage-card-w); padding: 22px 10px 20px; box-sizing: border-box; }
+    .stage-thumb { width: 170px; height: 170px; }
+    .start-card .stage-name { font-size: 18px; }
+    .start-card .start-btn { font-size: 21px; padding-block: 20px; margin-top: 10px; }
+    .home-links { font-size: 15px; }
   </style>
 </head>
 <body>
