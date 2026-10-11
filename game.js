@@ -2363,6 +2363,7 @@ function gameOver(isWin, isSurrender = false) {
       `<div class="end-record">${timeStr}</div>` +
       (recordResult.isNewBest ? `<div class="end-best new">최고 기록</div>` : `<div class="end-best">최고 기록 ${bestStr}</div>`) +
       `<div class="end-total">대한민국 총 시간 ${formatLongTime(getCampaignTotalTime().sum)}</div>`;
+    submitCountryRanking(selectedCountryKey || 'KR');
 
     // 캠페인 다음 맵 (클리어로 열림)
     const order = getCampaignOrder();
@@ -3017,6 +3018,40 @@ function getCampaignTotalTime() {
   });
   return { sum, count };
 }
+
+// -------------------------------------------------------------
+// 나라별 글로벌 순위 (Apple 게임 센터 순위표)
+// - 나라의 모든 맵을 클리어하면 '총 시간'(맵별 최고 기록 합)을 그 나라 순위표에 제출 (낮을수록 높은 순위)
+// - App Store Connect 에서 만든 순위표 ID 로 바꿔 넣을 것 (형식: 경과 시간 - 초 단위, 정렬: 낮은 점수 우선)
+// -------------------------------------------------------------
+const LEADERBOARDS = {
+  KR: 'tapwar.leaderboard.kr.totaltime' // TODO: App Store Connect 순위표 ID
+};
+const GameCenter = (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() &&
+  window.Capacitor.registerPlugin) ? window.Capacitor.registerPlugin('GameCenter') : null;
+if (GameCenter) GameCenter.authenticate().catch(() => {});
+
+// 나라의 모든 맵을 깼으면 총 시간을 순위표에 제출
+function submitCountryRanking(countryKey) {
+  const id = LEADERBOARDS[countryKey];
+  const order = getCampaignOrder();
+  if (!id || !GameCenter || !order.every(isStageCleared)) return;
+  const total = Math.round(getCampaignTotalTime().sum);
+  GameCenter.submitScore({ leaderboardId: id, score: total }).catch(() => {});
+}
+
+// 순위 보기 (고른 나라의 순위표)
+function openRanking() {
+  const c = COUNTRIES.find(x => x.key === selectedCountryKey) || COUNTRIES[0];
+  if (GameCenter && LEADERBOARDS[c.key]) {
+    GameCenter.showLeaderboard({ leaderboardId: LEADERBOARDS[c.key] }).catch(() => {});
+    return;
+  }
+  const order = getCampaignOrder();
+  const done = order.filter(isStageCleared).length;
+  openSheet('', `${c.name} 순위`, `${c.name}의 모든 맵(${order.length}개)을 클리어하면 총 시간으로 전 세계 순위에 올라가요.\n순위는 아이폰 앱(게임 센터)에서 볼 수 있어요. (${done}/${order.length} 클리어)`);
+}
+window.openRanking = openRanking;
 
 // 1시간이 넘을 수 있는 시간 표시 (h:mm:ss 또는 mm:ss)
 function formatLongTime(sec) {
