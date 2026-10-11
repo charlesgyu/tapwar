@@ -721,6 +721,19 @@
       border-radius: inherit;
       pointer-events: none;
     }
+    /* 나라 버튼: 선택한 나라는 국기를 선명하게, 잠긴 나라는 검은 막(50%)으로 어둡게 */
+    .country-chip.active { background: #ffffff; color: #ffffff; border-color: #1e293b; }
+    .country-chip.active .flag-bg { opacity: 1; }
+    .country-chip.active .chip-name { text-shadow: 0 0 4px #000, 0 0 2px #000; }
+    .country-chip.locked { color: #ffffff; }
+    .country-chip.locked .chip-name { z-index: 1; text-shadow: 0 0 3px rgba(0,0,0,0.6); }
+    .country-chip.locked::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
