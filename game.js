@@ -2527,7 +2527,7 @@ const ITEMS = [
   { key: 'crit', name: '크리티컬', desc: '30% 확률로 상대 땅에 3배 피해' },
   { key: 'absorb', name: '흡수', desc: '30% 확률로 상대 공격을 막고 그 2배만큼 회복' }
 ];
-let itemMode = false; // 시작 버튼(노멀 모드/아이템 모드)으로 정함
+const itemMode = true; // 모든 판이 아이템 모드 (노멀 모드 없음)
 let itemsOf = { player: [], enemy: [] };
 let itemRound = 0;
 let nextItemAt = 0;
@@ -2553,12 +2553,6 @@ function itemIconSvg(key, size = 28) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ITEM_ICON[key]}</svg>`;
 }
 
-// 맵 화면의 노멀 모드 / 아이템 모드 버튼
-function startWithMode(withItems) {
-  itemMode = !!withItems;
-  onStartBtnClick();
-}
-window.startWithMode = startWithMode;
 
 function resetItems() {
   itemsOf = { player: [], enemy: [] };
@@ -2910,8 +2904,7 @@ function gameOver(isWin, isSurrender = false) {
     title.style.color = '#1e293b';
     title.innerText = '축하합니다.';
 
-    // 아이템 모드 판은 기록·순위에 남기지 않음
-    const recordResult = itemMode ? { bestTime: (getBattleRecords()[currentMapKey] || {}).bestTime ?? gameElapsedTime, isNewBest: false } : saveBattleRecord(currentMapKey, gameElapsedTime);
+    const recordResult = saveBattleRecord(currentMapKey, gameElapsedTime);
     const bestStr = formatTimeString(recordResult.bestTime);
     desc.innerHTML =
       `<div class="end-sub">${label}${josaEulReul(label)} 점령했습니다.</div>` +
@@ -2919,12 +2912,8 @@ function gameOver(isWin, isSurrender = false) {
       `<div class="end-record">${timeStr}</div>` +
       (recordResult.isNewBest ? `<div class="end-best new">최고 기록</div>` : `<div class="end-best">최고 기록 ${bestStr}</div>`) +
       `<div class="end-total">${(COUNTRIES.find(x => x.key === selectedCountryKey) || COUNTRIES[0]).name} 총 시간 ${formatLongTime(getCampaignTotalTime().sum)}</div>`;
-    if (!itemMode) {
-      submitMapRanking(selectedCountryKey || 'KR', currentMapKey, gameElapsedTime);
-      submitCountryRanking(selectedCountryKey || 'KR');
-    } else {
-      desc.innerHTML += `<div class="end-total">아이템 모드 판은 기록에 남지 않아요</div>`;
-    }
+    submitMapRanking(selectedCountryKey || 'KR', currentMapKey, gameElapsedTime);
+    submitCountryRanking(selectedCountryKey || 'KR');
 
     // 캠페인 다음 맵 (클리어로 열림)
     const order = getCampaignOrder();
@@ -3569,16 +3558,10 @@ function selectCountry(key) {
   const c = COUNTRIES.find(x => x.key === key);
   const btn = document.getElementById('enter-btn');
   if (btn) btn.classList.toggle('locked', !isCountryOpen(c));
-  // 맵이 하나뿐인 나라는 참전하기 대신 노멀·아이템 모드 버튼
-  const single = getCampaignOrder(key).length === 1;
-  const row = document.getElementById('enter-mode-row');
-  if (btn) btn.hidden = single;
-  if (row) { row.hidden = !single; row.querySelectorAll('.start-btn').forEach(b => b.classList.toggle('locked', !isCountryOpen(c))); }
 }
 
 // 참전하기: 열린 국가면 도시 맵 화면으로, 잠긴 국가면 안내
-function enterCountry(withItems) {
-  if (typeof withItems === 'boolean') itemMode = withItems;
+function enterCountry() {
   const c = COUNTRIES.find(x => x.key === selectedCountryKey);
   if (!isCountryOpen(c)) {
     // TODO(IAP): 출시 후 인앱 구매 시트로 연결
