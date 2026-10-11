@@ -1713,7 +1713,28 @@ window.buyProduct = buyProduct;
 // [테스트용] DEV_TEST_SPEED 가 true 면 구매 없이도 사용 가능. 정식 출시 전 false 로
 const DEV_TEST_SPEED = true;
 
+// -------------------------------------------------------------
+// 진동 (iOS 앱: Capacitor Haptics, 웹: navigator.vibrate 지원 기기만)
+//   short: 짧게 한 번 / strong: 나라 컨셉 발동 / long: 살짝 길게(패배) / triple: 짧게 세 번(승리)
+// -------------------------------------------------------------
+const HapticsPlugin = (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() &&
+  window.Capacitor.registerPlugin) ? window.Capacitor.registerPlugin('Haptics') : null;
+function haptic(kind) {
+  try {
+    if (HapticsPlugin) {
+      if (kind === 'long') HapticsPlugin.vibrate({ duration: 400 });
+      else if (kind === 'triple') [0, 160, 320].forEach(t => setTimeout(() => HapticsPlugin.impact({ style: 'MEDIUM' }), t));
+      else HapticsPlugin.impact({ style: kind === 'strong' ? 'HEAVY' : 'MEDIUM' });
+      return;
+    }
+    if (navigator.vibrate) {
+      navigator.vibrate({ short: 30, strong: 60, long: 400, triple: [40, 120, 40, 120, 40] }[kind] || 30);
+    }
+  } catch (e) {}
+}
+
 function onSpeed2Click() {
+  haptic('short');
   const btn = document.getElementById('speed2-btn');
   if (!DEV_TEST_SPEED && !isOwned('speed2')) {
     openPurchase('speed2');
@@ -1808,6 +1829,7 @@ function handleZoneDoubleClick(targetZone) {
   // 새 집중 포화: 이전에 드래그로 빠졌던 지역도 모두 다시 참여
   rawZones.forEach(z => { z.focusOptOut = false; });
   addPlayerFocus(targetZone);
+  haptic('short'); // 집중포화 시전
   focusFireCooldown = 0; // 쿨타임 없음!
 
   // 전선의 모든 아군 기지(완전점령 제외, 메인 포함)가 목표를 고정 타겟으로 지정하고
@@ -2619,6 +2641,7 @@ function openItemPick() {
   });
   m.style.display = 'flex';
   renderItemBar();
+  haptic('short'); // 아이템 카드 등장
 }
 
 // 카드 모양 (고르기 화면·고른 카드 크게 보기 공통)
@@ -2773,6 +2796,7 @@ function updateCountryEvent() {
   triggerCountryEvent(country);
 }
 function triggerCountryEvent(country) {
+  haptic('strong'); // 나라 컨셉 발동 알림
   if (country === 'GB') { fogUntil = gameElapsedTime + WORLD_FOG_SEC; flashCenterText('안개!'); return; }
   const c = COUNTRY_EVENT_CFG[country];
   if (!c) return;
@@ -2952,6 +2976,7 @@ window.retryStage = retryStage;
 
 function gameOver(isWin, isSurrender = false) {
   currentState = GAME_STATE.GAME_OVER;
+  haptic(isWin ? 'triple' : 'long');
   const im = document.getElementById('item-modal');
   if (im) im.style.display = 'none';
   const toast = document.getElementById('center-toast');
