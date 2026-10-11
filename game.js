@@ -3198,8 +3198,8 @@ function buildStageCards() {
     btn.innerHTML = `<span class="stage-no">${i + 1}</span>` +
       `<canvas class="stage-thumb" id="thumb-${k}"></canvas>` +
       `<span class="stage-title"><span class="stage-name">${cfg.label || key}</span><span class="stage-sub">${cfg.count || ''}</span></span>` +
-      `<span class="stage-record" id="modal-${k}-record"></span>` +
-      (cleared ? `<span class="map-rank-pct" id="rank-${k}"></span>` : '');
+      `<span class="stage-recrow"><span class="stage-record" id="modal-${k}-record"></span>` +
+      (cleared ? `<span class="map-rank-pct" id="rank-${k}"></span>` : '') + `</span>`;
     grid.appendChild(btn);
   });
   // 마지막 맵 다음 카드: 이 나라의 글로벌 순위 (총 시간)
@@ -3209,10 +3209,10 @@ function buildStageCards() {
   rank.id = 'ranking-card';
   rank.className = 'stage-card ranking-card' + (allDone ? '' : ' locked');
   rank.onclick = openRanking;
+  // 총 시간은 화면 위쪽에 이미 있으므로 카드에는 순위만
   rank.innerHTML = `<span class="ranking-title">순위</span>` +
-    `<span class="ranking-time">${allDone ? formatLongTime(total.sum) : `${order.filter(isStageCleared).length}/${order.length}`}</span>` +
-    `<span class="stage-sub">${allDone ? '총 시간' : '모든 맵 클리어 후 참여'}</span>` +
-    (allDone ? `<span class="map-rank-pct" id="rank-total"></span>` : '');
+    (allDone ? `<span class="map-rank-pct" id="rank-total"></span>`
+      : `<span class="ranking-time">${order.filter(isStageCleared).length}/${order.length}</span><span class="stage-sub">모든 맵 클리어 후 참여</span>`);
   grid.appendChild(rank);
   updateRecordDisplays();
   loadRankPercents();
