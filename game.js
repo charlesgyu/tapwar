@@ -3046,6 +3046,7 @@ function submitMapRanking(countryKey, mapKey, sec) {
 }
 
 // 상위 몇 % (게임 센터에서 내 순위·전체 인원을 받아 계산). 웹·미연결이면 비워 둠
+const EXACT_RANK_LIMIT = 20; // 이 순위까지만 정확한 등수 표시
 function rankPercentText(rank, total) {
   if (!rank || !total) return '';
   const pct = Math.max(1, Math.ceil(rank / total * 100));
@@ -3063,9 +3064,12 @@ function loadRankPercents() {
   });
   const totalEl = document.getElementById('rank-total');
   if (totalEl && LEADERBOARDS[c.key]) {
-    // 순위 카드(총 시간)는 정확한 순위: 'N위 / 전체 M명'
+    // 순위 카드(총 시간): 1~20위는 정확한 순위, 21위부터는 상위 몇 %
     GameCenter.getRank({ leaderboardId: LEADERBOARDS[c.key] }).then(r => {
-      if (r.rank && r.total) totalEl.innerHTML = `<b class="rank-exact">${r.rank.toLocaleString()}위</b><span class="rank-of">${r.total.toLocaleString()}명 중</span>`;
+      if (!r.rank || !r.total) return;
+      totalEl.innerHTML = r.rank <= EXACT_RANK_LIMIT
+        ? `<b class="rank-exact">${r.rank}위</b><span class="rank-of">${r.total.toLocaleString()}명 중</span>`
+        : `<b class="rank-exact">${rankPercentText(r.rank, r.total)}</b>`;
     }).catch(() => {});
   }
 }
