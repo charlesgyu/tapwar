@@ -3041,33 +3041,101 @@ const hex = (x, y, fill, stroke = '#ffffff', w = 2) =>
 const svgWrap = inner => `<svg viewBox="0 0 210 150" aria-hidden="true">${inner}</svg>`;
 const orb = (x, y, c = TC.blueS) => `<circle cx="${x}" cy="${y}" r="4.5" fill="${c}" stroke="#fff" stroke-width="1.5"/>`;
 
+// 튜토리얼 그림 애니메이션 (SVG SMIL, 모든 동작이 한 주기 D초로 반복)
+const kt = arr => arr.map(v => +v.toFixed(4)).join(';');
+// 시각 t(0~1)마다 값이 바뀌는 애니메이션: frames = [[t, value], ...] (0과 1 포함)
+const animAttr = (attr, D, frames, discrete = false) =>
+  `<animate attributeName="${attr}" dur="${D}s" repeatCount="indefinite" ${discrete ? 'calcMode="discrete"' : ''} ` +
+  `keyTimes="${kt(frames.map(f => f[0]))}" values="${frames.map(f => f[1]).join(';')}"/>`;
+// 색이 바뀌는 육각형
+const hexAnim = (x, y, D, fills, stroke = '#ffffff', w = 2, r = 26) =>
+  `<polygon points="${hexPoints(x, y, r)}" fill="${fills[0][1]}" stroke="${stroke}" stroke-width="${w}" stroke-linejoin="round">` +
+  animAttr('fill', D, fills, true) + `</polygon>`;
+// t0~t1 동안 (x1,y1) → (x2,y2) 로 날아가는 구슬
+const flyOrb = (x1, y1, x2, y2, t0, t1, D, c = TC.blueS) => {
+  const e = 0.001;
+  return `<circle r="4.5" fill="${c}" stroke="#fff" stroke-width="1.5" cx="${x1}" cy="${y1}" opacity="0">` +
+    animAttr('cx', D, [[0, x1], [t0, x1], [t1, x2], [1, x2]]) +
+    animAttr('cy', D, [[0, y1], [t0, y1], [t1, y2], [1, y2]]) +
+    animAttr('opacity', D, [[0, 0], [Math.max(0, t0 - e), 0], [t0, 1], [t1, 1], [Math.min(1, t1 + e), 0], [1, 0]]) +
+    `</circle>`;
+};
+// 탭할 때 퍼지는 물결
+const tapRipple = (x, y, t, D) =>
+  `<circle cx="${x}" cy="${y}" r="4" fill="none" stroke="#1e293b" stroke-width="2.5" opacity="0">` +
+  animAttr('r', D, [[0, 4], [t, 4], [Math.min(1, t + 0.12), 20], [1, 20]]) +
+  animAttr('opacity', D, [[0, 0], [Math.max(0, t - 0.001), 0], [t, 0.7], [Math.min(1, t + 0.12), 0], [1, 0]]) + `</circle>`;
+// 손가락 위치 (반투명 점): frames = [[t, x, y, opacity], ...]
+const finger = (D, frames) =>
+  `<circle r="9" fill="#1e293b" fill-opacity="0.35" stroke="#1e293b" stroke-opacity="0.5" stroke-width="1.5" cx="${frames[0][1]}" cy="${frames[0][2]}" opacity="0">` +
+  animAttr('cx', D, frames.map(f => [f[0], f[1]])) + animAttr('cy', D, frames.map(f => [f[0], f[2]])) +
+  animAttr('opacity', D, frames.map(f => [f[0], f[3]])) + `</circle>`;
+// 아래에서 차오르는 파란 게이지 (t0~t1 동안 0 → 가득)
+const riseFill = (id, x, y, t0, t1, D, color = TC.blue, r = 26) => {
+  const top = y - r, h = r * 2;
+  return `<clipPath id="${id}"><polygon points="${hexPoints(x, y, r)}"/></clipPath>` +
+    `<rect x="${x - r}" y="${top + h}" width="${r * 2}" height="0" fill="${color}" clip-path="url(#${id})">` +
+    animAttr('y', D, [[0, top + h], [t0, top + h], [t1, top], [0.97, top], [1, top + h]]) +
+    animAttr('height', D, [[0, 0], [t0, 0], [t1, h], [0.97, h], [1, 0]]) + `</rect>`;
+};
+
+// 게이지 위에 다시 그리는 테두리 (색이 시간에 따라 바뀜)
+const outlineAnim = (x, y, D, strokes, w = 2, r = 26) =>
+  `<polygon points="${hexPoints(x, y, r)}" fill="none" stroke="${strokes[0][1]}" stroke-width="${w}" stroke-linejoin="round">` +
+  animAttr('stroke', D, strokes, true) + `</polygon>`;
+
 const TUTORIAL = [
   { title: '시작 지역 고르기',
     text: '지도를 확대·이동하며 둘러보고, 시작할 지역을 탭한 뒤 확인을 누르면 그곳이 내 기지가 돼요.',
-    art: svgWrap(hex(60, 70, TC.b, TC.s) + hex(105, 70, TC.yel, '#fff', 3) + hex(150, 70, TC.b, TC.s) ) },
+    art: (() => { const D = 3;
+      return svgWrap(hex(60, 70, TC.b, TC.s) + hex(150, 70, TC.b, TC.s) +
+        hexAnim(105, 70, D, [[0, TC.b], [0.4, TC.yel], [1, TC.yel]], '#fff', 3) +
+        finger(D, [[0, 175, 125, 0], [0.08, 175, 125, 1], [0.32, 105, 72, 1], [0.5, 105, 72, 1], [0.6, 105, 72, 0], [1, 105, 72, 0]]) +
+        tapRipple(105, 72, 0.36, D)); })() },
   { title: '자동으로 넓혀요',
     text: '내 지역은 붙어 있는 땅을 자동으로 공격해요. 아래에서부터 파란색이 꽉 차면 내 땅이 돼요.',
-    art: svgWrap(hex(65, 75, TC.yel, '#fff', 3) +
-      `<clipPath id="tut-c1"><polygon points="${hexPoints(145, 75)}"/></clipPath>` + hex(145, 75, TC.b, TC.s) +
-      `<rect x="115" y="80" width="60" height="30" fill="${TC.blue}" clip-path="url(#tut-c1)"/>` +
-      orb(97, 75) + orb(110, 75)) },
+    art: (() => { const D = 3.4;
+      return svgWrap(hex(82, 75, TC.yel, '#fff', 3) +
+        hexAnim(127, 75, D, [[0, TC.b], [0.82, TC.blue], [0.97, TC.blue], [1, TC.b]], TC.s) +
+        riseFill('tut-r2', 127, 75, 0.05, 0.82, D) + outlineAnim(127, 75, D, [[0, TC.s], [0.82, TC.blueS], [0.97, TC.blueS], [1, TC.s]]) +
+        [0.05, 0.2, 0.35, 0.5, 0.65].map(t => flyOrb(82, 75, 127, 75, t, t + 0.12, D)).join('')); })() },
   { title: '지정 공격',
     text: '내 지역을 꾹 눌러 맞닿은 곳으로 끌면 그곳을 공격해요. 내 땅으로 끌면 피를 채워 줘요.',
-    art: svgWrap(hex(82, 75, TC.blue, TC.blueS) + hex(127, 75, TC.red, TC.redS) +
-      `<path d="M84 75 L118 75" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>` +
-      `<path d="M112 69 L120 75 L112 81" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`) },
+    art: (() => { const D = 3.6;
+      return svgWrap(hex(60, 75, TC.blue, TC.blueS) + hex(105, 75, TC.blue, TC.blueS) +
+        hexAnim(150, 75, D, [[0, TC.red], [0.88, TC.blue], [0.97, TC.blue], [1, TC.red]], TC.redS) +
+        riseFill('tut-r3', 150, 75, 0.45, 0.88, D) + outlineAnim(150, 75, D, [[0, TC.redS], [0.88, TC.blueS], [0.97, TC.blueS], [1, TC.redS]]) +
+        finger(D, [[0, 105, 75, 0], [0.06, 105, 75, 1], [0.16, 105, 75, 1], [0.36, 150, 75, 1], [0.44, 150, 75, 0], [1, 150, 75, 0]]) +
+        `<line x1="105" y1="75" x2="105" y2="75" stroke="${TC.blueS}" stroke-width="3" stroke-dasharray="5 4" opacity="0">` +
+          animAttr('x2', D, [[0, 105], [0.16, 105], [0.36, 146], [1, 146]]) +
+          animAttr('opacity', D, [[0, 0], [0.15, 0], [0.16, 1], [0.44, 1], [0.5, 0], [1, 0]]) + `</line>` +
+        [0.45, 0.58, 0.71].map(t => flyOrb(105, 75, 150, 75, t, t + 0.1, D)).join('')); })() },
   { title: '집중 포화',
     text: '아무 지역이나 두 번 탭하면 전선의 내 지역이 모두 그곳을 쏴요. 점령할 때까지 계속돼요.',
-    art: svgWrap(hex(45, 45, TC.blue, TC.blueS) + hex(45, 105, TC.blue, TC.blueS) + hex(160, 75, TC.red, TC.blueS, 4) +
-      orb(88, 57) + orb(114, 65) + orb(88, 93) + orb(114, 85)) },
+    art: (() => { const D = 3.6;
+      return svgWrap(hex(60, 45, TC.blue, TC.blueS) + hex(60, 105, TC.blue, TC.blueS) + hex(105, 75, TC.blue, TC.blueS) +
+        hexAnim(150, 75, D, [[0, TC.red], [0.88, TC.blue], [0.97, TC.blue], [1, TC.red]], TC.redS, 2) +
+        riseFill('tut-r4', 150, 75, 0.35, 0.88, D) + outlineAnim(150, 75, D, [[0, TC.redS], [0.88, TC.blueS], [0.97, TC.blueS], [1, TC.redS]]) +
+        finger(D, [[0, 185, 130, 0], [0.04, 185, 130, 1], [0.14, 150, 78, 1], [0.32, 150, 78, 1], [0.38, 150, 78, 0], [1, 150, 78, 0]]) +
+        tapRipple(150, 78, 0.17, D) + tapRipple(150, 78, 0.27, D) +
+        [0.35, 0.5, 0.65].map(t => flyOrb(60, 45, 150, 75, t, t + 0.14, D) + flyOrb(60, 105, 150, 75, t + 0.03, t + 0.17, D) +
+          flyOrb(105, 75, 150, 75, t + 0.06, t + 0.14, D)).join('')); })() },
   { title: '완전 점령',
     text: '이웃을 모두 차지하면 초록색이 돼요. 초록 지역은 원거리 공격이 가능해져요.',
-    // 가운데 지역을 내 지역 6곳이 빈틈없이 둘러싼 모양
-    art: svgWrap([[105, 75], [150, 75], [60, 75], [127.5, 36], [82.5, 36], [127.5, 114], [82.5, 114]]
-      .map(([x, y], i) => i === 0 ? '' : hex(x, y, TC.blue, TC.blueS)).join('') + hex(105, 75, TC.grn2, TC.grnS, 3)) },
+    art: (() => { const D = 4.2, cx = 70, cy = 75;
+      // 가운데 지역을 둘러싼 이웃 6곳이 하나씩 내 땅이 되고 → 가운데가 초록 → 먼 곳으로 원거리 공격
+      const ring = [[cx + 45, cy], [cx + 22.5, cy - 39], [cx - 22.5, cy - 39], [cx - 45, cy], [cx - 22.5, cy + 39], [cx + 22.5, cy + 39]];
+      return svgWrap(ring.map(([x, y], i) => hexAnim(x, y, D, [[0, TC.b], [0.06 + i * 0.07, TC.blue], [0.97, TC.blue], [1, TC.b]], TC.blueS)).join('') +
+        hexAnim(cx, cy, D, [[0, TC.blue], [0.5, TC.grn2], [0.97, TC.grn2], [1, TC.blue]], '#ffffff', 3) +
+        `<polygon points="${hexPoints(185, 40, 17)}" fill="${TC.red}" stroke="${TC.redS}" stroke-width="2" stroke-linejoin="round"/>` +
+        [0.6, 0.72, 0.84].map(t => flyOrb(cx, cy, 185, 40, t, t + 0.1, D, TC.grnS)).join('')); })() },
   { title: '적 기지를 무너뜨려요',
     text: '적 지역을 모두 점령하면 승리!',
-    art: svgWrap(hex(60, 70, TC.yel, '#fff', 3) + hex(150, 70, TC.wine, '#fff', 3) ) }
+    art: (() => { const D = 3.6;
+      return svgWrap(hex(60, 75, TC.yel, '#fff', 3) + hex(105, 75, TC.blue, TC.blueS) +
+        hexAnim(150, 75, D, [[0, TC.wine], [0.85, TC.blue], [0.97, TC.blue], [1, TC.wine]], '#fff', 3) +
+        riseFill('tut-r6', 150, 75, 0.1, 0.85, D) + outlineAnim(150, 75, D, [[0, '#ffffff'], [0.85, TC.blueS], [0.97, TC.blueS], [1, '#ffffff']], 3) +
+        [0.1, 0.25, 0.4, 0.55, 0.7].map(t => flyOrb(105, 75, 150, 75, t, t + 0.1, D)).join('')); })() }
 ];
 let tutorialIndex = 0;
 
