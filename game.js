@@ -123,11 +123,8 @@ function updateRecordDisplays() {
     const el = document.getElementById(`modal-${key.toLowerCase()}-record`);
     if (!el) return;
     const r = records[key];
-    if (r && r.cleared && r.bestTime !== null) {
-      el.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#b45309">${formatTimeString(r.bestTime)}</span> (${r.clearCount}회)`;
-    } else {
-      el.innerHTML = `<span style="color:#94a3b8">미평정 (기록 없음)</span>`;
-    }
+    // 기록이 있을 때만 최고 기록 표시 (없으면 비워 둠)
+    el.textContent = (r && r.cleared && r.bestTime !== null) ? `🏆 ${formatTimeString(r.bestTime)}` : '';
   });
 
   // 상단 HUD 최고 기록 뱃지
@@ -2360,6 +2357,50 @@ if (minimapCanvas) {
   minimapCanvas.addEventListener('pointerup', endMinimapDrag);
   minimapCanvas.addEventListener('pointercancel', endMinimapDrag);
 }
+
+// -------------------------------------------------------------
+// 시작 화면 전장 썸네일: 각 맵 실제 모양을 파스텔 실루엣으로 그림
+// -------------------------------------------------------------
+const STAGE_THUMB_COLORS = { KOREA: '#93c5fd', SEOUL: '#fda4af', GYEONGGI: '#86efac', SUWON: '#fcd34d' };
+function renderStageThumbs() {
+  Object.keys(MAP_CONFIGS).forEach(key => {
+    const c = document.getElementById(`thumb-${key.toLowerCase()}`);
+    if (!c) return;
+    fetch(MAP_CONFIGS[key].file).then(r => r.json()).then(data => {
+      const dpr = window.devicePixelRatio || 1;
+      const size = c.clientWidth || 84;
+      c.width = size * dpr;
+      c.height = size * dpr;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      data.zones.forEach(z => z.polygons.forEach(r => r.forEach(([x, y]) => {
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      })));
+      const kx = Math.cos(((minY + maxY) / 2) * Math.PI / 180);
+      const w = (maxX - minX) * kx, h = maxY - minY;
+      const pad = 6 * dpr;
+      const sc = Math.min((c.width - pad * 2) / w, (c.height - pad * 2) / h);
+      const ox = (c.width - w * sc) / 2, oy = (c.height - h * sc) / 2;
+      const g = c.getContext('2d');
+      const path = new Path2D();
+      data.zones.forEach(z => z.polygons.forEach(r => {
+        r.forEach(([x, y], i) => {
+          const px = ox + (x - minX) * kx * sc, py = oy + (maxY - y) * sc;
+          if (i === 0) path.moveTo(px, py); else path.lineTo(px, py);
+        });
+        path.closePath();
+      }));
+      const color = STAGE_THUMB_COLORS[key] || '#cbd5e1';
+      g.fillStyle = color;
+      g.strokeStyle = color;
+      g.lineWidth = 2 * dpr;
+      g.lineJoin = 'round';
+      g.fill(path);
+      g.stroke(path);
+    }).catch(() => {});
+  });
+}
+renderStageThumbs();
 
 // Render Loop
 let lastTime = 0;
