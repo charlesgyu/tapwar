@@ -3284,7 +3284,21 @@ function buildCountryCards() {
     const b = document.createElement('button');
     b.id = `country-${c.key.toLowerCase()}`;
     b.className = 'stage-card country-card' + (c.key === selectedCountryKey ? ' active' : '') + (isCountryOpen(c) ? '' : ' locked');
-    b.innerHTML = `<span class="country-flag" aria-hidden="true">${c.flag}</span><span class="stage-name">${c.name}</span>`;
+    const maps = getCampaignOrder(c.key);
+    if (maps.length === 1) {
+      // 맵이 하나뿐인 나라(전세계): 국기 대신 맵 카드 모양 (썸네일·구역 수·최고 기록)
+      const key = maps[0], cfg = MAP_CONFIGS[key];
+      const r = getBattleRecords()[key];
+      const cleared = !!(r && r.cleared && r.bestTime !== null && r.bestTime !== undefined);
+      if (cleared) b.classList.add('cleared');
+      b.innerHTML = `<span class="stage-no">1</span>` +
+        `<canvas class="stage-thumb" id="cthumb-${key.toLowerCase()}"></canvas>` +
+        `<span class="stage-title"><span class="stage-name">${cfg.label || c.name}</span><span class="stage-sub">${cfg.count || ''}</span></span>` +
+        `<span class="stage-recrow"><span class="stage-record">${cleared ? formatTimeString(r.bestTime) : ''}</span></span>`;
+      requestAnimationFrame(() => drawMapThumb(document.getElementById(`cthumb-${key.toLowerCase()}`), key));
+    } else {
+      b.innerHTML = `<span class="country-flag" aria-hidden="true">${c.flag}</span><span class="stage-name">${c.name}</span>`;
+    }
     b.onclick = () => selectCountry(c.key);
     grid.appendChild(b);
   });
@@ -3763,10 +3777,13 @@ window.tutorialStep = tutorialStep;
 function renderStageThumbs() {
   buildStageCards();
   updateStageProgress();
+  Object.keys(MAP_CONFIGS).forEach(key => drawMapThumb(document.getElementById(`thumb-${key.toLowerCase()}`), key));
+}
+// 맵 썸네일: 맵 모양을 캔버스에 단색으로
+function drawMapThumb(c, key) {
+  if (!c) return;
   const keys = Object.keys(MAP_CONFIGS);
-  Object.keys(MAP_CONFIGS).forEach(key => {
-    const c = document.getElementById(`thumb-${key.toLowerCase()}`);
-    if (!c) return;
+  {
     fetch(MAP_CONFIGS[key].file).then(r => r.json()).then(data => {
       const dpr = window.devicePixelRatio || 1;
       const size = c.clientWidth || 96;
@@ -3799,7 +3816,7 @@ function renderStageThumbs() {
       g.fill(path);
       g.stroke(path);
     }).catch(() => {});
-  });
+  }
 }
 // -------------------------------------------------------------
 // 시작 연출: 지구본이 돌며 한국으로 다가간 뒤 선택한 맵 범위까지 확대 → 게임 지도로 전환
