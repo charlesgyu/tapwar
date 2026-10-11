@@ -57,7 +57,6 @@ const ENEMY_CONFIG = {
   enemyFocusCooldown: 8.0,      // 적 집중포화 쿨타임 (8초)
   enemyFocusSalvo: 3,           // 적 집중포화 일제 사격 수
   enemySpecialCooldown: 20,     // 특수기술 쿨타임 (20초)
-  enemySpecialMinFull: 3,       // 특수기술 발동 필요 완전점령 지역 수 (3개)
   startingEnemyBases: 1         // 시작 적 거점 수 (1개, 플레이어와 1:1 대등)
 };
 
@@ -176,13 +175,18 @@ let focusRings = []; // 집중포화 및 타격 링 이펙트
 let baseOrbSpeed = 5.2;
 let focusSalvoCount = 3;
 
-// Special Skill (완전점령 3개 이상 보유 시 발동 가능, 쿨타임 10초)
-let specialSkillCooldown = 0; // 글로벌 쿨타임 (초 단위)
-const SPECIAL_SKILL_COOLDOWN_MAX = 10; // 10초 쿨타임
+// Special Skill (완전점령 지역 1곳당 10초 충전 후 1발, 사용 시 소모)
+// [특수 기술 충전 규칙]
+// - 완전점령 지역 1곳마다 특수 기술 1발을 충전할 수 있음
+// - 완전점령 상태를 10초(게임 시간) 유지하면 그 지역에 1발 충전 완료
+// - 사용하면 그 지역의 1발은 소모되어, 완전점령이 풀렸다가 다시 완전점령되어야 재충전
+// - 충전 중이든 충전 완료든 완전점령이 풀리면 리셋
+const SKILL_CHARGE_SEC = 10;
+let specialSkillCooldown = 0; // (미사용) 이전 글로벌 쿨타임 호환용
 
 // Enemy AI Special Skill & Focus Fire
 let enemySpecialSkillCooldown = 0;
-const ENEMY_SPECIAL_SKILL_COOLDOWN_MAX = 15; // 적군 15초 쿨타임
+const ENEMY_SPECIAL_SKILL_MIN_GAP = 3; // 적군 AI 특수 기술 최소 사용 간격 (연사 방지)
 let enemyFocusFireCooldown = 0;
 const ENEMY_FOCUS_FIRE_COOLDOWN_MAX = 5.0; // 5초 쿨타임
 let currentEnemyFocusZone = null;
@@ -235,16 +239,9 @@ function pickSpecialSkillTargets(candidates, mainAlive) {
 function useSpecialSkill() {
   if (currentState !== GAME_STATE.PLAYING) return;
 
-  // 전체 완전점령지 수 (3개 이상 보유해야 특수기술 사용 가능)
-  const totalPlayerFullZones = rawZones.filter(z => z.owner === OWNER.PLAYER && isFullyConquered(z));
-  if (totalPlayerFullZones.length < 3) {
-    document.getElementById('status-guide').innerText = `⚠️ 특수 기술은 완전점령지역이 3개 이상일 때부터 사용 가능합니다! (현재: ${totalPlayerFullZones.length}/3개)`;
-    return;
-  }
-
-  // 10초 쿨타임 체크
-  if (specialSkillCooldown > 0) {
-    document.getElementById('status-guide').innerText = `⏳ 특수 기술 쿨타임 대기 중입니다 (${Math.ceil(specialSkillCooldown)}초 남음)`;
+  // 충전 완료된 완전점령 지역이 있어야 사용 가능 (1곳당 1발)
+  if (getReadySkillZones(OWNER.PLAYER).length === 0) {
+    document.getElementById('status-guide').innerText = `⚠️ 충전된 특수 기술이 없습니다! (완전점령 지역을 10초 유지하면 1발 충전)`;
     return;
   }
 
@@ -257,8 +254,7 @@ function useSpecialSkill() {
     return;
   }
 
-  // 10초 쿨타임 부여
-  specialSkillCooldown = SPECIAL_SKILL_COOLDOWN_MAX;
+  consumeSkillCharge(OWNER.PLAYER);
 
   // 1. 각 적 점령지마다 가장 가까운 아군 점령지와의 거리(및 직접 인접 여부) 계산
   enemyZones.forEach(ez => {
@@ -331,15 +327,15 @@ function useSpecialSkill() {
   updateEnemyPowerZone();
 
   const names = targetEnemyZones.map(tz => tz.name).join(', ');
-  document.getElementById('status-guide').innerText = `💥 [특수 기술 발동!]: 최인접 적지 [${names}] ${targetEnemyZones.length}곳 피 10 감소 및 점령 해제! (쿨타임 10초)`;
+  document.getElementById('status-guide').innerText = `💥 [특수 기술 발동!]: 최인접 적지 [${names}] ${targetEnemyZones.length}곳 피 10 감소 및 점령 해제! (남은 충전: ${getReadySkillZones(OWNER.PLAYER).length}발)`;
 }
 
-// 적군 AI 전용 특수 기술 (완전점령 3개 이상 보유 시 발동)
+// 적군 AI 전용 특수 기술 (아군과 동일한 충전 규칙)
 function useEnemySpecialSkill() {
   if (currentState !== GAME_STATE.PLAYING) return;
 
-  const totalEnemyFullZones = rawZones.filter(z => z.owner === OWNER.ENEMY && isFullyConquered(z));
-  if (totalEnemyFullZones.length < ENEMY_CONFIG.enemySpecialMinFull) return;
+  if (getReadySkillZones(OWNER.ENEMY).length === 0) return;
+  // 적군은 충전이 있어도 연사하지 않도록 최소 간격 유지
   if (enemySpecialSkillCooldown > 0) return;
 
   // 적군 AI의 특수 기술도 플레이어의 완전점령지역(🛡️)은 공격하지 못하고 일반 점령지만 공격!
@@ -347,7 +343,8 @@ function useEnemySpecialSkill() {
   const playerMainAlive = !!(playerMainZone && playerMainZone.owner === OWNER.PLAYER);
   if (playerZones.length === 0) return;
 
-  enemySpecialSkillCooldown = ENEMY_SPECIAL_SKILL_COOLDOWN_MAX;
+  enemySpecialSkillCooldown = ENEMY_SPECIAL_SKILL_MIN_GAP;
+  consumeSkillCharge(OWNER.ENEMY);
 
   // 무작위 아군 점령지 3곳 선택 (완전점령지 제외)
   const shuffled = [...playerZones].sort(() => Math.random() - 0.5);
@@ -395,38 +392,70 @@ function useEnemySpecialSkill() {
   document.getElementById('status-guide').innerText = `🚨 [적군 특수 기술 발동!]: 아군 점령지 [${names}] ${targetPlayerZones.length}곳 피 10 감소 및 점령 해제!`;
 }
 
+// 지역별 충전 상태 갱신: state = null(완전점령 아님) | 'charging' | 'ready' | 'spent'
+function updateSkillCharges(dt) {
+  for (let i = 0; i < rawZones.length; i++) {
+    const z = rawZones[i];
+    const full = z.owner !== OWNER.NEUTRAL && isFullyConquered(z);
+    if (!full || z.chargeOwner !== z.owner) {
+      z.chargeState = full ? 'charging' : null;
+      z.chargeTime = 0;
+      z.chargeOwner = full ? z.owner : null;
+      continue;
+    }
+    if (z.chargeState === 'charging') {
+      z.chargeTime += dt * gameSpeed;
+      if (z.chargeTime >= SKILL_CHARGE_SEC) z.chargeState = 'ready';
+    }
+  }
+}
+
+function getReadySkillZones(owner) {
+  return rawZones.filter(z => z.owner === owner && z.chargeState === 'ready');
+}
+
+// 충전 완료된 지역 1곳의 1발을 소모
+function consumeSkillCharge(owner) {
+  const ready = getReadySkillZones(owner);
+  if (ready.length === 0) return false;
+  ready[0].chargeState = 'spent';
+  return true;
+}
+
 let lastSkillTimerText = '';
 let lastSkillBtnDisabled = null;
 
 function updateSpecialSkillHUD(dt) {
-  if (specialSkillCooldown > 0) {
-    specialSkillCooldown = Math.max(0, specialSkillCooldown - dt * gameSpeed);
-  }
+  updateSkillCharges(dt);
 
   const btn = document.getElementById('special-skill-btn');
   const timer = document.getElementById('special-skill-timer');
   if (!btn || !timer) return;
 
-  const playerFullZones = rawZones.filter(z => z.owner === OWNER.PLAYER && isFullyConquered(z));
-  const totalFullCount = playerFullZones.length;
+  const own = rawZones.filter(z => z.owner === OWNER.PLAYER && z.chargeState);
+  const readyCount = own.filter(z => z.chargeState === 'ready').length;
+  const charging = own.filter(z => z.chargeState === 'charging');
 
   let text = '';
   let color = '';
   let disabled = false;
 
-  if (totalFullCount < 3) {
-    disabled = true;
-    text = `완전점령 3개 필요 (${totalFullCount}/3)`;
-    color = '#94a3b8';
-  } else if (specialSkillCooldown > 0) {
-    disabled = true;
-    const sec = Math.ceil(specialSkillCooldown);
-    text = `쿨타임 (${sec}s)`;
-    color = '#f59e0b';
-  } else {
-    disabled = false;
-    text = `특수 기술 즉시 발동! 💥`;
+  if (readyCount > 0) {
+    text = `${readyCount}발 발사 가능! 💥`;
     color = '#22c55e';
+  } else if (charging.length > 0) {
+    disabled = true;
+    const remain = Math.min(...charging.map(z => SKILL_CHARGE_SEC - z.chargeTime));
+    text = `충전 중 (${Math.max(1, Math.ceil(remain))}s)`;
+    color = '#f59e0b';
+  } else if (own.length > 0) {
+    disabled = true;
+    text = '재충전: 완전점령 풀렸다 다시 확보';
+    color = '#94a3b8';
+  } else {
+    disabled = true;
+    text = '완전점령 지역 필요';
+    color = '#94a3b8';
   }
 
   if (disabled !== lastSkillBtnDisabled) {
@@ -1687,7 +1716,7 @@ function updateAI(currentTime) {
   if (currentTime - lastAiDecisionTime < decisionInterval) return;
   lastAiDecisionTime = currentTime;
 
-  // 1. 적군 특수 기술 사용 검토 (완전점령 3개 이상 & 충전 보유 & 쿨타임 완료 시)
+  // 1. 적군 특수 기술 사용 검토 (충전된 완전점령 지역이 있을 때)
   useEnemySpecialSkill();
 
   // 2. 적군 집중포화 사용 검토 (쿨타임 완료 시 아군 거점에 일제 사격)
@@ -2078,7 +2107,9 @@ function drawZoneBadges(ctx) {
     let prefix = '';
     if (isMainZone(zone)) prefix = '👑';
     else if (isPlayerPowerZone || isEnemyPowerZone) prefix = '⚡';
-    else if (isFull) {
+    else if (zone.chargeState === 'ready') {
+      prefix = '💥'; // 특수 기술 1발 충전 완료
+    } else if (isFull) {
       prefix = '🛡️';
     }
 
