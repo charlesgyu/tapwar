@@ -11,7 +11,8 @@ public class GameCenterPlugin: CAPPlugin, CAPBridgedPlugin, GKGameCenterControll
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "authenticate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "submitScore", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "showLeaderboard", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "showLeaderboard", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getRank", returnType: CAPPluginReturnPromise)
     ]
 
     /// 앱 시작 시 한 번: 아이폰에 로그인된 Apple 계정으로 게임 센터 자동 로그인 (필요할 때만 로그인 화면)
@@ -50,6 +51,19 @@ public class GameCenterPlugin: CAPPlugin, CAPBridgedPlugin, GKGameCenterControll
             vc.gameCenterDelegate = self
             self.bridge?.viewController?.present(vc, animated: true)
             call.resolve()
+        }
+    }
+
+    /// 내 순위와 전체 참가자 수 → JS 에서 '상위 몇 %' 계산 (기록이 없으면 rank 0)
+    @objc func getRank(_ call: CAPPluginCall) {
+        guard let leaderboardId = call.getString("leaderboardId") else { call.reject("leaderboardId 필요"); return }
+        guard GKLocalPlayer.local.isAuthenticated else { call.reject("게임 센터 로그인 안 됨"); return }
+        GKLeaderboard.loadLeaderboards(IDs: [leaderboardId]) { boards, error in
+            guard let board = boards?.first, error == nil else { call.reject(error?.localizedDescription ?? "순위표 없음"); return }
+            board.loadEntries(for: .global, timeScope: .allTime, range: NSRange(location: 1, length: 1)) { local, _, total, error in
+                if let error = error { call.reject(error.localizedDescription); return }
+                call.resolve(["rank": local?.rank ?? 0, "total": total])
+            }
         }
     }
 
