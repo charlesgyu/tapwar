@@ -200,25 +200,26 @@ function isMainZone(zone) {
          (zone === enemyMainZone && zone.owner === OWNER.ENEMY);
 }
 
-// 메인 지역 전용 원거리 타겟: 거리와 무관하게 가장 가까운 적 거점(철벽 제외) ➔ 중립 구역 순
-function pickMainZoneLongRangeTarget(zone) {
-  let best = null;
-  let bestDist = Infinity;
-  let bestIsEnemy = false;
+// 공격 가능한 자동 목표인지: 내 점령지가 아니고, 적의 완전점령(🛡️) 철벽 기지가 아님
+function isAutoAttackable(target, owner) {
+  if (target.owner === owner || target.isHidden) return false;
+  if (target.owner !== OWNER.NEUTRAL && isFullyConquered(target)) return false;
+  return true;
+}
+
+// 메인 지역 원거리 자동 목표: 내 점령지역 전체와 맞닿아 있는 지역(전선) 중 무작위 1곳
+function pickMainZoneFrontierTarget(zone) {
+  const frontier = new Set();
   for (let i = 0; i < rawZones.length; i++) {
-    const t = rawZones[i];
-    if (t === zone || t.owner === zone.owner || t.isHidden) continue;
-    const isEnemy = t.owner !== OWNER.NEUTRAL;
-    if (isEnemy && isFullyConquered(t)) continue;
-    if (bestIsEnemy && !isEnemy) continue;
-    const d = Math.hypot(t.cx - zone.cx, t.cy - zone.cy);
-    if ((isEnemy && !bestIsEnemy) || d < bestDist) {
-      best = t;
-      bestDist = d;
-      bestIsEnemy = isEnemy;
-    }
+    const own = rawZones[i];
+    if (own.owner !== zone.owner) continue;
+    own.neighbors.forEach(n => {
+      if (isAutoAttackable(n, zone.owner)) frontier.add(n);
+    });
   }
-  return best;
+  if (frontier.size === 0) return null;
+  const list = [...frontier];
+  return list[Math.floor(Math.random() * list.length)];
 }
 
 // 특수 기술 대상 선정 및 피해 적용 (아군/적군 공용)
@@ -717,9 +718,11 @@ function isFullyConquered(zone) {
 
 // Smart Auto-Target Selection:
 function pickAutoTarget(zone) {
-  // 메인 지역은 공격을 멈추지 않음: 인접 목표가 없으면 거리와 무관한 원거리 목표로 계속 사격
+  // [자동 공격 규칙]: 모든 점령지역(메인 포함)은 맞닿은 지역만 무작위로 공격.
+  // 메인 지역은 공격을 멈추지 않으므로, 자기와 맞닿은 목표가 없으면
+  // 내 점령지역 전체와 맞닿아 있는 전선 지역 중 무작위 1곳을 원거리 공격.
   if (isMainZone(zone)) {
-    return pickAdjacentTarget(zone) || pickMainZoneLongRangeTarget(zone);
+    return pickAdjacentTarget(zone) || pickMainZoneFrontierTarget(zone);
   }
   if (isFullyConquered(zone)) return null;
   return pickAdjacentTarget(zone);
@@ -730,19 +733,10 @@ function pickAdjacentTarget(zone) {
   const neighbors = zone.neighbors;
   if (!neighbors || neighbors.length === 0) return null;
 
-  // 1. 직접 맞닿아 있는 적군 지역 우선
-  const enemyTargets = neighbors.filter(n => n.owner !== zone.owner && n.owner !== OWNER.NEUTRAL && !isFullyConquered(n));
-  if (enemyTargets.length > 0) {
-    return enemyTargets[Math.floor(Math.random() * enemyTargets.length)];
-  }
-
-  // 2. 직접 맞닿아 있는 중립(미점령) 지역
-  const neutralTargets = neighbors.filter(n => n.owner === OWNER.NEUTRAL);
-  if (neutralTargets.length > 0) {
-    return neutralTargets[Math.floor(Math.random() * neutralTargets.length)];
-  }
-
-  return null;
+  // 맞닿아 있는 적군·중립 지역 중 무작위 1곳 (적 철벽 기지 제외)
+  const targets = neighbors.filter(n => isAutoAttackable(n, zone.owner));
+  if (targets.length === 0) return null;
+  return targets[Math.floor(Math.random() * targets.length)];
 }
 
 // 초기 맵 로드 (기본: 전국 전선)
@@ -1150,6 +1144,9 @@ let lastTapZoneId = null;
 function handleZoneDoubleClick(targetZone) {
   if (!targetZone || currentState !== GAME_STATE.PLAYING) return;
 
+  // [지정 공격 규칙]: 내 점령지역은 집중 포격 대상이 아님
+  if (targetZone.owner === OWNER.PLAYER) return;
+
   // [면역 규칙]: 완전 점령된 적 기지는 일반 공격 절대 불가!
   if (targetZone.owner === OWNER.ENEMY && isFullyConquered(targetZone)) {
     document.getElementById('status-guide').innerText = `🛡️ [${targetZone.name}]은(는) 완전 점령된 철벽 기지입니다!`;
@@ -1330,7 +1327,8 @@ function onPointerUp(e) {
 
   if (isDragging && dragSourceZone) {
     const endZone = findZoneAtWorld(worldMousePos.x, worldMousePos.y);
-    if (endZone && endZone.id !== dragSourceZone.id) {
+    // [지정 공격 규칙]: 내 점령지역을 제외한 모든 지역(적군·중립, 거리 무관) 지정 가능
+    if (endZone && endZone.id !== dragSourceZone.id && endZone.owner !== dragSourceZone.owner) {
       // 완전 점령된 적 기지는 일반 공격 불가!
       if (endZone.owner !== dragSourceZone.owner && endZone.owner !== OWNER.NEUTRAL && isFullyConquered(endZone)) {
         document.getElementById('status-guide').innerText = `🛡️ [${endZone.name}]은(는) 완전 점령된 철벽 기지입니다! [즉시 점령] 아이템으로만 공략 가능합니다.`;
