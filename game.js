@@ -297,6 +297,7 @@ function useSpecialSkill() {
     // 메인 지역을 잃은 상태에서 최후 1곳만 남았다면 피만 깎이고 구슬 전투로만 전멸되도록 보호
     if (enemyMainAlive || enemyZones.length > 1) {
       z.owner = OWNER.NEUTRAL;
+      z.claimant = OWNER.ENEMY; // 남은 피는 원래 주인의 줄다리기 게이지로 유지
     }
     z.targetZones = [];
     z.isManualTarget = false;
@@ -357,6 +358,7 @@ function useEnemySpecialSkill() {
     z.orbs = Math.max(0, z.orbs - 10);
     if (playerMainAlive || playerZones.length > 1) {
       z.owner = OWNER.NEUTRAL;
+      z.claimant = OWNER.PLAYER; // 남은 피는 원래 주인의 줄다리기 게이지로 유지
     }
     z.targetZones = [];
     z.isManualTarget = false;
@@ -551,6 +553,8 @@ function loadSelectedMap(mapKey) {
         cy: 0,
         owner: OWNER.NEUTRAL,
         orbs: 0,
+        claimant: null,       // 중립 지역 줄다리기 게이지의 현재 우세 진영 (orbs = 게이지 크기)
+        protectedUntil: 0,    // 점령 직후 보호 종료 시각 (게임 시간, 초)
         targetZones: [],
         isManualTarget: false,
         lastShotTime: 0,
@@ -922,7 +926,22 @@ function applyOrbHit(zone, hitOwner, power, sourceZone) {
       reRouteZone(sourceZone);
     }
   } else if (zone.owner === OWNER.NEUTRAL) {
-    zone.orbs += power;
+    // [줄다리기 게이지]: 중립 지역은 우세 진영(claimant)과 게이지(orbs)를 가짐.
+    // 같은 편 구슬은 게이지를 올리고, 상대 구슬은 깎음. 0을 넘어가면 우세 진영이 뒤집힘.
+    // 게이지가 50에 닿은 진영이 점령.
+    if (!zone.claimant || zone.orbs <= 0) {
+      zone.claimant = hitOwner;
+      zone.orbs = 0;
+    }
+    if (zone.claimant === hitOwner) {
+      zone.orbs += power;
+    } else {
+      zone.orbs -= power;
+      if (zone.orbs < 0) {
+        zone.claimant = hitOwner;
+        zone.orbs = -zone.orbs;
+      }
+    }
     if (zone.orbs >= zone.maxOrbs) {
       conquerZone(zone, hitOwner, sourceZone);
     }
@@ -937,9 +956,15 @@ function applyOrbHit(zone, hitOwner, power, sourceZone) {
       return;
     }
 
+    // [점령 직후 보호]: 막 점령된 지역은 잠시 피해를 받지 않음 (주인이 1초에 여러 번 바뀌는 혼전 방지)
+    if (gameElapsedTime < zone.protectedUntil) {
+      return;
+    }
+
     zone.orbs -= power;
     if (zone.orbs <= 0) {
       zone.owner = OWNER.NEUTRAL;
+      zone.claimant = hitOwner;
       zone.targetZones = [];
       zone.isManualTarget = false;
       zone.orbs = Math.abs(zone.orbs);
@@ -952,6 +977,50 @@ function applyOrbHit(zone, hitOwner, power, sourceZone) {
   }
 }
 
+const CAPTURE_PROTECT_SEC = 1.5; // 점령 직후 보호 시간 (게임 시간 기준, 배속 연동)
+
+// [공중 충돌]: 두 지역 사이를 서로 마주 보고 날아가는 적대 구슬은 중간에서 만나면 함께 소멸.
+// 같은 두 지역 사이 구슬끼리만 비교하므로 전체 비용은 O(구슬 수).
+function resolveOrbCollisions() {
+  if (flyingOrbs.length < 2) return;
+  const lanes = new Map();
+  for (let i = 0; i < flyingOrbs.length; i++) {
+    const orb = flyingOrbs[i];
+    if (orb.isDead) continue;
+    const a = orb.sourceZone.id, b = orb.targetZone.id;
+    const key = a < b ? a + '|' + b : b + '|' + a;
+    let lane = lanes.get(key);
+    if (!lane) {
+      lane = { fwd: [], back: [] };
+      lanes.set(key, lane);
+    }
+    (a < b ? lane.fwd : lane.back).push(orb);
+  }
+
+  lanes.forEach(lane => {
+    if (lane.fwd.length === 0 || lane.back.length === 0) return;
+    // 가장 앞서 나간 구슬끼리 먼저 만남
+    lane.fwd.sort((o1, o2) => o2.progress - o1.progress);
+    lane.back.sort((o1, o2) => o2.progress - o1.progress);
+    let i = 0, j = 0;
+    while (i < lane.fwd.length && j < lane.back.length) {
+      const f = lane.fwd[i], k = lane.back[j];
+      if (f.owner === k.owner) {
+        // 같은 편끼리는 충돌하지 않음: 더 뒤처진 쪽을 건너뜀
+        if (f.progress < k.progress) i++; else j++;
+        continue;
+      }
+      if (f.progress + k.progress < 1) break; // 아직 만나지 않음
+      const hit = Math.min(f.power, k.power);
+      f.power -= hit;
+      k.power -= hit;
+      createDisintegrateParticle((f.x + k.x) / 2, (f.y + k.y) / 2, '#a855f7');
+      if (f.power <= 0) { f.isDead = true; i++; }
+      if (k.power <= 0) { k.isDead = true; j++; }
+    }
+  });
+}
+
 let totalPlayerConquests = 0;
 let nextConquestThreshold = 3; // 3 -> 6 -> 12 -> 24 -> 48 -> 96... 배수로 증가!
 let isInstantConquerMode = false;
@@ -959,6 +1028,8 @@ let isInstantConquerMode = false;
 function conquerZone(conqueredZone, newOwner, conqueredBySource) {
   conqueredZone.owner = newOwner;
   conqueredZone.orbs = conqueredZone.maxOrbs; // Full garrison upon capture
+  conqueredZone.claimant = null;
+  conqueredZone.protectedUntil = gameElapsedTime + CAPTURE_PROTECT_SEC;
 
   // 1. Conquered Zone immediately starts advancing towards an adjacent front!
   const newTarget = pickAutoTarget(conqueredZone);
@@ -2042,6 +2113,11 @@ function drawZoneBadges(ctx) {
     if (owner === OWNER.PLAYER) tagColor = isFull ? '#16a34a' : '#2563eb';
     else if (owner === OWNER.ENEMY) tagColor = isFull ? '#dc2626' : '#b91c1c';
 
+    // 중립 지역 줄다리기: 우세 진영 색으로 게이지와 숫자 표시
+    if (owner === OWNER.NEUTRAL && zone.claimant && orbs > 0) {
+      tagColor = zone.claimant === OWNER.PLAYER ? '#2563eb' : '#dc2626';
+    }
+
     // Garrison Progress Outer Arc (단일 스트로크 링 게이지)
     if (orbs > 0) {
       const fillPct = Math.min(1, orbs / maxOrbs);
@@ -2049,6 +2125,15 @@ function drawZoneBadges(ctx) {
       ctx.arc(x, y, 7.0, -Math.PI / 2, -Math.PI / 2 + fillPct * Math.PI * 2);
       ctx.strokeStyle = tagColor;
       ctx.lineWidth = 2.0;
+      ctx.stroke();
+    }
+
+    // 점령 직후 보호 중: 흰 보호막 링
+    if (owner !== OWNER.NEUTRAL && gameElapsedTime < zone.protectedUntil) {
+      ctx.beginPath();
+      ctx.arc(x, y, 10.5, 0, Math.PI * 2);
+      ctx.strokeStyle = owner === OWNER.PLAYER ? 'rgba(37, 99, 235, 0.55)' : 'rgba(220, 38, 38, 0.55)';
+      ctx.lineWidth = 2.5;
       ctx.stroke();
     }
 
@@ -2142,6 +2227,7 @@ function gameLoop(timestamp) {
         checkWinConditions();
       }
 
+      resolveOrbCollisions();
       for (let i = flyingOrbs.length - 1; i >= 0; i--) {
         const orb = flyingOrbs[i];
         if (!orb || orb.isDead || orb.update()) {
