@@ -2361,7 +2361,8 @@ function gameOver(isWin, isSurrender = false) {
       `<div class="end-sub">${label}${josaEulReul(label)} 점령했습니다.</div>` +
       `<div class="end-record-label">기록</div>` +
       `<div class="end-record">${timeStr}</div>` +
-      (recordResult.isNewBest ? `<div class="end-best new">최고 기록</div>` : `<div class="end-best">최고 기록 ${bestStr}</div>`);
+      (recordResult.isNewBest ? `<div class="end-best new">최고 기록</div>` : `<div class="end-best">최고 기록 ${bestStr}</div>`) +
+      `<div class="end-total">대한민국 총 시간 ${formatLongTime(getCampaignTotalTime().sum)}</div>`;
 
     // 캠페인 다음 맵 (클리어로 열림)
     const order = getCampaignOrder();
@@ -2999,6 +3000,30 @@ function updateStageProgress() {
   if (!el) return;
   const order = getCampaignOrder();
   el.textContent = `${order.filter(isStageCleared).length}/${order.length}`;
+  const totalEl = document.getElementById('stage-total-time');
+  if (totalEl) {
+    const t = getCampaignTotalTime();
+    totalEl.textContent = t.count > 0 ? `총 시간 ${formatLongTime(t.sum)}` : '';
+  }
+}
+
+// 총 작전 시간: 클리어한 맵들의 최고 기록(가장 빨리 이긴 시간)을 모두 더한 값. 짧을수록 좋은 기록
+function getCampaignTotalTime() {
+  const records = getBattleRecords();
+  let sum = 0, count = 0;
+  getCampaignOrder().forEach(k => {
+    const r = records[k];
+    if (r && r.cleared && r.bestTime !== null && r.bestTime !== undefined) { sum += r.bestTime; count++; }
+  });
+  return { sum, count };
+}
+
+// 1시간이 넘을 수 있는 시간 표시 (h:mm:ss 또는 mm:ss)
+function formatLongTime(sec) {
+  sec = Math.floor(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  const pad = n => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
 // 가로 슬라이드 공통: 터치 스와이프(기본) + 마우스 끌기 + 마우스 휠(세로→가로)
