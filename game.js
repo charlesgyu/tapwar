@@ -2519,9 +2519,12 @@ let quakeUntilMs = 0;
 // 적도 같은 때 무작위로 1장씩 고름. 고른 카드는 화면 아래에 아이콘으로 (나: 파랑, 적: 빨강)
 // 아이템 모드 판은 기록·순위에 남기지 않음
 // -------------------------------------------------------------
-const ITEM_ROUNDS_DEFAULT = 4;
-const ITEM_ROUNDS_WORLD = 5; // 전세계는 카드 5번
-function itemRounds() { return currentCountryKey() === 'WD' ? ITEM_ROUNDS_WORLD : ITEM_ROUNDS_DEFAULT; }
+// 고르는 카드 수: 일반 맵 3장, 나라 전국 맵 4장, 전세계 5장
+const NATIONAL_MAPS = new Set(['KOREA', 'JP_JAPAN', 'CN_CHINA', 'US_USA', 'FR_FRANCE', 'DE_GERMANY', 'IT_ITALY', 'ES_SPAIN', 'GB_UK']);
+function itemRounds() {
+  if (currentCountryKey() === 'WD') return 5;
+  return NATIONAL_MAPS.has(currentMapKey) ? 4 : 3;
+}
 const ITEM_EVERY_SEC = 30;
 const REBUILD_EVERY_SEC = 5;
 const REBUILD_HP = 2;
@@ -2613,6 +2616,7 @@ function openItemPick() {
     list.appendChild(b);
   });
   m.style.display = 'flex';
+  renderItemBar();
 }
 
 // 카드 모양 (고르기 화면·고른 카드 크게 보기 공통)
@@ -2642,17 +2646,24 @@ function chooseItem(key) {
 window.chooseItem = chooseItem;
 
 // 화면 아래 고른 카드: 왼쪽 나(파랑), 오른쪽 적(빨강). 아이콘을 누르면 이름·설명
+// 화면 아래 카드 칸: 위 줄 내 카드(파랑), 아래 줄 적 카드(빨강). 이 맵에서 고를 수만큼 빈 칸을 미리 둠
 function renderItemBar() {
   const bar = document.getElementById('item-bar');
   if (!bar) return;
-  const show = itemMode && (itemsOf.player.length + itemsOf.enemy.length) > 0 && currentState !== GAME_STATE.SELECT_START;
+  const show = itemMode && rawZones.length > 0 && currentState !== GAME_STATE.SELECT_START;
   bar.hidden = !show;
   if (!show) return;
-  const chips = (owner, cls) => itemsOf[owner].map(k => {
-    const it = ITEMS.find(x => x.key === k);
-    return `<span class="item-chip ${cls}" data-key="${k}" data-owner="${owner}">${itemIconSvg(k, 26)}</span>`;
-  }).join('');
-  bar.innerHTML = `<div class="item-side mine">${chips(OWNER.PLAYER, 'mine')}</div><div class="item-vs">VS</div><div class="item-side theirs">${chips(OWNER.ENEMY, 'theirs')}</div>`;
+  const n = itemRounds();
+  const row = (owner, cls) => {
+    let h = '';
+    for (let i = 0; i < n; i++) {
+      const k = itemsOf[owner][i];
+      h += k ? `<span class="item-chip ${cls}" data-key="${k}" data-owner="${owner}">${itemIconSvg(k, 26)}</span>`
+             : `<span class="item-slot ${cls}"></span>`;
+    }
+    return `<div class="item-side ${cls}">${h}</div>`;
+  };
+  bar.innerHTML = row(OWNER.PLAYER, 'mine') + row(OWNER.ENEMY, 'theirs');
   // 카드를 누르고 있는 동안 이름·설명 말풍선 (손을 떼면 1.5초 뒤 사라짐)
   bar.querySelectorAll('.item-chip').forEach(ch => {
     const show = e => { e.preventDefault(); showItemInfo(ch.dataset.key, ch.dataset.owner); };
@@ -2702,7 +2713,7 @@ const COUNTRY_CONCEPT = {
   FR: ['혁명', '1분마다 10초 동안 점령 지역과 맞닿은 중립 지역이 주변을 공격해요'],
   DE: ['전차 돌파', '1분마다 전차가 지나가고, 지나간 지역은 중립이 돼요 (본진 제외)'],
   IT: ['최고의 지휘관', '본진 3개로 시작해요. 2개는 무작위 위치에 생겨요 (적도 마찬가지)'],
-  WD: ['세계 대전', '본진 3개로 시작하고, 30초마다 나라 컨셉 하나가 무작위로 일어나요. 카드는 5번 골라요'],
+  WD: ['세계 대전', '본진 3개로 시작하고, 30초마다 나라 컨셉 하나가 무작위로 일어나요. 카드는 5장 골라요'],
   ES: ['대항해시대', '1분마다 양쪽의 완전점령 지역 한 곳이 대포를 쏴요 (공격력 20)'],
   GB: ['안개', '적의 구슬은 처음 방향만 보이고 어디로 가는지는 보이지 않아요']
 };
