@@ -151,7 +151,26 @@ const ENABLE_ITEMS = false;
 
 let currentPowerZone = null; // 파워 구슬이 지정된 단 1곳의 점령지
 let currentEnemyPowerZone = null; // 적군 파워 구슬 거점
-let currentFocusZone = null; // 아군 집중포화 대상 구역 (단 1곳만 허용)
+let currentFocusZone = null; // 아군 집중포화: 가장 마지막에 지정한 구역
+// 아군 집중포화 구역 목록 (중복 가능, 지정한 순서대로. 마지막이 최신)
+let playerFocusList = [];
+function syncFocus() { currentFocusZone = playerFocusList[playerFocusList.length - 1] || null; }
+function addPlayerFocus(z) { playerFocusList = playerFocusList.filter(f => f !== z); playerFocusList.push(z); syncFocus(); }
+function removePlayerFocus(z) { playerFocusList = playerFocusList.filter(f => f !== z); syncFocus(); }
+
+// 이 지역이 사격할 집중포화 구역
+// - 원거리 가능(완전점령) 지역: 가장 마지막에 지정한 집중포화 구역
+// - 그 외: 맞닿은 집중포화 구역 중 가장 최근 것
+function focusForZone(zone) {
+  if (zone.owner !== OWNER.PLAYER || zone.focusOptOut || playerFocusList.length === 0) return null;
+  if (isFullyConquered(zone) && !isUnleashed(zone)) return null;
+  for (let i = playerFocusList.length - 1; i >= 0; i--) {
+    const f = playerFocusList[i];
+    if (f === zone || !canAttackTarget(zone, f)) continue;
+    if (canRangeAttack(zone) || zone.neighbors.includes(f)) return f;
+  }
+  return null;
+}
 let focusFireCooldown = 0; // 집중포화 쿨타임 없음 (0초)
 const FOCUS_FIRE_COOLDOWN_MAX = 0; // 쿨타임 없음
 let focusRings = []; // 집중포화 및 타격 링 이펙트
@@ -652,6 +671,7 @@ function loadSelectedMap(mapKey) {
   particles = [];
   focusRings = [];
   currentFocusZone = null;
+  playerFocusList = [];
   currentEnemyFocusZone = null;
   playerMainZone = null;
   enemyMainZone = null;
@@ -1080,7 +1100,7 @@ function applyOrbHit(zone, hitOwner, power, sourceZone) {
   if (zone.owner === hitOwner) {
     // If friendly zone, reinforce defense
     zone.orbs = Math.min(zone.maxOrbs, zone.orbs + power);
-    if (zone.orbs >= zone.maxOrbs && currentFocusZone === zone) currentFocusZone = null;
+    if (zone.orbs >= zone.maxOrbs && playerFocusList.includes(zone)) removePlayerFocus(zone);
     // If it's already full & friendly, source zone should look for next conquest target!
     if (zone.orbs >= zone.maxOrbs && sourceZone && !sourceZone.isManualTarget) {
       reRouteZone(sourceZone);
@@ -1212,7 +1232,7 @@ function conquerZone(conqueredZone, newOwner, conqueredBySource) {
   });
 
   // [사용자 요구사항]: 집중포화로 인해 그 지역이 점령되면 날아가던 구슬들이 없어질 때 그 효과(파티클 & 충격파)를 주면서 소멸!
-  const wasPlayerFocus = currentFocusZone && currentFocusZone.id === conqueredZone.id;
+  const wasPlayerFocus = playerFocusList.includes(conqueredZone);
   const wasEnemyFocus = currentEnemyFocusZone && currentEnemyFocusZone.id === conqueredZone.id;
   if (wasPlayerFocus || wasEnemyFocus) {
     // [집중 포화 점령]: 점령되는 순간 그 지역으로 날아가던 모든 구슬은 소멸 (별도 그래픽 효과 없음)
@@ -1220,7 +1240,7 @@ function conquerZone(conqueredZone, newOwner, conqueredBySource) {
       const orb = flyingOrbs[j];
       if (orb.targetZone && orb.targetZone.id === conqueredZone.id) orb.isDead = true;
     }
-    if (wasPlayerFocus) currentFocusZone = null;
+    if (wasPlayerFocus) removePlayerFocus(conqueredZone);
   }
 
   // Player gets item reward at doubling intervals (3 -> 6 -> 12 -> 24...)
@@ -1544,28 +1564,22 @@ function handleZoneDoubleClick(targetZone) {
     return;
   }
 
-  // [규칙]: 집중포화 공격은 한 번에 1개 구역만 가능!
-  // 다른 구역이 이미 지정되어 있었다면 이전 지정 구역의 아군 기지들을 해제하여 재배치!
-  if (currentFocusZone && currentFocusZone.id !== targetZone.id) {
-    rawZones.forEach(z => {
-      if (z.owner === OWNER.PLAYER && z.targetZones.includes(currentFocusZone)) {
-        z.isManualTarget = false;
-        reRouteZone(z);
-      }
-    });
-  }
+  // [규칙]: 집중포화는 여러 곳 중복 가능. 이전 집중포화는 유지되고,
+  // 완전점령(원거리) 지역은 가장 마지막에 지정한 곳으로, 그 외 지역은 맞닿은 집중포화 구역 중 최신 곳으로 사격
 
   // 새 집중 포화: 이전에 드래그로 빠졌던 지역도 모두 다시 참여
   rawZones.forEach(z => { z.focusOptOut = false; });
-  currentFocusZone = targetZone;
+  addPlayerFocus(targetZone);
   focusFireCooldown = 0; // 쿨타임 없음!
 
   // 전선의 모든 아군 기지(완전점령 제외, 메인 포함)가 목표를 고정 타겟으로 지정하고
   // 평소 생산 주기대로 점령(또는 피 회복)될 때까지 계속 사격.
   // 즉시 추가 발사는 없음: 더블탭을 반복해도 구슬이 더 나가지 않음.
   allPlayerZones.forEach(pZone => {
+    const f = focusForZone(pZone);
+    if (!f) return;
     pZone.isManualTarget = true;
-    pZone.targetZones = [targetZone];
+    pZone.targetZones = [f];
   });
   // 집중 포화 지정 순간: 목표 지역 테두리 번쩍 (내 지역 보급이면 초록)
   flashZone(targetZone, targetZone.owner === OWNER.PLAYER ? ZONE_COLORS.playerFullCharged : ZONE_COLORS.playerStroke);
@@ -1724,7 +1738,7 @@ function onPointerUp(e) {
         dragSourceZone.isManualTarget = true;
         dragSourceZone.targetZones = [endZone];
         // [집중 포화 중 지정 공격]: 다른 지역을 지정하면 이 지역만 집중 포화에서 빠짐 (여러 지역 중복 가능)
-        dragSourceZone.focusOptOut = !!currentFocusZone && endZone !== currentFocusZone;
+        dragSourceZone.focusOptOut = playerFocusList.length > 0 && !playerFocusList.includes(endZone);
       }
     }
   }
@@ -2032,11 +2046,7 @@ function updateAI(currentTime) {
 
 // 아군 집중 포화 참여 대상인지: 전선 기지(메인은 완전점령이어도 참여), 드래그로 빠진 지역 제외
 function shouldJoinPlayerFocus(zone) {
-  const focus = currentFocusZone;
-  if (!focus || zone.owner !== OWNER.PLAYER || zone === focus || zone.focusOptOut) return false;
-  if (isFullyConquered(zone) && !isUnleashed(zone)) return false;
-  if (!canRangeAttack(zone) && !zone.neighbors.includes(focus)) return false; // 원거리 불가 지역은 맞닿은 경우만
-  return true;
+  return !!focusForZone(zone);
 }
 
 // Continuous automatic troop generation (adjusted by gameSpeed 1x, 2x, 4x!)
@@ -2061,9 +2071,10 @@ function updateOrbSpawners(currentTime) {
 
     // [집중 포화 유지]: 집중 포화가 진행 중이면 참여 대상 기지(메인 포함, 도중에 새로 점령한 전선 포함)는
     // 드래그로 따로 지정하지 않은 한 계속 집중 포화 목표를 사격
-    if (shouldJoinPlayerFocus(zone) && !(zone.targetZones.length === 1 && zone.targetZones[0] === currentFocusZone)) {
+    const myFocus = focusForZone(zone);
+    if (myFocus && !(zone.targetZones.length === 1 && zone.targetZones[0] === myFocus)) {
       zone.isManualTarget = true;
-      zone.targetZones = [currentFocusZone];
+      zone.targetZones = [myFocus];
     }
 
     // '완전 점령' Check: 수동 지정(전국 집중포화 등)이 아닌 경우에만 잉여 생산 중단!
@@ -2079,9 +2090,6 @@ function updateOrbSpawners(currentTime) {
     const allTargetsCaptured = zone.targetZones.length > 0 && zone.targetZones.every(t => t.owner === zone.owner);
     if (targetBecameImmune || allTargetsCaptured || zone.targetZones.length === 0) {
       // 집중포화 타겟이었을 경우 집중포화 타겟팅 해제 및 후속 구슬 소멸
-      if (currentFocusZone && zone.targetZones.includes(currentFocusZone) && targetBecameImmune) {
-        currentFocusZone = null;
-      }
       reRouteZone(zone);
       if (zone.targetZones.length === 0) return;
     }
