@@ -229,14 +229,34 @@ function pickMainZoneFrontierTarget(zone) {
 }
 
 // [특수 기술 대상 우선순위] (메인 지역은 항상 제외, 피가 닳은 점령지도 대상)
-// 1순위: 일반 점령지역 (완전점령 아님) 중 무작위
-// 2순위: 1순위가 3곳보다 적으면 부족한 수만큼 완전점령지역 중 무작위로 채움
+// 1순위: 일반 점령지역 (완전점령 아님)
+// 2순위: 1순위가 3곳보다 적으면 부족한 수만큼 완전점령지역으로 채움
 //   예) 점령지역 2곳 → 점령지역 2 + 완전점령 1 / 점령지역 1곳 → 점령지역 1 + 완전점령 2
+// 같은 순위 안에서는 공격하는 쪽 지역과 가까운 순: 맞닿은 지역 우선 → 최단 거리 순 (동률은 무작위)
 function buildSkillTargetList(victimOwner) {
-  const shuffle = arr => arr.sort(() => Math.random() - 0.5);
+  const attackerOwner = victimOwner === OWNER.PLAYER ? OWNER.ENEMY : OWNER.PLAYER;
+  const attackers = rawZones.filter(z => z.owner === attackerOwner);
   const victims = rawZones.filter(z => z.owner === victimOwner && !isMainZone(z));
-  const normal = shuffle(victims.filter(z => !isFullyConquered(z)));
-  const full = shuffle(victims.filter(z => isFullyConquered(z)));
+  victims.forEach(v => {
+    let minDist = Infinity;
+    let touching = false;
+    for (let i = 0; i < attackers.length; i++) {
+      const a = attackers[i];
+      if (v.neighbors.includes(a)) touching = true;
+      const d = Math.hypot(v.cx - a.cx, v.cy - a.cy);
+      if (d < minDist) minDist = d;
+    }
+    v._skillTouching = touching;
+    v._skillDist = minDist;
+    v._skillTie = Math.random();
+  });
+  const byProximity = (a, b) => {
+    if (a._skillTouching !== b._skillTouching) return a._skillTouching ? -1 : 1;
+    if (a._skillDist !== b._skillDist) return a._skillDist - b._skillDist;
+    return a._skillTie - b._skillTie;
+  };
+  const normal = victims.filter(z => !isFullyConquered(z)).sort(byProximity);
+  const full = victims.filter(z => isFullyConquered(z)).sort(byProximity);
   return normal.concat(full);
 }
 
