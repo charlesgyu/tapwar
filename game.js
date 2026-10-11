@@ -921,6 +921,7 @@ function applyOrbHit(zone, hitOwner, power, sourceZone) {
   if (zone.owner === hitOwner) {
     // If friendly zone, reinforce defense
     zone.orbs = Math.min(zone.maxOrbs, zone.orbs + power);
+    if (zone.orbs >= zone.maxOrbs && currentFocusZone === zone) currentFocusZone = null;
     // If it's already full & friendly, source zone should look for next conquest target!
     if (zone.orbs >= zone.maxOrbs && sourceZone && !sourceZone.isManualTarget) {
       reRouteZone(sourceZone);
@@ -1049,7 +1050,10 @@ function conquerZone(conqueredZone, newOwner, conqueredBySource) {
   });
 
   // [사용자 요구사항]: 집중포화로 인해 그 지역이 점령되면 날아가던 구슬들이 없어질 때 그 효과(파티클 & 충격파)를 주면서 소멸!
-  if (currentFocusZone && currentFocusZone.id === conqueredZone.id) {
+  const wasPlayerFocus = currentFocusZone && currentFocusZone.id === conqueredZone.id;
+  const wasEnemyFocus = currentEnemyFocusZone && currentEnemyFocusZone.id === conqueredZone.id;
+  if (wasPlayerFocus || wasEnemyFocus) {
+    // [집중 포화 점령]: 점령되는 순간 그 지역으로 날아가던 모든 구슬은 공중분해
     let effectCount = 0;
     for (let j = 0; j < flyingOrbs.length; j++) {
       const orb = flyingOrbs[j];
@@ -1069,7 +1073,7 @@ function conquerZone(conqueredZone, newOwner, conqueredBySource) {
       alpha: 1.0,
       color: (newOwner === OWNER.PLAYER) ? '#38bdf8' : '#ef4444'
     });
-    currentFocusZone = null;
+    if (wasPlayerFocus) currentFocusZone = null;
   }
 
   // Player gets item reward at doubling intervals (3 -> 6 -> 12 -> 24...)
@@ -1249,27 +1253,17 @@ function handleZoneDoubleClick(targetZone) {
   currentFocusZone = targetZone;
   focusFireCooldown = 0; // 쿨타임 없음!
 
-  // 1. 완전점령지역을 제외한 전선의 모든 아군 기지가 이 단 하나의 목표 지역을 동시 타겟으로 지정!
+  // 전선의 모든 아군 기지(완전점령 제외, 메인 포함)가 목표를 고정 타겟으로 지정하고
+  // 평소 생산 주기대로 점령(또는 피 회복)될 때까지 계속 사격.
+  // 즉시 추가 발사는 없음: 더블탭을 반복해도 구슬이 더 나가지 않음.
   allPlayerZones.forEach(pZone => {
-    // 집중 포격은 일회성 연발 사격만 수행. 타겟을 고정하지 않으므로
-    // 사격 후 각 기지는 즉시 인접 지역 자동 공격으로 복귀 (원거리 지속 공격은 드래그 지정 시에만)
-
-    // 2. 즉시 일제 집중 포격 (전선 모든 기지에서 3~4발 쾌속 연발 발사!)
-    const isPowerZone = (currentPowerZone && currentPowerZone.id === pZone.id);
-    const power = isMainZone(pZone) ? MAIN_ZONE_POWER : (isPowerZone ? (1 + playerBuffs.powerLevel * 2) : 1);
-
-    for (let i = 0; i < 4; i++) {
-      setTimeout(() => {
-        if (currentState === GAME_STATE.PLAYING) {
-          flyingOrbs.push(new FlyingOrb(pZone, targetZone, OWNER.PLAYER, power));
-        }
-      }, i * (70 / gameSpeed));
-    }
+    pZone.isManualTarget = true;
+    pZone.targetZones = [targetZone];
   });
 
   document.getElementById('status-guide').innerText = targetZone.owner === OWNER.PLAYER
-    ? `🛡️ [${targetZone.name}] 방어 지원! 아군 ${allPlayerZones.length}개 거점에서 구슬 보급 (3~4발 연발)!`
-    : `🔥 [${targetZone.name}] 집중 포격! 전선의 아군 ${allPlayerZones.length}개 거점에서 일제 사격 (3~4발 연발)!`;
+    ? `🛡️ [${targetZone.name}] 방어 지원! 아군 ${allPlayerZones.length}개 거점에서 피가 찰 때까지 보급!`
+    : `🔥 [${targetZone.name}] 집중 포화! 아군 ${allPlayerZones.length}개 거점에서 점령할 때까지 일제 사격!`;
 }
 
 function getEventCoords(e) {
@@ -1687,21 +1681,10 @@ function triggerEnemyFocusFire() {
   const firingBases = activeEnemyZones.filter(e => e.neighbors.includes(target) || Math.random() < 0.45);
   if (firingBases.length === 0) return;
 
-  const salvoCount = ENEMY_CONFIG.enemyFocusSalvo;
+  // 적군도 동일 규칙: 즉시 추가 발사 없이 점령할 때까지 고정 사격
   firingBases.forEach(eZone => {
     eZone.isManualTarget = true;
     eZone.targetZones = [target];
-
-    const isEnemyPower = (currentEnemyPowerZone && currentEnemyPowerZone.id === eZone.id);
-    const power = isMainZone(eZone) ? MAIN_ZONE_POWER : (isEnemyPower ? (1 + enemyBuffs.powerLevel * 2) : 1);
-
-    for (let i = 0; i < salvoCount; i++) {
-      setTimeout(() => {
-        if (currentState === GAME_STATE.PLAYING) {
-          flyingOrbs.push(new FlyingOrb(eZone, target, OWNER.ENEMY, power));
-        }
-      }, i * (70 / gameSpeed));
-    }
   });
 
   document.getElementById('status-guide').innerText = `🚨 [적군 집중포화 경보!]: 적 기지 ${firingBases.length}곳에서 [${target.name}]에 일제 사격을 개시했습니다!`;
