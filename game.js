@@ -3314,6 +3314,8 @@ function enterCountry() {
   if (only.length === 1) {
     selectedModalMapKey = only[0];
     showStageView();
+    // 거쳐 가는 화면에서도 맵 카드가 맨 앞(가운데)에 보이도록: 레이아웃이 잡힌 뒤 몇 번 더 맞춤
+    [50, 200, 500].forEach(ms => setTimeout(() => centerStageCard(only[0], false), ms));
     startWhenMapLoaded(only[0]);
     return;
   }
