@@ -754,7 +754,9 @@
       margin: -14px 0 4px;
       font-variant-numeric: tabular-nums;
     }
-    .ranking-btn { display: block; margin: -10px auto 14px; font-size: 14px; font-weight: 800; color: #2563eb; }
+    .start-card .ranking-card { justify-content: center; }
+    .ranking-title { font-size: 40px; font-weight: 900; color: #1e293b; letter-spacing: 2px; }
+    .ranking-time { font-size: 26px; font-weight: 900; color: #2563eb; margin: 10px 0 4px; font-variant-numeric: tabular-nums; }
     .stage-total-time { text-align: center; font-size: 14px; font-weight: 800; color: #a8a29e; margin-bottom: 16px; min-height: 18px; font-variant-numeric: tabular-nums; }
     .end-total { font-size: 14px; font-weight: 800; color: #475569; margin-top: 10px; font-variant-numeric: tabular-nums; }
     .country-flag { font-size: 120px; line-height: 1.25; margin-bottom: 6px; }
@@ -867,7 +869,6 @@
           <h1 class="start-logo" id="country-title">대한민국</h1>
           <div class="stage-progress" id="stage-progress">0/17</div>
           <div class="stage-total-time" id="stage-total-time"></div>
-          <button class="link-btn ranking-btn" onclick="openRanking()">순위 보기</button>
           <div class="stage-wrap">
             <button class="slide-arrow left" aria-label="이전 맵" onclick="slideGrid('stage-grid', -1)">‹</button>
             <div class="stage-grid" id="stage-grid"></div>
