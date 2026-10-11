@@ -2605,13 +2605,17 @@ function openItemPick() {
   itemChoices.forEach(it => {
     const b = document.createElement('button');
     b.className = 'item-card';
-    b.innerHTML = `<span class="item-icon">${itemIconSvg(it.key, 40)}</span><span class="item-name">${it.name}</span><span class="item-desc">${it.desc}</span>`;
+    b.innerHTML = itemCardHtml(it);
     b.onclick = () => chooseItem(it.key);
     list.appendChild(b);
   });
   m.style.display = 'flex';
 }
 
+// 카드 모양 (고르기 화면·고른 카드 크게 보기 공통)
+function itemCardHtml(it) {
+  return `<span class="item-icon">${itemIconSvg(it.key, 52)}</span><span class="item-name">${it.name}</span><span class="item-desc">${it.desc}</span>`;
+}
 function gainItem(owner, key) {
   itemsOf[owner].push(key);
   if (key === 'rebuild') rebuildAt[owner] = gameElapsedTime + REBUILD_EVERY_SEC;
@@ -2643,12 +2647,12 @@ function renderItemBar() {
   if (!show) return;
   const chips = (owner, cls) => itemsOf[owner].map(k => {
     const it = ITEMS.find(x => x.key === k);
-    return `<span class="item-chip ${cls}" data-key="${k}" data-owner="${owner}">${itemIconSvg(k, 20)}</span>`;
+    return `<span class="item-chip ${cls}" data-key="${k}" data-owner="${owner}">${itemIconSvg(k, 26)}</span>`;
   }).join('');
   bar.innerHTML = `<div class="item-side mine">${chips(OWNER.PLAYER, 'mine')}</div><div class="item-vs">VS</div><div class="item-side theirs">${chips(OWNER.ENEMY, 'theirs')}</div>`;
   // 카드를 누르고 있는 동안 이름·설명 말풍선 (손을 떼면 1.5초 뒤 사라짐)
   bar.querySelectorAll('.item-chip').forEach(ch => {
-    const show = e => { e.preventDefault(); showItemInfo(ch.dataset.key, ch.dataset.owner, ch); };
+    const show = e => { e.preventDefault(); showItemInfo(ch.dataset.key, ch.dataset.owner); };
     ch.addEventListener('pointerdown', show);
     ch.addEventListener('pointerup', () => hideItemInfo(1500));
     ch.addEventListener('pointerleave', () => hideItemInfo(1500));
@@ -2660,21 +2664,17 @@ function hideItemInfo(delay) {
   clearTimeout(itemTipTimer);
   itemTipTimer = setTimeout(() => { const tip = document.getElementById('item-tip'); if (tip) tip.hidden = true; }, delay || 0);
 }
-function showItemInfo(key, owner, chip) {
+function showItemInfo(key, owner) {
+  // 화면 가운데에 고르기 화면과 같은 카드로 크게 (나: 파랑, 적: 빨강)
   const it = ITEMS.find(x => x.key === key);
   const tip = document.getElementById('item-tip');
   if (!it || !tip) return;
   clearTimeout(itemTipTimer);
-  tip.className = owner === OWNER.PLAYER ? 'mine' : 'theirs';
-  tip.innerHTML = `<div class="item-tip-name">${owner === OWNER.PLAYER ? '나' : '적'} · ${it.name}</div><div class="item-tip-desc">${it.desc}</div>`;
+  const toast = document.getElementById('center-toast');
+  if (toast) toast.classList.remove('show');
+  tip.innerHTML = `<div class="item-tip-owner ${owner === OWNER.PLAYER ? 'mine' : 'theirs'}">${owner === OWNER.PLAYER ? '내 카드' : '적 카드'}</div>` +
+    `<div class="item-card ${owner === OWNER.PLAYER ? 'mine' : 'theirs'}">${itemCardHtml(it)}</div>`;
   tip.hidden = false;
-  // 누른 카드 바로 위에 (화면 밖으로 나가지 않게)
-  if (chip) {
-    const r = chip.getBoundingClientRect();
-    const w = tip.offsetWidth;
-    tip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
-    tip.style.top = (r.top - tip.offsetHeight - 8) + 'px';
-  }
 }
 window.showItemInfo = showItemInfo;
 
