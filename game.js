@@ -39,7 +39,7 @@ const OWNER = {
   NEUTRAL: 'neutral',
   PLAYER: 'player',
   ENEMY: 'enemy',
-  ENEMY2: 'enemy2' // 대륙 3파전의 두 번째 적
+  ENEMY2: 'enemy2' // 전세계 3파전의 두 번째 적
 };
 
 const playerBuffs = {
@@ -209,7 +209,7 @@ let enemyFocusReticleTimer = 0;
 let playerMainZone = null;
 let enemyMainZone = null;
 let enemy2MainZone = null;
-// 대륙 맵은 3파전: 나 vs 적(빨강) vs 적2(보라). 두 적은 서로도 싸움
+// 전세계 맵은 3파전: 나 vs 적(빨강) vs 적2(보라). 두 적은 서로도 싸움
 function isThreeWay() { return currentCountryKey() === 'WD'; }
 
 const MAIN_ZONE_POWER = 2; // 메인 지역 구슬 공격력
@@ -679,11 +679,6 @@ const MAP_CONFIGS = {
   GB_WALESNI: { country: 'GB', name: '웨일스·북아일랜드', label: '웨일스·북아일랜드', count: 14, file: 'assets/gb_walesni_zones.json', maxScale: 8 },
   GB_UK: { country: 'GB', name: '영국 전국', label: '영국 전국', count: 70, file: 'assets/gb_uk_zones.json', maxScale: 20 },
   // WD — tools/build_*_maps.sh 로 생성
-  WD_AMERICA: { country: 'WD', name: '아메리카', label: '아메리카', count: 250, file: 'assets/w_america_zones.json', maxScale: 20 },
-  WD_AFRICA: { country: 'WD', name: '아프리카', label: '아프리카', count: 250, file: 'assets/w_africa_zones.json', maxScale: 20 },
-  WD_ASIA: { country: 'WD', name: '아시아', label: '아시아', count: 250, file: 'assets/w_asia_zones.json', maxScale: 20 },
-  WD_OCEANIA: { country: 'WD', name: '오세아니아', label: '오세아니아', count: 250, file: 'assets/w_oceania_zones.json', maxScale: 20 },
-  WD_EUROPE: { country: 'WD', name: '유럽', label: '유럽', count: 250, file: 'assets/w_europe_zones.json', maxScale: 20 },
   WD_WORLD: { country: 'WD', name: '전세계', label: '전세계', count: 500, file: 'assets/w_world_zones.json', maxScale: 30 },
 };
 MAP_CONFIGS.KOREA.label = '전국'; MAP_CONFIGS.KOREA.count = 164;
@@ -3209,10 +3204,10 @@ const COUNTRIES = [
   { key: 'IT', flag: '🇮🇹', name: '이탈리아', open: false, paid: true },
   { key: 'ES', flag: '🇪🇸', name: '스페인', open: false, paid: true },
   { key: 'GB', flag: '🇬🇧', name: '영국', open: false, paid: true },
-  { key: 'WD', flag: '🌏', name: '대륙', open: false, paid: true }
+  { key: 'WD', flag: '🌏', name: '전세계', open: false, paid: true }
 ];
 const DEV_UNLOCK_KEY = 'tapwar_dev_unlock_all';
-// [테스트용] 유료 나라(일본·중국·미국·유럽 5개국·대륙)를 구매 없이 열기. 출시 전 false (인앱 구매 'country_jp' 등으로 열림)
+// [테스트용] 유료 나라(일본·중국·미국·유럽 5개국·전세계)를 구매 없이 열기. 출시 전 false (인앱 구매 'country_jp' 등으로 열림)
 const DEV_TEST_COUNTRIES = true;
 function isCountryOpen(c) {
   return !!c && (c.open || (c.paid && (DEV_TEST_COUNTRIES || isOwned(`country_${c.key.toLowerCase()}`))));
