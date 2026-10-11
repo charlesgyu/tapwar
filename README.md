@@ -126,6 +126,7 @@ python tools/build_map.py assets/새맵.json
 - 통계청 SGIS 행정구역·행정동 경계 (공공누리 제1유형: 출처 표시 시 상업적 이용 가능)
 - vuski/admdongkor 행정동 경계 가공본 (CC BY 4.0) — https://github.com/vuski/admdongkor
 - southkorea/seoul-maps 서울 자치구 경계 (KOSTAT 2013)
+- Natural Earth 110m 육지(시작 연출용 세계 지도, 퍼블릭 도메인) — `assets/world_land.json`
 
 ---
 

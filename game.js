@@ -1399,6 +1399,7 @@ function getEventCoords(e) {
 
 function onPointerDown(e) {
   const coords = getEventCoords(e);
+  if (introAnim) { skipIntro(); return; } // 시작 연출 중 탭하면 건너뜀
 
   if (e.button === 2) {
     view.isPanning = true;
@@ -1669,6 +1670,7 @@ window.switchBattlefield = switchBattlefield;
 function onStartBtnClick() {
   const modal = document.getElementById('start-modal');
   if (modal) modal.style.display = 'none';
+  startIntroZoom(selectedModalMapKey);
   if (currentMapKey !== selectedModalMapKey) {
     switchBattlefield(selectedModalMapKey);
   } else {
@@ -2349,7 +2351,7 @@ function layoutMinimap() {
 function drawMinimap(timestamp) {
   if (!minimapCtx) return;
   const startModalOpen = document.getElementById('start-modal').style.display !== 'none';
-  const hidden = !(currentState === GAME_STATE.PLAYING || (currentState === GAME_STATE.SELECT_START && !startModalOpen)) || rawZones.length === 0;
+  const hidden = !!introAnim || !(currentState === GAME_STATE.PLAYING || (currentState === GAME_STATE.SELECT_START && !startModalOpen)) || rawZones.length === 0;
   if (hidden !== lastMinimapHidden) {
     lastMinimapHidden = hidden;
     minimapCard.hidden = hidden;
@@ -2484,6 +2486,118 @@ function renderStageThumbs() {
 }
 renderStageThumbs();
 
+// -------------------------------------------------------------
+// 시작 연출: 지구본이 돌며 한국으로 다가간 뒤 선택한 맵 범위까지 확대 → 게임 지도로 전환
+// (화면을 탭하면 건너뜀, '동작 줄이기' 설정 시 생략)
+// -------------------------------------------------------------
+const INTRO_SPIN_MS = 1100;
+const INTRO_ZOOM_MS = 1700;
+const INTRO_FADE_FROM = 0.72; // 확대 구간의 이 지점부터 게임 지도로 서서히 전환
+let worldLand = null;
+let introAnim = null;
+fetch('assets/world_land.json').then(r => r.json()).then(d => { worldLand = d; }).catch(() => {});
+
+function startIntroZoom(mapKey) {
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const cfg = MAP_CONFIGS[mapKey];
+  if (reduce || !cfg || !worldLand) return;
+  const b = cfg.bounds;
+  introAnim = {
+    start: performance.now(),
+    lon: (b.minLng + b.maxLng) / 2,
+    lat: (b.minLat + b.maxLat) / 2,
+    dLat: b.maxLat - b.minLat
+  };
+}
+
+function skipIntro() {
+  introAnim = null;
+}
+
+const easeInOut = t => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+
+// 정사영(orthographic) 투영: 지구 뒤편 점은 지평선(원 둘레)으로 붙임
+function orthoProject(lon, lat, lon0, lat0, R, cx, cy) {
+  const d2r = Math.PI / 180;
+  const φ = lat * d2r, λ = lon * d2r, φ0 = lat0 * d2r, λ0 = lon0 * d2r;
+  const cosc = Math.sin(φ0) * Math.sin(φ) + Math.cos(φ0) * Math.cos(φ) * Math.cos(λ - λ0);
+  let x = Math.cos(φ) * Math.sin(λ - λ0);
+  let y = Math.cos(φ0) * Math.sin(φ) - Math.sin(φ0) * Math.cos(φ) * Math.cos(λ - λ0);
+  if (cosc < 0) {
+    const n = Math.hypot(x, y) || 1;
+    x /= n; y /= n;
+  }
+  return [cx + x * R, cy - y * R];
+}
+
+// 반환값: 게임 지도 위에 덮을 인트로 불투명도 (0이면 종료)
+function drawIntro(ctx) {
+  if (!introAnim) return;
+  const W = canvas.width, H = canvas.height;
+  const el = performance.now() - introAnim.start;
+  const area = getMapArea();
+  const R0 = Math.min(W, H) * 0.36;
+  const Rf = area.h / (introAnim.dLat * Math.PI / 180);
+  let R, lon0, lat0, alpha = 1;
+
+  if (el < INTRO_SPIN_MS) {
+    const t = easeInOut(el / INTRO_SPIN_MS);
+    lon0 = introAnim.lon - 110 * (1 - t);
+    lat0 = introAnim.lat * t;
+    R = R0;
+  } else {
+    const t = Math.min(1, (el - INTRO_SPIN_MS) / INTRO_ZOOM_MS);
+    const e = easeInOut(t);
+    lon0 = introAnim.lon;
+    lat0 = introAnim.lat;
+    R = R0 * Math.pow(Rf / R0, e);
+    if (t > INTRO_FADE_FROM) alpha = 1 - (t - INTRO_FADE_FROM) / (1 - INTRO_FADE_FROM);
+    if (t >= 1) {
+      introAnim = null;
+      return;
+    }
+  }
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#f6f5f0';
+  ctx.fillRect(0, 0, W, H);
+  const cx = W / 2, cy = area.y + area.h / 2;
+  // 바다
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.fillStyle = '#bfe5fa';
+  ctx.fill();
+  // 육지
+  ctx.save();
+  ctx.clip();
+  ctx.beginPath();
+  for (let i = 0; i < worldLand.length; i++) {
+    const ring = worldLand[i];
+    for (let j = 0; j < ring.length; j++) {
+      const [x, y] = orthoProject(ring[j][0], ring[j][1], lon0, lat0, R, cx, cy);
+      if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+  }
+  ctx.fillStyle = '#edebe3';
+  ctx.fill();
+  ctx.strokeStyle = '#cfcdc4';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // 목표 지점 표시 (노란 점)
+  const [tx, ty] = orthoProject(introAnim.lon, introAnim.lat, lon0, lat0, R, cx, cy);
+  ctx.beginPath();
+  ctx.arc(tx, ty, 5, 0, Math.PI * 2);
+  ctx.fillStyle = ZONE_COLORS.main;
+  ctx.fill();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+  ctx.restore();
+}
+
 // Render Loop
 let lastTime = 0;
 let lastWinCheckTime = 0;
@@ -2561,6 +2675,7 @@ function gameLoop(timestamp) {
 
     ctx.restore();
 
+    drawIntro(ctx);
     drawMinimap(timestamp);
   } catch (err) {
     console.error('gameLoop error:', err);
