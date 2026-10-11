@@ -492,8 +492,8 @@ function updateSkillCharges(dt) {
       const fortress = z.owner !== OWNER.NEUTRAL && isFullyConquered(z);
       if (fortress && !z.fortressHp) {
         z.fortressHp = true;
-        z.maxOrbs = hasItem(z.owner, 'fortress') ? 150 : FULL_ZONE_HP; // [아이템 철벽]
-        z.orbs = z.maxOrbs;
+        z.maxOrbs = FULL_ZONE_HP;
+        z.orbs = FULL_ZONE_HP;
       } else if (!fortress && z.fortressHp) {
         z.fortressHp = false;
         if (z.owner !== OWNER.NEUTRAL) {
@@ -1114,13 +1114,17 @@ class FlyingOrb {
       return;
     }
     // [아이템 점령 가속] 빈 땅 게이지 2배
-    const power = (t.owner === OWNER.NEUTRAL && hasItem(own, 'claim')) ? this.power * 2 : this.power;
+    // [아이템 철벽] 맞는 쪽이 철벽이면 상대 구슬 50%
+    const power = itemHitPower((t.owner === OWNER.NEUTRAL && hasItem(own, 'claim')) ? this.power * 2 : this.power, own, t);
     const wasRival = t.owner !== OWNER.NEUTRAL && t.owner !== own;
     applyOrbHit(t, own, power, this.sourceZone);
     // [아이템 관통탄] 맞힌 상대 지역 옆의 상대 지역 하나도 타격
     if (wasRival && hasItem(own, 'pierce')) {
       const next = t.neighbors.filter(n => n !== this.sourceZone && n.owner !== OWNER.NEUTRAL && n.owner !== own);
-      if (next.length) applyOrbHit(next[Math.floor(Math.random() * next.length)], own, this.power, null);
+      if (next.length) {
+        const n2 = next[Math.floor(Math.random() * next.length)];
+        applyOrbHit(n2, own, itemHitPower(this.power, own, n2), null);
+      }
     }
   }
 
@@ -2480,7 +2484,7 @@ const ITEMS = [
   { key: 'rapid', name: '속사', desc: '원거리 구슬이 느려지지 않고 더 빠르게' },
   { key: 'power', name: '파워샷', desc: '구슬 공격력 2배' },
   { key: 'pierce', name: '관통탄', desc: '맞힌 지역 옆의 상대 지역도 한 번 더 타격' },
-  { key: 'fortress', name: '철벽', desc: '완전점령 지역 피 150' },
+  { key: 'fortress', name: '철벽', desc: '상대 공격을 50%만 받음' },
   { key: 'rebuild', name: '재건', desc: '30초마다 내 모든 지역 피 가득' },
   { key: 'reflect', name: '반사 방패', desc: '상대 구슬 5발 중 1발을 되돌려 보냄' },
   { key: 'longrange', name: '장거리 사격', desc: '모든 내 지역이 원거리 공격 가능' },
@@ -2496,6 +2500,14 @@ let nextItemAt = 0;
 let rebuildAt = { player: 0, enemy: 0 };
 let itemChoices = [];
 
+// [아이템 상호작용] 구슬이 실제로 주는 양: 공격하는 쪽 카드(파워샷 등)로 정해진 power 에
+// 맞는 쪽 카드를 적용. 철벽: 상대(적·나) 구슬에 맞을 때만 50% (중립 땅·자기 땅에는 그대로)
+function itemHitPower(power, attacker, target) {
+  if (!itemMode || !target) return power;
+  const victim = target.owner;
+  if (victim !== OWNER.NEUTRAL && victim !== attacker && hasItem(victim, 'fortress')) return power * 0.5;
+  return power;
+}
 function hasItem(owner, key) { return itemMode && !!itemsOf[owner] && itemsOf[owner].includes(key); }
 function itemRival(owner) { return owner === OWNER.PLAYER ? OWNER.ENEMY : OWNER.PLAYER; }
 function itemIconSvg(key, size = 28) {
