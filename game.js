@@ -1863,8 +1863,9 @@ function onPointerUp(e) {
       } else {
         dragSourceZone.isManualTarget = true;
         dragSourceZone.targetZones = [endZone];
-        // [집중 포화 중 지정 공격]: 다른 지역을 지정하면 이 지역만 집중 포화에서 빠짐 (여러 지역 중복 가능)
-        dragSourceZone.focusOptOut = playerFocusList.length > 0 && !playerFocusList.includes(endZone);
+        // [집중 포화 중 지정 공격]: 지정하면 이 지역은 집중 포화에서 빠지고 지정한 곳만 공격
+        // (지정한 곳이 다른 집중포화 구역이어도 마찬가지. 예전엔 가장 최근 집중포화 구역으로 끌려가 지정이 무시됨)
+        dragSourceZone.focusOptOut = playerFocusList.length > 0;
       }
     }
   }
