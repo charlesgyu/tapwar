@@ -124,7 +124,7 @@ function updateRecordDisplays() {
   if (koreaRecordEl) {
     const k = records.KOREA;
     if (k && k.cleared && k.bestTime !== null) {
-      koreaRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#facc15">${formatTimeString(k.bestTime)}</span> (${k.clearCount}회)`;
+      koreaRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#b45309">${formatTimeString(k.bestTime)}</span> (${k.clearCount}회)`;
     } else {
       koreaRecordEl.innerHTML = `<span style="color:#94a3b8">미평정 (기록 없음)</span>`;
     }
@@ -134,7 +134,7 @@ function updateRecordDisplays() {
   if (seoulRecordEl) {
     const s = records.SEOUL;
     if (s && s.cleared && s.bestTime !== null) {
-      seoulRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#facc15">${formatTimeString(s.bestTime)}</span> (${s.clearCount}회)`;
+      seoulRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#b45309">${formatTimeString(s.bestTime)}</span> (${s.clearCount}회)`;
     } else {
       seoulRecordEl.innerHTML = `<span style="color:#94a3b8">미평정 (기록 없음)</span>`;
     }
@@ -144,7 +144,7 @@ function updateRecordDisplays() {
   if (gyeonggiRecordEl) {
     const g = records.GYEONGGI;
     if (g && g.cleared && g.bestTime !== null) {
-      gyeonggiRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#facc15">${formatTimeString(g.bestTime)}</span> (${g.clearCount}회)`;
+      gyeonggiRecordEl.innerHTML = `⭐ <b>평정 완료!</b> 최고: <span style="color:#b45309">${formatTimeString(g.bestTime)}</span> (${g.clearCount}회)`;
     } else {
       gyeonggiRecordEl.innerHTML = `<span style="color:#94a3b8">미평정 (기록 없음)</span>`;
     }
@@ -1476,23 +1476,7 @@ function onStartBtnClick() {
 }
 window.onStartBtnClick = onStartBtnClick;
 
-// Explicit DOM Event listeners for robust click handling
-const startBtnEl = document.getElementById('start-btn');
-if (startBtnEl) {
-  startBtnEl.addEventListener('click', onStartBtnClick);
-}
-const mKoreaCard = document.getElementById('modal-map-korea');
-if (mKoreaCard) {
-  mKoreaCard.addEventListener('click', () => selectModalMap('KOREA'));
-}
-const mSeoulCard = document.getElementById('modal-map-seoul');
-if (mSeoulCard) {
-  mSeoulCard.addEventListener('click', () => selectModalMap('SEOUL'));
-}
-const mGyeonggiCard = document.getElementById('modal-map-gyeonggi');
-if (mGyeonggiCard) {
-  mGyeonggiCard.addEventListener('click', () => selectModalMap('GYEONGGI'));
-}
+// 시작 버튼/전장 카드 클릭은 index.html의 onclick 속성으로만 처리 (중복 리스너 등록 시 클릭 1회가 2번 실행됨)
 
 // Rapid Tap Burst from player's advancing bases
 function triggerPlayerTapBurst() {
@@ -1763,25 +1747,25 @@ function gameOver(isWin) {
   const mapName = MAP_CONFIGS[currentMapKey] ? MAP_CONFIGS[currentMapKey].name : currentMapKey;
   
   if (isWin) {
-    title.style.color = '#38bdf8';
+    title.style.color = '#2563eb';
     title.innerText = '🎉 [전면 승리] 적군 섬멸 완료!';
 
     const recordResult = saveBattleRecord(currentMapKey, gameElapsedTime);
     const bestStr = formatTimeString(recordResult.bestTime);
 
-    let recordMsg = `<div style="font-size: 15px; margin-bottom: 12px; color: #f1f5f9;">⏱️ 작전 소요 시간: <b style="color: #38bdf8; font-size: 18px;">${timeStr}</b></div>`;
+    let recordMsg = `<div style="font-size: 15px; margin-bottom: 12px; color: #0f172a;">⏱️ 작전 소요 시간: <b style="color: #2563eb; font-size: 18px;">${timeStr}</b></div>`;
     if (recordResult.isNewBest) {
-      recordMsg += `<div style="background: rgba(34, 197, 94, 0.2); border: 1px solid #22c55e; color: #4ade80; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; font-weight: 700;">🥇 전장 최고 기록 경신! 신기록 달성 (${timeStr})</div>`;
+      recordMsg += `<div style="background: #dcfce7; border: 1px solid #22c55e; color: #15803d; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; font-weight: 700;">🥇 전장 최고 기록 경신! 신기록 달성 (${timeStr})</div>`;
     } else {
-      recordMsg += `<div style="color: #94a3b8; font-size: 13px; margin-bottom: 10px;">🏆 전장 최고 기록: <b style="color: #facc15;">${bestStr}</b></div>`;
+      recordMsg += `<div style="color: #475569; font-size: 13px; margin-bottom: 10px;">🏆 전장 최고 기록: <b style="color: #b45309;">${bestStr}</b></div>`;
     }
-    recordMsg += `<div style="font-size: 12px; color: #94a3b8; line-height: 1.5;">🎖️ [${mapName}] 누적 평정: <b>${recordResult.clearCount}회</b><br>적의 모든 거점을 격파하고 전선을 완전히 평정했습니다!</div>`;
+    recordMsg += `<div style="font-size: 12px; color: #475569; line-height: 1.5;">🎖️ [${mapName}] 누적 평정: <b>${recordResult.clearCount}회</b><br>적의 모든 거점을 격파하고 전선을 완전히 평정했습니다!</div>`;
 
     desc.innerHTML = recordMsg;
   } else {
     title.style.color = '#ef4444';
     title.innerText = '💀 본진 함락... 작전 실패!';
-    desc.innerHTML = `<div style="font-size: 14px; color: #94a3b8; margin-bottom: 10px;">작전 진행 시간: <b>${timeStr}</b></div><div style="font-size: 13px; color: #cbd5e1;">적의 공세에 아군의 모든 거점이 함락되었습니다.<br>전열을 가다듬고 다시 도전하세요!</div>`;
+    desc.innerHTML = `<div style="font-size: 14px; color: #475569; margin-bottom: 10px;">작전 진행 시간: <b>${timeStr}</b></div><div style="font-size: 13px; color: #334155;">적의 공세에 아군의 모든 거점이 함락되었습니다.<br>전열을 가다듬고 다시 도전하세요!</div>`;
   }
   if (modal) modal.style.display = 'flex';
 }
@@ -2034,7 +2018,7 @@ function gameLoop(timestamp) {
         const timerEl = document.getElementById('match-timer');
         if (timerEl) {
           timerEl.innerText = timerStr;
-          timerEl.style.color = '#facc15';
+          timerEl.style.color = '#b45309';
         }
       }
 
