@@ -158,3 +158,13 @@ Xcode에서:
 - 세로 화면 고정, 앱 이름 `TAPWAR`
 - 앱 아이콘: `ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png` (1024×1024)
 - 스플래시: `ios/App/App/Assets.xcassets/Splash.imageset/`
+
+### 큰 물(강·호수) 지정
+외부 데이터 없이 `tools/water_spec.json`에 우리가 직접 정합니다.
+- **호수·하구**: 기준점(`point`+`radius`) 또는 대략 그린 범위(`rough`) 안의 빈 공간(어느 구역에도 속하지 않는 곳)을 물로 채움 → 해안선·경계와 정확히 맞음
+- **강**: `tools/korea_rivers_ne10m.json`(Natural Earth 10m 중심선)을 맵별 폭(`riverWidth`)으로 그림
+- **물 건너 연결 보정**: 자동 판정이 틀리면 `maps[파일].waterLinksAdd / waterLinksRemove`에 구역 이름 쌍으로 지정
+```bash
+python tools/add_water.py assets/*_exact_zones.json
+python tools/build_map.py assets/*_exact_zones.json
+```

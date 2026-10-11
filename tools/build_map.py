@@ -174,7 +174,12 @@ def process(path):
     # → 게임에서 완전점령 판정 시 물 건너 이웃은 세지 않음 (강이 아군 지역처럼 방어선 역할)
     water = d.get('water', [])
     if water:
-        wp = unary_union([make_valid(Polygon(r)) for w in water for r in w['polygons']]).buffer(WATER_EPS)
+        import os
+        spec_path = os.path.join(os.path.dirname(__file__), 'water_spec.json')
+        eps = WATER_EPS
+        if os.path.exists(spec_path):
+            eps = json.load(open(spec_path, encoding='utf-8'))['maps'].get(os.path.basename(path), {}).get('waterEps', WATER_EPS)
+        wp = unary_union([make_valid(Polygon(r)) for w in water for r in w['polygons']]).buffer(eps)
         zg = {z['id']: g for z, g in zip(zones, geoms)}
         wl = []
         for a, b in d['links']:
@@ -183,6 +188,23 @@ def process(path):
                 continue
             if line.intersection(wp).length / line.length >= WATER_LINK_RATIO:
                 wl.append([a, b])
+        # 직접 지정한 보정 (tools/water_spec.json maps[파일].waterLinksAdd / waterLinksRemove, 구역 이름 쌍)
+        if os.path.exists(spec_path):
+            mcfg = json.load(open(spec_path, encoding='utf-8'))['maps'].get(os.path.basename(path), {})
+            by_name = {z['name']: z['id'] for z in zones}
+            key = lambda a, b: tuple(sorted((a, b)))
+            wl_set = {key(a, b) for a, b in wl}
+            links_set = {key(a, b) for a, b in d['links']}
+            for na, nb in mcfg.get('waterLinksAdd', []):
+                k = key(by_name[na], by_name[nb])
+                if k not in links_set:
+                    d['links'].append(list(k))  # 물 건너 공격 가능하도록 연결도 추가
+                    links_set.add(k)
+                wl_set.add(k)
+            for na, nb in mcfg.get('waterLinksRemove', []):
+                wl_set.discard(key(by_name[na], by_name[nb]))
+            wl = [list(k) for k in wl_set]
+            d['links'] = sorted(d['links'])
         d['waterLinks'] = sorted(wl)
         print(f'  물 건너 연결 {len(wl)}개')
 
