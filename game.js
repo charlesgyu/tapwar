@@ -475,6 +475,8 @@ let currentMapKey = 'KOREA';
 const MAP_CONFIGS = {
   KOREA: {
     name: '한반도 전국 전선 (164개 시·군)',
+    maxScale: 14,                     // 전국처럼 큰 맵은 4배 더 확대 (기본 3.5 → 14)
+    minimap: { w: 84, h: 104 },       // 세로로 긴 전국 맵은 미니맵을 작게
     file: 'assets/south_korea_exact_zones.json',
     bounds: { minLng: 125.7, maxLng: 131.1, minLat: 33.1, maxLat: 38.65 },
     aspectRatio: 0.82
@@ -621,17 +623,19 @@ function loadSelectedMap(mapKey) {
         }
       });
 
-      // Reset camera view
+      // Reset camera view (맵 크기에 따라 최대 확대 배율 다름)
       view.scale = 1.0;
       view.offsetX = 0;
       view.offsetY = 0;
+      view.maxScale = cfg.maxScale || 3.5;
+      pendingStartZone = null;
 
       updateZoneScreenPositions();
       updateRecordDisplays();
       const timerEl = document.getElementById('match-timer');
       if (timerEl) timerEl.innerText = '00:00';
 
-      document.getElementById('status-guide').innerText = cfg.guide || '';
+      document.getElementById('status-guide').innerText = START_GUIDE_TEXT;
     })
     .catch(err => console.error('Failed to load map data:', err));
 }
@@ -1237,6 +1241,70 @@ function reRouteZone(zone) {
   }
 }
 
+function beginGameAtZone(zone) {
+  zone.owner = OWNER.PLAYER;
+  zone.orbs = zone.maxOrbs;
+  lastSelectedPlayerZone = zone;
+  playerMainZone = zone;
+
+  // Assign initial auto target for starter
+  const initTarget = pickAutoTarget(zone);
+  if (initTarget) zone.zones = [initTarget];
+
+  // Assign AI Enemy starting base (1 base)
+  const baseCount = ENEMY_CONFIG.startingEnemyBases;
+
+  const enemyCandidates = rawZones.filter(z => z.id !== zone.id && !z.isHidden);
+  enemyCandidates.sort((a, b) => Math.hypot(b.cx - zone.cx, b.cy - zone.cy) - Math.hypot(a.cx - zone.cx, a.cy - zone.cy));
+
+  const chosenEnemies = [];
+  for (let k = 0; k < baseCount; k++) {
+    const idx = Math.min(enemyCandidates.length - 1, k * 5);
+    const eZone = enemyCandidates[idx];
+    if (eZone && !chosenEnemies.includes(eZone)) {
+      eZone.owner = OWNER.ENEMY;
+      eZone.orbs = eZone.maxOrbs;
+      const aiTarget = pickAutoTarget(eZone);
+      if (aiTarget) eZone.zones = [aiTarget];
+      chosenEnemies.push(eZone);
+      if (!enemyMainZone) enemyMainZone = eZone;
+    }
+  }
+
+  // Configure enemy buffs based on standard config
+  enemyBuffs.interval = ENEMY_CONFIG.enemyInterval;
+  enemyBuffs.powerLevel = 0;
+  gameElapsedTime = 0;
+  lastTimerText = '';
+
+  currentState = GAME_STATE.PLAYING;
+  document.getElementById('status-guide').innerText = `${zone.name} 기지 확보! 작전 개시! (적 전면 섬멸 작전)`;
+}
+
+const START_GUIDE_TEXT = '🗺️ 지도를 둘러보고 시작할 지역을 탭 → 한 번 더 탭하면 시작';
+let pendingStartZone = null; // 시작 구역 후보 (한 번 더 탭하면 시작)
+let pointerDownPos = { x: 0, y: 0 };
+const TAP_MOVE_TOLERANCE = 8; // 이 거리(px) 이하로 움직이면 탭으로 판정
+
+function startPan(coords) {
+  view.isPanning = true;
+  view.panStartX = coords.clientX - view.offsetX;
+  view.panStartY = coords.clientY - view.offsetY;
+}
+
+function handleStartSelectTap(zone) {
+  const guide = document.getElementById('status-guide');
+  if (!zone || zone.isHidden) return;
+  if (zone === pendingStartZone) {
+    pendingStartZone = null;
+    beginGameAtZone(zone);
+    return;
+  }
+  pendingStartZone = zone;
+  flashZone(zone, ZONE_COLORS.main);
+  if (guide) guide.innerText = `[${zone.name}] 선택 · 한 번 더 탭하면 여기서 시작`;
+}
+
 let dragSourceZone = null;
 let worldMousePos = { x: 0, y: 0 };
 let isDragging = false;
@@ -1329,6 +1397,7 @@ function onPointerDown(e) {
 
   worldMousePos = screenToWorld(coords.sx, coords.sy);
   const targetZone = findZoneAtWorld(worldMousePos.x, worldMousePos.y);
+  pointerDownPos = { x: coords.clientX, y: coords.clientY };
 
 
   // Instant Conquer mode activated from Item Reward!
@@ -1342,46 +1411,10 @@ function onPointerDown(e) {
     }
   }
 
+  // [시작 구역 선택]: 맵을 둘러볼 수 있도록 드래그는 화면 이동, 탭 1번 = 선택, 같은 곳 다시 탭 = 시작
+  // (탭/드래그 구분은 손을 뗄 때 판정)
   if (currentState === GAME_STATE.SELECT_START) {
-    if (targetZone && !targetZone.isHidden) {
-      targetZone.owner = OWNER.PLAYER;
-      targetZone.orbs = targetZone.maxOrbs;
-      lastSelectedPlayerZone = targetZone;
-      playerMainZone = targetZone;
-
-      // Assign initial auto target for starter
-      const initTarget = pickAutoTarget(targetZone);
-      if (initTarget) targetZone.targetZones = [initTarget];
-
-      // Assign AI Enemy starting base (1 base)
-      const baseCount = ENEMY_CONFIG.startingEnemyBases;
-
-      const enemyCandidates = rawZones.filter(z => z.id !== targetZone.id && !z.isHidden);
-      enemyCandidates.sort((a, b) => Math.hypot(b.cx - targetZone.cx, b.cy - targetZone.cy) - Math.hypot(a.cx - targetZone.cx, a.cy - targetZone.cy));
-
-      const chosenEnemies = [];
-      for (let k = 0; k < baseCount; k++) {
-        const idx = Math.min(enemyCandidates.length - 1, k * 5);
-        const eZone = enemyCandidates[idx];
-        if (eZone && !chosenEnemies.includes(eZone)) {
-          eZone.owner = OWNER.ENEMY;
-          eZone.orbs = eZone.maxOrbs;
-          const aiTarget = pickAutoTarget(eZone);
-          if (aiTarget) eZone.targetZones = [aiTarget];
-          chosenEnemies.push(eZone);
-          if (!enemyMainZone) enemyMainZone = eZone;
-        }
-      }
-
-      // Configure enemy buffs based on standard config
-      enemyBuffs.interval = ENEMY_CONFIG.enemyInterval;
-      enemyBuffs.powerLevel = 0;
-      gameElapsedTime = 0;
-      lastTimerText = '';
-
-      currentState = GAME_STATE.PLAYING;
-      document.getElementById('status-guide').innerText = `${targetZone.name} 기지 확보! 작전 개시! (적 전면 섬멸 작전)`;
-    }
+    startPan(coords);
     return;
   }
 
@@ -1392,6 +1425,7 @@ function onPointerDown(e) {
       !isMainZone(targetZone) && targetZone.chargeState === 'spent') {
     lastTapTime = 0;
     lastTapZoneId = null;
+    startPan(coords);
     return;
   }
 
@@ -1415,6 +1449,9 @@ function onPointerDown(e) {
     dragSourceZone = targetZone;
     lastSelectedPlayerZone = targetZone;
     isDragging = true;
+  } else {
+    // [화면 이동]: 내 지역이 아닌 곳(적·중립 지역, 맵 바깥)에서 시작한 한 손가락/마우스 드래그
+    startPan(coords);
   }
 }
 
@@ -1433,6 +1470,14 @@ function onPointerMove(e) {
 function onPointerUp(e) {
   if (view.isPanning) {
     view.isPanning = false;
+    if (currentState === GAME_STATE.SELECT_START) {
+      const c = getEventCoords(e);
+      const moved = Math.hypot(c.clientX - pointerDownPos.x, c.clientY - pointerDownPos.y);
+      if (moved <= TAP_MOVE_TOLERANCE) {
+        const w = screenToWorld(c.sx, c.sy);
+        handleStartSelectTap(findZoneAtWorld(w.x, w.y));
+      }
+    }
     return;
   }
 
@@ -1482,10 +1527,21 @@ function onPointerUp(e) {
 }
 
 // Mouse Wheel Zoom
+// 화면의 한 점(sx, sy: 캔버스 좌표)을 고정한 채 배율 변경
+function zoomAt(newScale, sx, sy, worldAnchor) {
+  const s2 = Math.min(view.maxScale, Math.max(view.minScale, newScale));
+  const w = worldAnchor || screenToWorld(sx, sy);
+  const cx = canvas.width / 2, cy = canvas.height / 2;
+  view.scale = s2;
+  view.offsetX = sx - cx - (w.x - cx) * s2;
+  view.offsetY = sy - cy - (w.y - cy) * s2;
+}
+
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
-  view.scale = Math.min(view.maxScale, Math.max(view.minScale, view.scale * zoomFactor));
+  const c = getEventCoords(e);
+  zoomAt(view.scale * zoomFactor, c.sx, c.sy); // 마우스 위치를 중심으로 확대/축소
 }, { passive: false });
 
 canvas.addEventListener('contextmenu', e => e.preventDefault());
@@ -1505,6 +1561,7 @@ let initialPinchDist = null;
 let initialScale = 1.0;
 let initialPanMidX = 0;
 let initialPanMidY = 0;
+let pinchWorldAnchor = null;
 
 canvas.addEventListener('touchstart', (e) => {
   lastTouchTime = performance.now();
@@ -1515,6 +1572,9 @@ canvas.addEventListener('touchstart', (e) => {
     initialScale = view.scale;
     initialPanMidX = (t1.clientX + t2.clientX) / 2 - view.offsetX;
     initialPanMidY = (t1.clientY + t2.clientY) / 2 - view.offsetY;
+    // 두 손가락 가운데 지점의 월드 좌표를 기억해 그 지점을 중심으로 확대
+    const r = canvas.getBoundingClientRect();
+    pinchWorldAnchor = screenToWorld((t1.clientX + t2.clientX) / 2 - r.left, (t1.clientY + t2.clientY) / 2 - r.top);
     view.isPanning = false;
     isDragging = false;
     dragSourceZone = null;
@@ -1531,12 +1591,10 @@ window.addEventListener('touchmove', (e) => {
     const t2 = e.touches[1];
     const currentDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
     const scaleFactor = currentDist / initialPinchDist;
-    view.scale = Math.min(view.maxScale, Math.max(view.minScale, initialScale * scaleFactor));
-
-    const curMidX = (t1.clientX + t2.clientX) / 2;
-    const curMidY = (t1.clientY + t2.clientY) / 2;
-    view.offsetX = curMidX - initialPanMidX;
-    view.offsetY = curMidY - initialPanMidY;
+    const r = canvas.getBoundingClientRect();
+    const curMidX = (t1.clientX + t2.clientX) / 2 - r.left;
+    const curMidY = (t1.clientY + t2.clientY) / 2 - r.top;
+    zoomAt(initialScale * scaleFactor, curMidX, curMidY, pinchWorldAnchor);
     e.preventDefault();
   } else if (e.touches.length === 1) {
     onPointerMove(e);
@@ -1592,7 +1650,7 @@ function switchBattlefield(mapKey) {
   loadSelectedMap(mapKey);
   updateMapButtonsUI(mapKey);
   const guideEl = document.getElementById('status-guide');
-  if (guideEl && MAP_CONFIGS[mapKey]) guideEl.innerText = MAP_CONFIGS[mapKey].guide;
+  if (guideEl) guideEl.innerText = START_GUIDE_TEXT;
 }
 window.switchBattlefield = switchBattlefield;
 
@@ -1603,7 +1661,7 @@ function onStartBtnClick() {
     switchBattlefield(selectedModalMapKey);
   } else {
     const guideEl = document.getElementById('status-guide');
-    if (guideEl && MAP_CONFIGS[selectedModalMapKey]) guideEl.innerText = MAP_CONFIGS[selectedModalMapKey].guide;
+    if (guideEl) guideEl.innerText = START_GUIDE_TEXT;
   }
 }
 window.onStartBtnClick = onStartBtnClick;
@@ -2149,6 +2207,20 @@ function drawExactDistrictsMap(ctx) {
   strokePass(z => z.owner !== OWNER.NEUTRAL && !isAnyMain(z));
   strokePass(isAnyMain);
 
+  // 2.5 시작 구역 후보: 노란색 + 흰 테두리 (한 번 더 탭하면 시작)
+  if (currentState === GAME_STATE.SELECT_START && pendingStartZone && pendingStartZone.path) {
+    const pulse = 0.65 + 0.25 * Math.sin(performance.now() / 220);
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = ZONE_COLORS.main;
+    ctx.fill(pendingStartZone.path);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3.2 / view.scale;
+    ctx.stroke(pendingStartZone.path);
+    ctx.restore();
+  }
+
   // 3. 선택(드래그 시작) 지역 강조
   if (dragSourceZone && dragSourceZone.path) {
     ctx.strokeStyle = '#0f172a';
@@ -2247,7 +2319,8 @@ let lastMinimapHidden = null;
 function layoutMinimap() {
   if (!minimapCanvas) return null;
   const area = getMapArea();
-  const scale = Math.min(MINIMAP_MAX_W / area.w, MINIMAP_MAX_H / area.h);
+  const mm = (MAP_CONFIGS[currentMapKey] && MAP_CONFIGS[currentMapKey].minimap) || { w: MINIMAP_MAX_W, h: MINIMAP_MAX_H };
+  const scale = Math.min(mm.w / area.w, mm.h / area.h);
   const cssW = Math.round(area.w * scale);
   const cssH = Math.round(area.h * scale);
   const dpr = window.devicePixelRatio || 1;
@@ -2262,7 +2335,8 @@ function layoutMinimap() {
 
 function drawMinimap(timestamp) {
   if (!minimapCtx) return;
-  const hidden = currentState !== GAME_STATE.PLAYING || rawZones.length === 0;
+  const startModalOpen = document.getElementById('start-modal').style.display !== 'none';
+  const hidden = !(currentState === GAME_STATE.PLAYING || (currentState === GAME_STATE.SELECT_START && !startModalOpen)) || rawZones.length === 0;
   if (hidden !== lastMinimapHidden) {
     lastMinimapHidden = hidden;
     minimapCard.hidden = hidden;
