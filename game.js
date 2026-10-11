@@ -1739,7 +1739,53 @@ function checkWinConditions(isTimeUp = false) {
   }
 }
 
-function gameOver(isWin) {
+// 항복: 실수 방지를 위해 2단계 확인 (첫 탭 ➔ 확인 상태, 3초 안에 다시 탭 ➔ 항복)
+const SURRENDER_CONFIRM_MS = 3000;
+let surrenderArmedUntil = 0;
+let surrenderResetTimer = null;
+
+function resetSurrenderButton() {
+  surrenderArmedUntil = 0;
+  const btn = document.getElementById('surrender-btn');
+  if (btn) {
+    btn.classList.remove('armed');
+    btn.innerText = '🏳️ 항복';
+  }
+}
+
+function onSurrenderClick() {
+  if (currentState !== GAME_STATE.PLAYING) return;
+  const btn = document.getElementById('surrender-btn');
+  const now = performance.now();
+
+  if (now < surrenderArmedUntil) {
+    clearTimeout(surrenderResetTimer);
+    resetSurrenderButton();
+    gameOver(false, true);
+    return;
+  }
+
+  surrenderArmedUntil = now + SURRENDER_CONFIRM_MS;
+  if (btn) {
+    btn.classList.add('armed');
+    btn.innerText = '한 번 더 누르면 항복';
+  }
+  clearTimeout(surrenderResetTimer);
+  surrenderResetTimer = setTimeout(resetSurrenderButton, SURRENDER_CONFIRM_MS);
+}
+window.onSurrenderClick = onSurrenderClick;
+
+let lastSurrenderHidden = null;
+function updateSurrenderButtonVisibility() {
+  const hidden = currentState !== GAME_STATE.PLAYING;
+  if (hidden === lastSurrenderHidden) return;
+  lastSurrenderHidden = hidden;
+  const btn = document.getElementById('surrender-btn');
+  if (btn) btn.hidden = hidden;
+  if (hidden) resetSurrenderButton();
+}
+
+function gameOver(isWin, isSurrender = false) {
   currentState = GAME_STATE.GAME_OVER;
   const modal = document.getElementById('end-modal');
   const title = document.getElementById('end-title');
@@ -1765,6 +1811,12 @@ function gameOver(isWin) {
     desc.innerHTML = recordMsg;
   } else {
     title.style.color = '#ef4444';
+    if (isSurrender) {
+      title.innerText = '🏳️ 항복... 작전 중단';
+      desc.innerHTML = `<div style="font-size: 14px; color: #475569; margin-bottom: 10px;">작전 진행 시간: <b>${timeStr}</b></div><div style="font-size: 13px; color: #334155;">스스로 항복하여 작전을 중단했습니다.<br>전열을 가다듬고 다시 도전하세요!</div>`;
+      if (modal) modal.style.display = 'flex';
+      return;
+    }
     title.innerText = '💀 본진 함락... 작전 실패!';
     desc.innerHTML = `<div style="font-size: 14px; color: #475569; margin-bottom: 10px;">작전 진행 시간: <b>${timeStr}</b></div><div style="font-size: 13px; color: #334155;">적의 공세에 아군의 모든 거점이 함락되었습니다.<br>전열을 가다듬고 다시 도전하세요!</div>`;
   }
@@ -2009,6 +2061,7 @@ function gameLoop(timestamp) {
     lastTime = timestamp;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    updateSurrenderButtonVisibility();
 
     if (currentState === GAME_STATE.PLAYING) {
       // 작전 소요 시간 측정 (스톱워치 기록계, 배속 연동)

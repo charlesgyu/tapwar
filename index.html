@@ -191,6 +191,39 @@
       color: #ef4444;
     }
 
+    /* Surrender Button (2단계 확인: 첫 탭 ➔ 확인 상태, 3초 안에 다시 탭 ➔ 항복) */
+    .bottom-actions {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .surrender-btn {
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 14px;
+      padding: 9px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #475569;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      transition: all 0.15s ease;
+      pointer-events: auto;
+      white-space: nowrap;
+    }
+    .surrender-btn:active {
+      transform: scale(0.96);
+    }
+    .surrender-btn.armed {
+      background: #dc2626;
+      border-color: #dc2626;
+      color: #ffffff;
+    }
+    .surrender-btn[hidden] {
+      display: none;
+    }
+
     /* Modals - Clean Bauhaus/Mini Metro Card System */
     .modal-overlay {
       position: absolute;
@@ -403,6 +436,10 @@
           📱 <b>화면 조작:</b> 두 손가락 핀치 ➔ <b>줌 인/아웃</b> | 드래그 ➔ <b>이동</b>
         </div>
 
+        <div class="bottom-actions">
+        <!-- Surrender -->
+        <button id="surrender-btn" class="surrender-btn" onclick="onSurrenderClick()" hidden>🏳️ 항복</button>
+
         <!-- Special Skill FAB -->
         <div id="special-skill-btn" class="special-skill-btn disabled" onclick="useSpecialSkill()">
           <div class="special-skill-icon">💥</div>
@@ -410,6 +447,7 @@
             <span class="special-skill-title">특수 기술</span>
             <span class="special-skill-status" id="special-skill-timer">완전점령 3개 필요</span>
           </div>
+        </div>
         </div>
       </div>
     </div>
