@@ -2057,7 +2057,7 @@ function resetSurrenderButton() {
   const btn = document.getElementById('surrender-btn');
   if (btn) {
     btn.classList.remove('armed');
-    btn.innerText = '🏳️ 항복';
+    btn.innerText = '항복';
   }
 }
 
@@ -2150,7 +2150,7 @@ function gameOver(isWin, isSurrender = false) {
   } else {
     title.style.color = '#ef4444';
     if (isSurrender) {
-      title.innerText = '🏳️ 항복... 작전 중단';
+      title.innerText = '항복... 작전 중단';
       desc.innerHTML = `<div style="font-size: 14px; color: #475569; margin-bottom: 10px;">작전 진행 시간: <b>${timeStr}</b></div><div style="font-size: 13px; color: #334155;">스스로 항복하여 작전을 중단했습니다.<br>전열을 가다듬고 다시 도전하세요!</div>`;
       if (modal) modal.style.display = 'flex';
       return;
