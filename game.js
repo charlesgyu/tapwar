@@ -188,6 +188,26 @@ const ENEMY_FOCUS_FIRE_COOLDOWN_MAX = 5.0; // 5초 쿨타임
 let currentEnemyFocusZone = null;
 let enemyFocusReticleTimer = 0;
 
+// 메인 지역(본진): 게임 시작 시 확보한 최초 거점. 특수 기술의 대상이 되지 않음.
+// 일반 구슬 전투로 함락되면 메인 지역 지위를 잃음.
+let playerMainZone = null;
+let enemyMainZone = null;
+
+function isMainZone(zone) {
+  return (zone === playerMainZone && zone.owner === OWNER.PLAYER) ||
+         (zone === enemyMainZone && zone.owner === OWNER.ENEMY);
+}
+
+// 특수 기술 대상 선정 및 피해 적용 (아군/적군 공용)
+// - 완전점령(🛡️)과 메인 지역은 대상에서 제외
+// - 메인 지역이 살아 있으면 대상 후보 전부(최대 3곳)를 공격
+// - 메인 지역을 잃은 상태라면 최후 1곳은 남겨둠(피만 깎고 중립화하지 않음)
+function pickSpecialSkillTargets(candidates, mainAlive) {
+  if (mainAlive) return candidates.slice(0, Math.min(3, candidates.length));
+  const count = candidates.length <= 1 ? 1 : Math.min(3, candidates.length - 1);
+  return candidates.slice(0, count);
+}
+
 function useSpecialSkill() {
   if (currentState !== GAME_STATE.PLAYING) return;
 
@@ -206,9 +226,10 @@ function useSpecialSkill() {
 
   // [규칙]: 특수 기술은 적의 완전점령지역(🛡️)을 제외하고, 아군 영토와 가장 인접한 적군의 일반 점령지 중 무작위 3곳 공격!
   const playerZones = rawZones.filter(z => z.owner === OWNER.PLAYER);
-  const enemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY && !isFullyConquered(z));
+  const enemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY && !isFullyConquered(z) && !isMainZone(z));
+  const enemyMainAlive = !!(enemyMainZone && enemyMainZone.owner === OWNER.ENEMY);
   if (enemyZones.length === 0) {
-    document.getElementById('status-guide').innerText = '공격 가능한 적의 일반 점령지가 없습니다! (적의 모든 기지가 완전점령 철벽 상태)';
+    document.getElementById('status-guide').innerText = '공격 가능한 적의 일반 점령지가 없습니다! (완전점령 철벽 기지와 적 메인 지역은 특수 기술 면역)';
     return;
   }
 
@@ -244,14 +265,13 @@ function useSpecialSkill() {
   const nearestCandidates = sortedEnemyZones.slice(0, candidatePoolSize);
   const shuffledCandidates = [...nearestCandidates].sort(() => Math.random() - 0.5);
 
-  const targetCount = enemyZones.length <= 1 ? 1 : Math.min(3, enemyZones.length - 1);
-  const targetEnemyZones = shuffledCandidates.slice(0, Math.max(1, targetCount));
+  const targetEnemyZones = pickSpecialSkillTargets(shuffledCandidates, enemyMainAlive);
 
   targetEnemyZones.forEach(z => {
     // [규칙]: 피 10 감소 및 점령 요건(피 꽉 참) 미달로 점령 해제(중립화)!
     z.orbs = Math.max(0, z.orbs - 10);
-    // 적 영토가 단 1곳만 남은 최후 거점은 피만 깎이고 구슬 전투로만 전멸되도록 보호
-    if (enemyZones.length > 1) {
+    // 메인 지역을 잃은 상태에서 최후 1곳만 남았다면 피만 깎이고 구슬 전투로만 전멸되도록 보호
+    if (enemyMainAlive || enemyZones.length > 1) {
       z.owner = OWNER.NEUTRAL;
     }
     z.targetZones = [];
@@ -298,20 +318,20 @@ function useEnemySpecialSkill() {
   if (enemySpecialSkillCooldown > 0) return;
 
   // 적군 AI의 특수 기술도 플레이어의 완전점령지역(🛡️)은 공격하지 못하고 일반 점령지만 공격!
-  const playerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && !isFullyConquered(z));
+  const playerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && !isFullyConquered(z) && !isMainZone(z));
+  const playerMainAlive = !!(playerMainZone && playerMainZone.owner === OWNER.PLAYER);
   if (playerZones.length === 0) return;
 
   enemySpecialSkillCooldown = ENEMY_SPECIAL_SKILL_COOLDOWN_MAX;
 
   // 무작위 아군 점령지 3곳 선택 (완전점령지 제외)
   const shuffled = [...playerZones].sort(() => Math.random() - 0.5);
-  const targetCount = playerZones.length <= 1 ? 1 : Math.min(3, playerZones.length - 1);
-  const targetPlayerZones = shuffled.slice(0, Math.max(1, targetCount));
+  const targetPlayerZones = pickSpecialSkillTargets(shuffled, playerMainAlive);
 
   targetPlayerZones.forEach(z => {
     // [규칙]: 아군 점령지 피 10 감소 및 점령 해제(중립화)!
     z.orbs = Math.max(0, z.orbs - 10);
-    if (playerZones.length > 1) {
+    if (playerMainAlive || playerZones.length > 1) {
       z.owner = OWNER.NEUTRAL;
     }
     z.targetZones = [];
@@ -469,6 +489,8 @@ function loadSelectedMap(mapKey) {
   focusRings = [];
   currentFocusZone = null;
   currentEnemyFocusZone = null;
+  playerMainZone = null;
+  enemyMainZone = null;
   currentPowerZone = null;
   currentEnemyPowerZone = null;
   specialSkillCooldown = 0;
@@ -1178,6 +1200,7 @@ function onPointerDown(e) {
       targetZone.owner = OWNER.PLAYER;
       targetZone.orbs = targetZone.maxOrbs;
       lastSelectedPlayerZone = targetZone;
+      playerMainZone = targetZone;
 
       // Assign initial auto target for starter
       const initTarget = pickAutoTarget(targetZone);
@@ -1199,6 +1222,7 @@ function onPointerDown(e) {
           const aiTarget = pickAutoTarget(eZone);
           if (aiTarget) eZone.targetZones = [aiTarget];
           chosenEnemies.push(eZone);
+          if (!enemyMainZone) enemyMainZone = eZone;
         }
       }
 
@@ -1920,7 +1944,8 @@ function drawZoneBadges(ctx) {
     ctx.textBaseline = 'bottom';
 
     let prefix = '';
-    if (isPlayerPowerZone || isEnemyPowerZone) prefix = '⚡';
+    if (isMainZone(zone)) prefix = '👑';
+    else if (isPlayerPowerZone || isEnemyPowerZone) prefix = '⚡';
     else if (isFull) {
       prefix = '🛡️';
     }
