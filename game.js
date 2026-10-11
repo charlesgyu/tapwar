@@ -1985,6 +1985,29 @@ function onSurrenderClick() {
 }
 window.onSurrenderClick = onSurrenderClick;
 
+// 시작 전(시작 지역 고르는 중) 홈으로: 전장 선택 화면을 다시 열고 선택 초기화
+function goHome() {
+  if (currentState !== GAME_STATE.SELECT_START) return;
+  introAnim = null;
+  pendingStartZone = null;
+  view.scale = 1;
+  view.offsetX = 0;
+  view.offsetY = 0;
+  const modal = document.getElementById('start-modal');
+  if (modal) modal.style.display = 'flex';
+}
+window.goHome = goHome;
+
+let lastHomeHidden = null;
+function updateHomeButtonVisibility() {
+  const modal = document.getElementById('start-modal');
+  const hidden = currentState !== GAME_STATE.SELECT_START || !modal || modal.style.display !== 'none';
+  if (hidden === lastHomeHidden) return;
+  lastHomeHidden = hidden;
+  const btn = document.getElementById('home-btn');
+  if (btn) btn.hidden = hidden;
+}
+
 let lastSurrenderHidden = null;
 function updateSurrenderButtonVisibility() {
   const hidden = currentState !== GAME_STATE.PLAYING;
@@ -2609,6 +2632,7 @@ function gameLoop(timestamp) {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     updateSurrenderButtonVisibility();
+    updateHomeButtonVisibility();
 
     if (currentState === GAME_STATE.PLAYING) {
       // 작전 소요 시간 측정 (스톱워치 기록계, 배속 연동)
