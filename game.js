@@ -211,11 +211,11 @@ let enemyMainZone = null;
 let enemy2MainZone = null;
 // 전세계 맵은 3파전: 나 vs 적(빨강) vs 적2(보라). 두 적은 서로도 싸움
 function isThreeWay() { return currentCountryKey() === 'WD'; }
-// 전세계 원거리 규칙: 맞닿지 않은 곳으로 쏘는 구슬은 2배 느리고, 그런 지역은 2초마다 발사
-const WORLD_RANGED_SLOW = 2;
-const WORLD_RANGED_INTERVAL_MS = 2000;
-function isWorldRanged(src, tgt) {
-  return !!src && !!tgt && src !== tgt && currentCountryKey() === 'WD' && !src.neighbors.includes(tgt);
+// [원거리 규칙] 모든 맵: 맞닿지 않은 곳으로 쏘는 구슬은 2배 느리고, 그런 지역은 발사 간격도 2배
+const RANGED_SLOW = 2;
+const RANGED_INTERVAL_MULT = 2;
+function isRangedShot(src, tgt) {
+  return !!src && !!tgt && src !== tgt && !!src.neighbors && !src.neighbors.includes(tgt);
 }
 
 const MAIN_ZONE_POWER = 2; // 메인 지역 구슬 공격력
@@ -1072,8 +1072,8 @@ class FlyingOrb {
     const dy = targetZone.cy - sourceZone.cy;
     this.dist = Math.hypot(dx, dy);
     this.speed = (this.owner === OWNER.PLAYER) ? baseOrbSpeed : ENEMY_CONFIG.enemyOrbSpeed;
-    // [전세계] 원거리(맞닿지 않은 곳) 구슬은 2배 느림
-    if (isWorldRanged(sourceZone, targetZone)) this.speed /= WORLD_RANGED_SLOW;
+    // [원거리] 맞닿지 않은 곳으로 가는 구슬은 2배 느림
+    if (isRangedShot(sourceZone, targetZone)) this.speed /= RANGED_SLOW;
     this.progress = 0;
     this.curve = (Math.random() - 0.5) * 16;
     this.isDead = false;
@@ -2306,9 +2306,9 @@ function updateOrbSpawners(currentTime) {
     const baseInterval = zone.owner === OWNER.PLAYER ? playerBaseInterval : enemyBaseInterval;
     // [중국 사막] 모래폭풍에 걸린 지역은 공격 속도 50% (간격 2배)
     const slow = zone.slowUntil && gameElapsedTime < zone.slowUntil ? 2 : 1;
-    // [전세계] 원거리로 쏘는 지역은 2초마다 발사
-    const ranged = zone.targetZones.some(t => isWorldRanged(zone, t));
-    const interval = (ranged ? WORLD_RANGED_INTERVAL_MS : baseInterval) * slow / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
+    // [원거리] 맞닿지 않은 곳을 쏘는 지역은 발사 간격 2배
+    const ranged = zone.targetZones.some(t => isRangedShot(zone, t));
+    const interval = baseInterval * (ranged ? RANGED_INTERVAL_MULT : 1) * slow / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
 
     if (currentTime - zone.lastShotTime >= interval) {
       zone.lastShotTime = currentTime;
