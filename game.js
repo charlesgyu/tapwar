@@ -3203,7 +3203,7 @@ function renderStageThumbs() {
 // (화면을 탭하면 건너뜀, '동작 줄이기' 설정 시 생략)
 // -------------------------------------------------------------
 const INTRO_SPIN_MS = 1100;
-const INTRO_ZOOM_MS = 1700;
+const INTRO_ZOOM_MS = 2100;
 const INTRO_FADE_FROM = 0.72; // 확대 구간의 이 지점부터 게임 지도로 서서히 전환
 let worldLand = null;
 let introAnim = null;
@@ -3229,8 +3229,51 @@ function startIntroZoom(mapKey) {
     start: performance.now(),
     lon: (b.minLng + b.maxLng) / 2,
     lat: (b.minLat + b.maxLat) / 2,
-    dLat: b.maxLat - b.minLat
+    dLat: b.maxLat - b.minLat,
+    // 우주 배경 별 (화면 비율 좌표)
+    stars: Array.from({ length: 140 }, () => ({
+      x: Math.random(), y: Math.random(), r: Math.random() * 1.2 + 0.3, a: Math.random() * 0.6 + 0.4, p: Math.random() * Math.PI * 2
+    })),
+    // 확대할 때 헤치고 지나가는 구름 (각도·거리·등장 시점·크기)
+    clouds: Array.from({ length: 26 }, () => ({
+      ang: Math.random() * Math.PI * 2, d0: Math.random() * 0.35 + 0.05,
+      t0: Math.random() * 0.55 + 0.05, size: Math.random() * 0.5 + 0.6, puffs: Math.floor(Math.random() * 3) + 3,
+      seed: Math.random() * 1000
+    }))
   };
+}
+
+// 확대 중 구름: 화면 가운데에서 바깥으로 커지며 스쳐 지나감 (t: 확대 진행 0~1)
+function drawIntroClouds(ctx, t, W, H, cx, cy) {
+  const span = 0.32; // 구름 하나가 지나가는 시간(확대 구간 비율)
+  const diag = Math.hypot(W, H);
+  introAnim.clouds.forEach(c => {
+    const k = (t - c.t0) / span;
+    if (k <= 0 || k >= 1) return;
+    const dist = (c.d0 + Math.pow(k, 2.2) * 1.1) * diag * 0.6;
+    const x = cx + Math.cos(c.ang) * dist, y = cy + Math.sin(c.ang) * dist;
+    const size = c.size * diag * (0.06 + k * k * 0.5);
+    const alpha = Math.sin(k * Math.PI) * 0.85;
+    for (let i = 0; i < c.puffs; i++) {
+      const a2 = c.seed + i * 2.1;
+      const px = x + Math.cos(a2) * size * 0.45, py = y + Math.sin(a2) * size * 0.3;
+      const pr = size * (0.55 + ((c.seed * (i + 1)) % 1) * 0.35);
+      const g = ctx.createRadialGradient(px, py, 0, px, py, pr);
+      g.addColorStop(0, `rgba(255,255,255,${alpha})`);
+      g.addColorStop(0.6, `rgba(255,255,255,${alpha * 0.55})`);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(px, py, pr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+  // 구름 속을 지날 때 화면 전체가 살짝 하얗게
+  const haze = Math.max(0, Math.sin(Math.min(1, Math.max(0, (t - 0.15) / 0.6)) * Math.PI)) * 0.35;
+  if (haze > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${haze})`;
+    ctx.fillRect(0, 0, W, H);
+  }
 }
 
 function skipIntro() {
@@ -3301,7 +3344,7 @@ function drawIntro(ctx) {
   const area = getMapArea();
   const R0 = Math.min(W, H) * 0.36;
   const Rf = area.h / (introAnim.dLat * Math.PI / 180);
-  let R, lon0, lat0, alpha = 1, seaBlend = 0;
+  let R, lon0, lat0, alpha = 1, seaBlend = 0, zoomT = -1;
 
   if (el < INTRO_SPIN_MS) {
     const t = easeInOut(el / INTRO_SPIN_MS);
@@ -3310,6 +3353,7 @@ function drawIntro(ctx) {
     R = R0;
   } else {
     const t = Math.min(1, (el - INTRO_SPIN_MS) / INTRO_ZOOM_MS);
+    zoomT = t;
     const e = easeInOut(t);
     lon0 = introAnim.lon;
     lat0 = introAnim.lat;
@@ -3325,9 +3369,32 @@ function drawIntro(ctx) {
 
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = '#f6f5f0';
-  ctx.fillRect(0, 0, W, H);
   const cx = W / 2, cy = area.y + area.h / 2;
+  // 우주 배경: 짙은 남색 그라데이션 + 반짝이는 별
+  const space = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.hypot(W, H) * 0.7);
+  space.addColorStop(0, '#16213e');
+  space.addColorStop(1, '#05070f');
+  ctx.fillStyle = space;
+  ctx.fillRect(0, 0, W, H);
+  const tw = performance.now() / 600;
+  introAnim.stars.forEach(st => {
+    ctx.globalAlpha = alpha * st.a * (0.65 + 0.35 * Math.sin(tw + st.p));
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(st.x * W, st.y * H, st.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = alpha;
+  // 대기권 빛 (지구 둘레의 푸른 테)
+  if (R < Math.hypot(W, H)) {
+    const glow = ctx.createRadialGradient(cx, cy, R * 0.98, cx, cy, R * 1.12);
+    glow.addColorStop(0, 'rgba(125, 200, 255, 0.55)');
+    glow.addColorStop(1, 'rgba(125, 200, 255, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 1.12, 0, Math.PI * 2);
+    ctx.fill();
+  }
   // 바다 (지구가 화면보다 훨씬 커지면 원 대신 화면 전체를 칠함: 거대한 원 그리기에서 생기는 깜빡임 방지)
   const seaColor = mixColor('#bfe5fa', '#f6f5f0', seaBlend);
   const huge = R > Math.hypot(W, H) * 2;
@@ -3360,6 +3427,7 @@ function drawIntro(ctx) {
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.restore();
+  if (zoomT >= 0) drawIntroClouds(ctx, zoomT, W, H, cx, cy);
   ctx.restore();
 }
 
