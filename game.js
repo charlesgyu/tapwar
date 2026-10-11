@@ -685,7 +685,7 @@ const MAP_CONFIGS = {
   GB_WALESNI: { country: 'GB', name: '웨일스·북아일랜드', label: '웨일스·북아일랜드', count: 14, file: 'assets/gb_walesni_zones.json', maxScale: 8 },
   GB_UK: { country: 'GB', name: '영국 전국', label: '영국 전국', count: 70, file: 'assets/gb_uk_zones.json', maxScale: 20 },
   // WD — tools/build_*_maps.sh 로 생성
-  WD_WORLD: { country: 'WD', name: '전세계', label: '전세계', count: 500, file: 'assets/w_world_zones.json', maxScale: 30 },
+  WD_WORLD: { country: 'WD', name: '전세계', label: '전세계', count: 300, file: 'assets/w_world_zones.json', maxScale: 30 },
 };
 MAP_CONFIGS.KOREA.label = '전국'; MAP_CONFIGS.KOREA.count = 164;
 MAP_CONFIGS.SEOUL.label = '서울'; MAP_CONFIGS.SEOUL.count = 25;
