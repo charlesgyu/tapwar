@@ -711,6 +711,16 @@
     .start-card .stage-name { font-size: 18px; }
     .start-card .start-btn { font-size: 21px; padding-block: 20px; margin-top: 10px; }
     .home-links { font-size: 15px; }
+    /* 잠긴 맵: 검은 막(투명도 50%)을 씌워 어둡게 */
+    .start-card .stage-card.locked { overflow: hidden; }
+    .start-card .stage-card.locked::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: inherit;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
