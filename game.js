@@ -439,6 +439,7 @@ function updateSpecialSkillHUD(dt) {
   }
 }
 
+const ZONE_MAX_HP = 50;
 let currentMapKey = 'KOREA';
 
 const MAP_CONFIGS = {
@@ -542,7 +543,7 @@ function loadSelectedMap(mapKey) {
       rawLinks = data.links;
       rawZones = data.zones.map(z => ({
         ...z,
-        maxOrbs: z.maxOrbs || 50,
+        maxOrbs: ZONE_MAX_HP, // 모든 지역 피 50 고정 (주요 도시 가중치 없음)
         cx: 0,
         cy: 0,
         owner: OWNER.NEUTRAL,

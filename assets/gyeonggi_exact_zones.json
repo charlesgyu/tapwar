@@ -15,7 +15,7 @@
       "name": "수원",
       "lng": 126.97966,
       "lat": 37.26054,
-      "maxOrbs": 85,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -1564,7 +1564,7 @@
       "name": "성남",
       "lng": 127.10602,
       "lat": 37.37939,
-      "maxOrbs": 85,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -2675,7 +2675,7 @@
       "name": "의정부",
       "lng": 127.06844,
       "lat": 37.73623,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -3010,7 +3010,7 @@
       "name": "안양",
       "lng": 126.91133,
       "lat": 37.40407,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -3743,7 +3743,7 @@
       "name": "부천",
       "lng": 126.78875,
       "lat": 37.50423,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -4090,7 +4090,7 @@
       "name": "광명",
       "lng": 126.86472,
       "lat": 37.44515,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -4469,7 +4469,7 @@
       "name": "평택",
       "lng": 126.99367,
       "lat": 37.01553,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -4816,7 +4816,7 @@
       "name": "동두천",
       "lng": 127.07793,
       "lat": 37.91654,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -5199,7 +5199,7 @@
       "name": "안산",
       "lng": 126.8706,
       "lat": 37.31574,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -6238,7 +6238,7 @@
       "name": "고양",
       "lng": 126.8786,
       "lat": 37.65575,
-      "maxOrbs": 85,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -7337,7 +7337,7 @@
       "name": "과천",
       "lng": 127.00272,
       "lat": 37.4339,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -7800,7 +7800,7 @@
       "name": "구리",
       "lng": 127.13122,
       "lat": 37.59922,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -8159,7 +8159,7 @@
       "name": "남양주",
       "lng": 127.24363,
       "lat": 37.66254,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -8514,7 +8514,7 @@
       "name": "오산",
       "lng": 127.05119,
       "lat": 37.16328,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -8909,7 +8909,7 @@
       "name": "시흥",
       "lng": 126.78364,
       "lat": 37.38612,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -9280,7 +9280,7 @@
       "name": "군포",
       "lng": 126.92118,
       "lat": 37.34347,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -9639,7 +9639,7 @@
       "name": "의왕",
       "lng": 126.98953,
       "lat": 37.36231,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -9986,7 +9986,7 @@
       "name": "하남",
       "lng": 127.20592,
       "lat": 37.5228,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -10361,7 +10361,7 @@
       "name": "용인",
       "lng": 127.25288,
       "lat": 37.20335,
-      "maxOrbs": 85,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -11452,7 +11452,7 @@
       "name": "파주",
       "lng": 126.80958,
       "lat": 37.85554,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -11795,7 +11795,7 @@
       "name": "이천",
       "lng": 127.4809,
       "lat": 37.20985,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -12150,7 +12150,7 @@
       "name": "안성",
       "lng": 127.30282,
       "lat": 37.03502,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -12493,7 +12493,7 @@
       "name": "김포",
       "lng": 126.62634,
       "lat": 37.6817,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -12828,7 +12828,7 @@
       "name": "화성",
       "lng": 126.86051,
       "lat": 37.16389,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -13175,7 +13175,7 @@
       "name": "광주",
       "lng": 127.30116,
       "lat": 37.40307,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -13530,7 +13530,7 @@
       "name": "양주",
       "lng": 127.00116,
       "lat": 37.80865,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -13885,7 +13885,7 @@
       "name": "포천",
       "lng": 127.25045,
       "lat": 37.96992,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -14240,7 +14240,7 @@
       "name": "여주",
       "lng": 127.61566,
       "lat": 37.30248,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -14595,7 +14595,7 @@
       "name": "연천",
       "lng": 127.02394,
       "lat": 38.09709,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -14938,7 +14938,7 @@
       "name": "가평",
       "lng": 127.45018,
       "lat": 37.81856,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
@@ -15293,7 +15293,7 @@
       "name": "양평",
       "lng": 127.5792,
       "lat": 37.51802,
-      "maxOrbs": 70,
+      "maxOrbs": 50,
       "polygons": [
         [
           [
