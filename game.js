@@ -3060,11 +3060,11 @@ function loadRankPercents() {
   });
   const totalEl = document.getElementById('rank-total');
   if (totalEl && LEADERBOARDS[c.key]) {
-    // 순위 카드(총 시간): 1~20위는 정확한 순위, 21위부터는 상위 몇 %
+    // 순위 카드(총 시간): 1~20위(랭커)는 정확한 순위만, 21위부터는 상위 몇 %
     GameCenter.getRank({ leaderboardId: LEADERBOARDS[c.key] }).then(r => {
       if (!r.rank || !r.total) return;
       totalEl.innerHTML = r.rank <= EXACT_RANK_LIMIT
-        ? `<b class="rank-exact">${r.rank}위</b><span class="rank-of">${r.total.toLocaleString()}명 중</span>`
+        ? `<b class="rank-exact">${r.rank}위</b>`
         : `<b class="rank-exact">${rankPercentText(r.rank, r.total)}</b>`;
     }).catch(() => {});
   }
