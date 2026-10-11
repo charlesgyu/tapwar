@@ -209,8 +209,8 @@ let enemyFocusReticleTimer = 0;
 let playerMainZone = null;
 let enemyMainZone = null;
 let enemy2MainZone = null;
-// 전세계 맵은 3파전: 나 vs 적(빨강) vs 적2(보라). 두 적은 서로도 싸움
-function isThreeWay() { return currentCountryKey() === 'WD'; }
+// 3파전(나 vs 적 vs 적2 보라): 지금은 어느 맵도 쓰지 않음 (전세계도 1:1). 다시 쓰려면 여기서 켜기
+function isThreeWay() { return false; }
 // [원거리 규칙] 모든 맵: 맞닿지 않은 곳으로 쏘는 구슬은 2배 느리고, 그런 지역은 발사 간격도 2배
 const RANGED_SLOW = 2;
 const RANGED_INTERVAL_MULT = 2;
