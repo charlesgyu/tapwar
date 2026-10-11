@@ -608,7 +608,18 @@ const MAP_CONFIGS = {
   JEONBUK: { name: '전북', label: '전북', count: 25, file: 'assets/jeonbuk_zones.json', maxScale: 8 },
   GYEONGBUK: { name: '경북', label: '경북', count: 25, file: 'assets/gyeongbuk_zones.json', maxScale: 8 },
   GYEONGNAM: { name: '경남', label: '경남', count: 25, file: 'assets/gyeongnam_zones.json', maxScale: 8 },
-  JEJU: { name: '제주', label: '제주', count: 43, file: 'assets/jeju_zones.json', maxScale: 8 }
+  JEJU: { name: '제주', label: '제주', count: 43, file: 'assets/jeju_zones.json', maxScale: 8 },
+  // 일본 (country: 'JP') — tools/build_japan_maps.sh 로 생성
+  JP_HOKKAIDO: { country: 'JP', name: '홋카이도', label: '홋카이도', count: 14, file: 'assets/jp_hokkaido_zones.json', maxScale: 8 },
+  JP_SHIKOKU: { country: 'JP', name: '시코쿠', label: '시코쿠', count: 16, file: 'assets/jp_shikoku_zones.json', maxScale: 8 },
+  JP_CHUGOKU: { country: 'JP', name: '주고쿠', label: '주고쿠', count: 20, file: 'assets/jp_chugoku_zones.json', maxScale: 8 },
+  JP_TOHOKU: { country: 'JP', name: '도호쿠', label: '도호쿠', count: 25, file: 'assets/jp_tohoku_zones.json', maxScale: 8 },
+  JP_KANTO: { country: 'JP', name: '간토', label: '간토', count: 25, file: 'assets/jp_kanto_zones.json', maxScale: 8 },
+  JP_KINKI: { country: 'JP', name: '긴키', label: '긴키', count: 25, file: 'assets/jp_kinki_zones.json', maxScale: 8 },
+  JP_KYUSHU: { country: 'JP', name: '규슈·오키나와', label: '규슈·오키나와', count: 25, file: 'assets/jp_kyushu_zones.json', maxScale: 8 },
+  JP_CHUBU: { country: 'JP', name: '주부', label: '주부', count: 27, file: 'assets/jp_chubu_zones.json', maxScale: 8 },
+  JP_TOKYO: { country: 'JP', name: '도쿄', label: '도쿄', count: 29, file: 'assets/jp_tokyo_zones.json', maxScale: 10 },
+  JP_JAPAN: { country: 'JP', name: '일본 전국', label: '일본 전국', count: 47, file: 'assets/jp_japan_zones.json', maxScale: 14 }
 };
 MAP_CONFIGS.KOREA.label = '전국'; MAP_CONFIGS.KOREA.count = 164;
 MAP_CONFIGS.SEOUL.label = '서울'; MAP_CONFIGS.SEOUL.count = 25;
@@ -2358,7 +2369,7 @@ function gameOver(isWin, isSurrender = false) {
       `<div class="end-record-label">기록</div>` +
       `<div class="end-record">${timeStr}</div>` +
       (recordResult.isNewBest ? `<div class="end-best new">최고 기록</div>` : `<div class="end-best">최고 기록 ${bestStr}</div>`) +
-      `<div class="end-total">대한민국 총 시간 ${formatLongTime(getCampaignTotalTime().sum)}</div>`;
+      `<div class="end-total">${(COUNTRIES.find(x => x.key === selectedCountryKey) || COUNTRIES[0]).name} 총 시간 ${formatLongTime(getCampaignTotalTime().sum)}</div>`;
     submitMapRanking(selectedCountryKey || 'KR', currentMapKey, gameElapsedTime);
     submitCountryRanking(selectedCountryKey || 'KR');
 
@@ -2881,16 +2892,22 @@ const THUMB_PALETTE = ['#93c5fd', '#fda4af', '#86efac', '#fcd34d', '#c4b5fd', '#
 // -------------------------------------------------------------
 const COUNTRIES = [
   { key: 'KR', flag: '🇰🇷', name: '대한민국', open: true },
-  { key: 'JP', flag: '🇯🇵', name: '일본', open: false },
+  { key: 'JP', flag: '🇯🇵', name: '일본', open: false, paid: true },
   { key: 'CN', flag: '🇨🇳', name: '중국', open: false },
   { key: 'US', flag: '🇺🇸', name: '미국', open: false },
   { key: 'EU', flag: '🇪🇺', name: '유럽', open: false }
 ];
 const DEV_UNLOCK_KEY = 'tapwar_dev_unlock_all';
+// [테스트용] 유료 나라(일본)를 구매 없이 열기. 출시 전 false (인앱 구매 'country_jp' 로 열림)
+const DEV_TEST_COUNTRIES = true;
+function isCountryOpen(c) {
+  return !!c && (c.open || (c.paid && (DEV_TEST_COUNTRIES || isOwned(`country_${c.key.toLowerCase()}`))));
+}
 
 // 대한민국 캠페인 순서: 구역 수가 적은 맵부터 (같으면 MAP_CONFIGS 순서)
-function getCampaignOrder() {
-  const keys = Object.keys(MAP_CONFIGS);
+function getCampaignOrder(country) {
+  if (!country) { try { country = selectedCountryKey; } catch (e) { country = 'KR'; } }
+  const keys = Object.keys(MAP_CONFIGS).filter(k => (MAP_CONFIGS[k].country || 'KR') === (country || 'KR'));
   return keys.slice().sort((a, b) => (MAP_CONFIGS[a].count - MAP_CONFIGS[b].count) || (keys.indexOf(a) - keys.indexOf(b)));
 }
 
@@ -2944,7 +2961,7 @@ function buildCountryCards() {
   COUNTRIES.forEach(c => {
     const b = document.createElement('button');
     b.id = `country-${c.key.toLowerCase()}`;
-    b.className = 'stage-card country-card' + (c.key === selectedCountryKey ? ' active' : '') + (c.open ? '' : ' locked');
+    b.className = 'stage-card country-card' + (c.key === selectedCountryKey ? ' active' : '') + (isCountryOpen(c) ? '' : ' locked');
     b.innerHTML = `<span class="country-flag" aria-hidden="true">${c.flag}</span><span class="stage-name">${c.name}</span>`;
     b.onclick = () => selectCountry(c.key);
     grid.appendChild(b);
@@ -2959,13 +2976,13 @@ function selectCountry(key) {
   centerCard('country-grid', document.getElementById(`country-${key.toLowerCase()}`));
   const c = COUNTRIES.find(x => x.key === key);
   const btn = document.getElementById('enter-btn');
-  if (btn) btn.classList.toggle('locked', !c.open);
+  if (btn) btn.classList.toggle('locked', !isCountryOpen(c));
 }
 
 // 참전하기: 열린 국가면 도시 맵 화면으로, 잠긴 국가면 안내
 function enterCountry() {
   const c = COUNTRIES.find(x => x.key === selectedCountryKey);
-  if (!c || !c.open) {
+  if (!isCountryOpen(c)) {
     // TODO(IAP): 출시 후 인앱 구매 시트로 연결
     openSheet('', `${c ? c.name : ''} 전선`, '곧 출시돼요.\n출시되면 인앱 구매로 열 수 있어요.');
     return;
@@ -2979,6 +2996,8 @@ function showStageView() {
   document.getElementById('country-view').hidden = true;
   document.getElementById('stage-view').hidden = false;
   document.getElementById('country-title').textContent = c.name;
+  // 나라가 바뀌면 그 나라 캠페인의 다음 맵을 고름
+  if ((MAP_CONFIGS[selectedModalMapKey].country || 'KR') !== c.key) selectedModalMapKey = getNextStageKey();
   updateStageProgress();
   try { sessionStorage.setItem('tapwar_in_country', c.key); } catch (e) {}
   // 보이게 된 뒤에 썸네일 크기·가운데 정렬 계산
@@ -3022,7 +3041,8 @@ function getCampaignTotalTime() {
 // - App Store Connect 에서 만든 순위표 ID 로 바꿔 넣을 것 (형식: 경과 시간 - 초 단위, 정렬: 낮은 점수 우선)
 // -------------------------------------------------------------
 const LEADERBOARDS = {
-  KR: 'tapwar.leaderboard.kr.totaltime' // TODO: App Store Connect 순위표 ID
+  KR: 'tapwar.leaderboard.kr.totaltime', // TODO: App Store Connect 순위표 ID
+  JP: 'tapwar.leaderboard.jp.totaltime'
 };
 const GameCenter = (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() &&
   window.Capacitor.registerPlugin) ? window.Capacitor.registerPlugin('GameCenter') : null;
@@ -3774,7 +3794,7 @@ function maybeOpenTutorial() {
   const splash = document.getElementById('splash');
   let returning = null;
   try { returning = sessionStorage.getItem('tapwar_in_country'); } catch (e) {}
-  if (returning && COUNTRIES.some(c => c.key === returning && c.open)) {
+  if (returning && COUNTRIES.some(c => c.key === returning && isCountryOpen(c))) {
     if (splash) splash.remove();
     selectedCountryKey = returning;
     buildCountryCards();
