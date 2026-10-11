@@ -2525,7 +2525,7 @@ function isStageCleared(key) {
 }
 
 function isStageUnlocked(key) {
-  if (isDevUnlockAll()) return true;
+  if (isDevUnlockAll() || isStageCleared(key)) return true; // 한 번 클리어한 맵은 항상 열림
   const order = getCampaignOrder();
   const i = order.indexOf(key);
   return i <= 0 || isStageCleared(order[i - 1]);
@@ -2603,6 +2603,9 @@ function buildStageCards() {
     grid.appendChild(btn);
   });
   updateRecordDisplays();
+  // 가로 슬라이드: 선택된(다음에 할) 스테이지가 보이도록 이동
+  const sel = document.getElementById(`modal-map-${selectedModalMapKey.toLowerCase()}`);
+  if (sel) requestAnimationFrame(() => { grid.scrollLeft = sel.offsetLeft - (grid.clientWidth - sel.offsetWidth) / 2; });
 }
 
 // 로고 5번 탭: (개발·테스트용) 모든 맵 열기/닫기
@@ -2710,7 +2713,7 @@ function renderStageThumbs() {
     if (!c) return;
     fetch(MAP_CONFIGS[key].file).then(r => r.json()).then(data => {
       const dpr = window.devicePixelRatio || 1;
-      const size = c.clientWidth || 64;
+      const size = c.clientWidth || 96;
       c.width = size * dpr;
       c.height = size * dpr;
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
