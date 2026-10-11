@@ -401,7 +401,12 @@ function updateSkillCharges(dt) {
     }
     if (z.chargeState === 'charging') {
       z.chargeTime += dt * gameSpeed;
-      if (z.chargeTime >= SKILL_CHARGE_SEC) z.chargeState = 'ready';
+      if (z.chargeTime >= SKILL_CHARGE_SEC) {
+        z.chargeState = 'ready';
+        // 충전 완료: 테두리가 같은 색으로 번쩍
+        const isMyMain = z.owner === OWNER.PLAYER && z === playerMainZone;
+        flashZone(z, isMyMain ? ZONE_COLORS.mainCharged : (z.owner === OWNER.PLAYER ? ZONE_COLORS.playerFullCharged : ZONE_COLORS.enemyFullCharged));
+      }
     }
   }
 }
@@ -1057,6 +1062,7 @@ function conquerZone(conqueredZone, newOwner, conqueredBySource) {
   conqueredZone.orbs = conqueredZone.maxOrbs; // Full garrison upon capture
   conqueredZone.claimant = null;
   conqueredZone.protectedUntil = gameElapsedTime + CAPTURE_PROTECT_SEC;
+  flashZone(conqueredZone, newOwner === OWNER.PLAYER ? ZONE_COLORS.playerStroke : ZONE_COLORS.enemyStroke);
 
   // 1. Conquered Zone immediately starts advancing towards an adjacent front!
   const newTarget = pickAutoTarget(conqueredZone);
@@ -1971,64 +1977,132 @@ function drawBackdropZones(ctx) {
   ctx.restore();
 }
 
+// -------------------------------------------------------------
+// 지역 색상 표현 (글자 대신 색으로 상태 표시)
+// - 중립: 바탕색 + 아래에서 차오르는 줄다리기 게이지 (우세 진영 색)
+// - 점령지: 피(0~50)만큼 아래에서 소유 진영 색이 차오름
+// - 내 메인: 밝은 노란색 + 흰 테두리
+// - 완전점령: 연한 색 바탕 위로 10초에 걸쳐 진한 색이 차오름(특수 기술 충전), 충전 완료 시 테두리 번쩍
+// - 특수 기술 사용 후: 다시 연한 완전점령 색
+// - 점령 순간: 테두리가 점령한 진영 색으로 번쩍
+// -------------------------------------------------------------
+const ZONE_COLORS = {
+  base: '#edebe3',
+  baseStroke: '#cfcdc4',
+  player: '#60a5fa',
+  playerStroke: '#2563eb',
+  enemy: '#f87171',
+  enemyStroke: '#b91c1c',
+  playerFull: '#bbf7d0',
+  playerFullCharged: '#22c55e',
+  playerFullStroke: '#16a34a',
+  enemyFull: '#fecaca',
+  enemyFullCharged: '#dc2626',
+  enemyFullStroke: '#991b1b',
+  main: '#fde047',
+  mainCharged: '#eab308',
+  mainStroke: '#ffffff'
+};
+const ZONE_FLASH_MS = 700;
+
+function flashZone(zone, color) {
+  zone.flashAt = performance.now();
+  zone.flashColor = color;
+}
+
+// 지역 모양 안을 아래에서부터 ratio(0~1)만큼 color로 채움
+function fillZoneFromBottom(ctx, zone, ratio, color) {
+  if (ratio <= 0 || !zone.bbox) return;
+  const r = Math.min(1, ratio);
+  const { minX, maxX, minY, maxY } = zone.bbox;
+  const h = (maxY - minY) * r;
+  ctx.save();
+  ctx.clip(zone.path);
+  ctx.fillStyle = color;
+  ctx.fillRect(minX - 1, maxY - h, maxX - minX + 2, h + 1);
+  ctx.restore();
+}
+
+function getZoneStyle(zone) {
+  const isFull = isFullyConquered(zone);
+  const isPlayer = zone.owner === OWNER.PLAYER;
+  const isMyMain = isPlayer && zone === playerMainZone;
+  const hpRatio = zone.orbs / zone.maxOrbs;
+  const chargeRatio = zone.chargeState === 'ready' ? 1 : (zone.chargeState === 'charging' ? zone.chargeTime / SKILL_CHARGE_SEC : 0);
+
+  if (zone.owner === OWNER.NEUTRAL) {
+    const gauge = zone.claimant === OWNER.PLAYER ? ZONE_COLORS.player : ZONE_COLORS.enemy;
+    return { base: ZONE_COLORS.base, gauge, ratio: zone.claimant ? hpRatio : 0, stroke: ZONE_COLORS.baseStroke, width: 1.0 };
+  }
+  if (isMyMain) {
+    if (isFull && hpRatio >= 1) {
+      return { base: ZONE_COLORS.main, gauge: ZONE_COLORS.mainCharged, ratio: chargeRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
+    }
+    return { base: ZONE_COLORS.base, gauge: ZONE_COLORS.main, ratio: hpRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
+  }
+  if (isFull && hpRatio >= 1) {
+    return isPlayer
+      ? { base: ZONE_COLORS.playerFull, gauge: ZONE_COLORS.playerFullCharged, ratio: chargeRatio, stroke: ZONE_COLORS.playerFullStroke, width: 2.0 }
+      : { base: ZONE_COLORS.enemyFull, gauge: ZONE_COLORS.enemyFullCharged, ratio: chargeRatio, stroke: ZONE_COLORS.enemyFullStroke, width: 2.0 };
+  }
+  return isPlayer
+    ? { base: ZONE_COLORS.base, gauge: ZONE_COLORS.player, ratio: hpRatio, stroke: ZONE_COLORS.playerStroke, width: 2.0 }
+    : { base: ZONE_COLORS.base, gauge: ZONE_COLORS.enemy, ratio: hpRatio, stroke: ZONE_COLORS.enemyStroke, width: 2.0 };
+}
+
 function drawExactDistrictsMap(ctx) {
   drawBackdropZones(ctx);
 
-  // 1. Draw Polygons via pre-compiled Path2D (Mini Metro Light/Minimalist Aesthetic)
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  // 1. 면 채우기 (바탕 + 아래에서 차오르는 게이지)
+  const styles = new Array(rawZones.length);
   for (let i = 0; i < rawZones.length; i++) {
     const zone = rawZones[i];
     if (!zone.path) continue;
-
-    const isHovered = hoveredZone && hoveredZone.id === zone.id;
-    const isSelected = dragSourceZone && dragSourceZone.id === zone.id;
-    const isFull = isFullyConquered(zone);
-
-    // Reference image styling: Pure crisp white district cards with subtle shadow and light grey stroke
-    // 모든 전장 동일한 지도 스타일 (전국 전선 기준)
-    let fillColor = '#edebe3';
-    let strokeColor = '#cfcdc4';
-    let lineWidth = 1.0;
-
-    if (zone.owner === OWNER.PLAYER) {
-      if (isFull) {
-        // [아군 완전 점령]: 편안하고 단정한 세이지 그린 / 에메랄드
-        fillColor = '#dcfce7';
-        strokeColor = '#16a34a';
-        lineWidth = 2.0;
-      } else {
-        // [아군 교전 중]: 산뜻한 파스텔 스카이 블루 & 선명한 코발트 테두리
-        fillColor = '#dbeafe';
-        strokeColor = '#2563eb';
-        lineWidth = 2.2;
-      }
-    } else if (zone.owner === OWNER.ENEMY) {
-      if (isFull) {
-        // [적군 완전 점령]: 딥 소프트 로즈
-        fillColor = '#fee2e2';
-        strokeColor = '#dc2626';
-        lineWidth = 2.0;
-      } else {
-        // [적군 교전 중]: 소프트 레드 & 버밀리온 레드 테두리
-        fillColor = '#fecaca';
-        strokeColor = '#b91c1c';
-        lineWidth = 2.2;
-      }
-    }
-
-    if (isHovered || isSelected) {
-      fillColor = zone.owner === OWNER.PLAYER ? '#bfdbfe' : '#fef08a';
-      strokeColor = '#0f172a';
-      lineWidth = 2.4;
-    }
-
-    ctx.fillStyle = fillColor;
+    const st = getZoneStyle(zone);
+    styles[i] = st;
+    ctx.fillStyle = st.base;
     ctx.fill(zone.path);
+    fillZoneFromBottom(ctx, zone, st.ratio, st.gauge);
+  }
 
-    ctx.strokeStyle = strokeColor;
-    ctx.lineWidth = lineWidth;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
+  // 2. 테두리: 중립 → 점령지 → 메인 순으로 그려 굵은 테두리가 이웃 선에 덮이지 않게 함
+  const strokePass = (filter) => {
+    for (let i = 0; i < rawZones.length; i++) {
+      const zone = rawZones[i];
+      const st = styles[i];
+      if (!st || !filter(zone)) continue;
+      ctx.strokeStyle = st.stroke;
+      ctx.lineWidth = st.width;
+      ctx.stroke(zone.path);
+    }
+  };
+  strokePass(z => z.owner === OWNER.NEUTRAL);
+  strokePass(z => z.owner !== OWNER.NEUTRAL && z !== playerMainZone);
+  strokePass(z => z === playerMainZone && z.owner === OWNER.PLAYER);
+
+  // 3. 선택(드래그 시작) 지역 강조
+  if (dragSourceZone && dragSourceZone.path) {
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 2.6;
+    ctx.stroke(dragSourceZone.path);
+  }
+
+  // 4. 번쩍 효과 (점령 순간, 특수 기술 충전 완료 순간)
+  const now = performance.now();
+  for (let i = 0; i < rawZones.length; i++) {
+    const zone = rawZones[i];
+    if (!zone.flashAt || !zone.path) continue;
+    const t = (now - zone.flashAt) / ZONE_FLASH_MS;
+    if (t >= 1) { zone.flashAt = 0; continue; }
+    ctx.save();
+    ctx.globalAlpha = 1 - t;
+    ctx.strokeStyle = zone.flashColor;
+    ctx.lineWidth = 3 + 5 * (1 - t);
     ctx.stroke(zone.path);
+    ctx.restore();
   }
 
   // 1.5 Draw Han River (한강 자연 수로 - 사용자 레퍼런스 스타일)
@@ -2066,83 +2140,18 @@ function drawExactDistrictsMap(ctx) {
   // 집중 포화 조준선 그래픽은 표시하지 않음
 }
 
+// 지역 이름만 작게 표시 (상태는 색으로 표현하므로 숫자·아이콘 표시 없음)
 function drawZoneBadges(ctx) {
   const isSeoul = currentMapKey === 'SEOUL';
-  const baseSize = isSeoul ? 11 : 9.5;
-  const fontSize = Math.max(9, Math.min(15, baseSize * Math.sqrt(view.scale)));
-  const titleFont = `700 ${fontSize}px -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif`;
-  const subFont = `600 ${isSeoul ? 9.5 : 8.5}px monospace`;
-
+  const baseSize = isSeoul ? 11 : 9;
+  const fontSize = Math.max(8, Math.min(14, baseSize * Math.sqrt(view.scale)));
+  ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif`;
   ctx.textAlign = 'center';
-
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(30, 41, 59, 0.55)';
   for (let i = 0; i < rawZones.length; i++) {
     const zone = rawZones[i];
-    const { cx: x, cy: y, name, orbs, maxOrbs, owner } = zone;
-    const isFull = isFullyConquered(zone);
-
-    let tagColor = '#64748b'; // 단일 폰트 색상 (Neutral Slate)
-    if (owner === OWNER.PLAYER) tagColor = isFull ? '#16a34a' : '#2563eb';
-    else if (owner === OWNER.ENEMY) tagColor = isFull ? '#dc2626' : '#b91c1c';
-
-    // 중립 지역 줄다리기: 우세 진영 색으로 게이지와 숫자 표시
-    if (owner === OWNER.NEUTRAL && zone.claimant && orbs > 0) {
-      tagColor = zone.claimant === OWNER.PLAYER ? '#2563eb' : '#dc2626';
-    }
-
-    // Garrison Progress Outer Arc (단일 스트로크 링 게이지)
-    if (orbs > 0) {
-      const fillPct = Math.min(1, orbs / maxOrbs);
-      ctx.beginPath();
-      ctx.arc(x, y, 7.0, -Math.PI / 2, -Math.PI / 2 + fillPct * Math.PI * 2);
-      ctx.strokeStyle = tagColor;
-      ctx.lineWidth = 2.0;
-      ctx.stroke();
-    }
-
-    // 점령 직후 보호 중: 흰 보호막 링
-    if (owner !== OWNER.NEUTRAL && gameElapsedTime < zone.protectedUntil) {
-      ctx.beginPath();
-      ctx.arc(x, y, 10.5, 0, Math.PI * 2);
-      ctx.strokeStyle = owner === OWNER.PLAYER ? 'rgba(37, 99, 235, 0.55)' : 'rgba(220, 38, 38, 0.55)';
-      ctx.lineWidth = 2.5;
-      ctx.stroke();
-    }
-
-    const isPlayerPowerZone = (currentPowerZone && currentPowerZone.id === zone.id);
-    const isEnemyPowerZone = (currentEnemyPowerZone && currentEnemyPowerZone.id === zone.id);
-
-    // Name text
-    ctx.font = titleFont;
-    ctx.textBaseline = 'bottom';
-
-    let prefix = '';
-    if (isMainZone(zone)) prefix = '👑';
-    else if (isPlayerPowerZone || isEnemyPowerZone) prefix = '⚡';
-    else if (zone.chargeState === 'ready') {
-      prefix = '💥'; // 특수 기술 1발 충전 완료
-    } else if (isFull) {
-      prefix = '🛡️';
-    }
-
-    const labelText = `${prefix}${name}`;
-
-    // 지역명 색상 지정
-    if (isPlayerPowerZone) {
-      ctx.fillStyle = '#b45309';
-    } else if (isEnemyPowerZone) {
-      ctx.fillStyle = '#c2410c';
-    } else if (isFull) {
-      ctx.fillStyle = owner === OWNER.PLAYER ? '#15803d' : '#b91c1c';
-    } else {
-      ctx.fillStyle = owner === OWNER.PLAYER ? '#1d4ed8' : (owner === OWNER.ENEMY ? '#b91c1c' : '#1e293b');
-    }
-    ctx.fillText(labelText, x, y - 2);
-
-    // HP / Garrison text (흰색 외곽선/중복 잔상 제거: 단일 단정한 회색/소속색 텍스트만 표시)
-    ctx.font = subFont;
-    ctx.fillStyle = tagColor;
-    ctx.textBaseline = 'top';
-    ctx.fillText(`${orbs}/${maxOrbs}`, x, y + 4);
+    ctx.fillText(zone.name, zone.cx, zone.cy);
   }
 }
 
