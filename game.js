@@ -1979,7 +1979,7 @@ function drawBackdropZones(ctx) {
     ctx.lineWidth = 3;
     ctx.stroke(b.path);
   });
-  ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif';
+  ctx.font = `600 ${ZONE_LABEL_PX / view.scale}px -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif`;
   ctx.fillStyle = '#a8a59b';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
