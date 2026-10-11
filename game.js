@@ -153,7 +153,7 @@ const ENABLE_ITEMS = false;
 let currentPowerZone = null; // 파워 구슬이 지정된 단 1곳의 점령지
 let currentEnemyPowerZone = null; // 적군 파워 구슬 거점
 let currentFocusZone = null; // 아군 집중포화: 가장 마지막에 지정한 구역
-// 아군 집중포화 구역 목록 (중복 가능, 지정한 순서대로. 마지막이 최신)
+// 아군 집중포화 구역 목록 (지금은 한 곳만: 더블탭하면 새 곳으로 옮겨감)
 let playerFocusList = [];
 function syncFocus() { currentFocusZone = playerFocusList[playerFocusList.length - 1] || null; }
 function addPlayerFocus(z) { playerFocusList = playerFocusList.filter(f => f !== z); playerFocusList.push(z); syncFocus(); }
@@ -1728,6 +1728,7 @@ let dragSourceZone = null;
 let worldMousePos = { x: 0, y: 0 };
 let isDragging = false;
 let lastTapTime = 0;
+const DOUBLE_TAP_MS = 450; // 같은 지역을 이 시간 안에 두 번 누르면 더블탭(집중포화)
 let lastTapZoneId = null;
 
 // 더블클릭 / 더블탭 시 인접 아군 점령지가 해당 구역을 일제히 집중 포격! (쿨타임 없이 무제한 즉시 발동 가능)
@@ -1758,8 +1759,18 @@ function handleZoneDoubleClick(targetZone) {
     return;
   }
 
-  // [규칙]: 집중포화는 여러 곳 중복 가능. 이전 집중포화는 유지되고,
-  // 완전점령(원거리) 지역은 가장 마지막에 지정한 곳으로, 그 외 지역은 맞닿은 집중포화 구역 중 최신 곳으로 사격
+  // [규칙]: 집중포화는 한 곳만. 다른 곳을 더블탭하면 집중포화가 그쪽으로 옮겨감.
+  // 이전 목표를 쏘던 지역은 풀어 주고(새 목표에 닿으면 아래에서 다시 합류, 아니면 평소 자동 공격)
+  const oldFocus = playerFocusList.slice();
+  playerFocusList = [];
+  syncFocus();
+  rawZones.forEach(z => {
+    if (z.owner === OWNER.PLAYER && z.isManualTarget && z.targetZones.some(t => oldFocus.includes(t))) {
+      z.isManualTarget = false;
+      const t = pickAutoTarget(z);
+      z.targetZones = t ? [t] : [];
+    }
+  });
 
   // 새 집중 포화: 이전에 드래그로 빠졌던 지역도 모두 다시 참여
   rawZones.forEach(z => { z.focusOptOut = false; });
@@ -1845,7 +1856,7 @@ function onPointerDown(e) {
   // 피가 가득 찬 아군 지역은 더블탭(방어 지원)할 일이 없으므로 탭으로 처리 (특수 기술 연속 사용 가능)
   const isFullFriendly = targetZone && targetZone.owner === OWNER.PLAYER &&
     (targetZone.orbs >= targetZone.maxOrbs || isFullyConquered(targetZone));
-  if (targetZone && !isFullFriendly && targetZone.id === lastTapZoneId && (now - lastTapTime) < 380) {
+  if (targetZone && !isFullFriendly && targetZone.id === lastTapZoneId && (now - lastTapTime) < DOUBLE_TAP_MS) {
     handleZoneDoubleClick(targetZone);
     lastTapTime = 0;
     lastTapZoneId = null;
