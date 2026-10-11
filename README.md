@@ -112,7 +112,13 @@ python tools/build_map.py assets/새맵.json
 
 ### 맵 구역 단위 원칙
 - 기본은 **행정구역(시·군·구)** 단위로 나눕니다.
-- 행정구가 너무 적어 게임이 성립하지 않는 시(예: 수원시 = 4개 구)는 **행정동** 단위로 나눕니다. 대략 15개 미만이면 동 단위를 사용합니다.
+- 시·군·구가 너무 적어(8곳 미만) 게임이 성립하지 않는 곳(대전·울산·세종·제주)은 **행정동** 단위로 나눕니다.
+- 시·도 맵 만들기 (2026-07-01 행정구역 기준, 16개 시·도):
+  ```bash
+  python tools/make_region_map.py HangJeongDong.geojson "부산광역시" "부산광역시 전선" assets/busan_zones.json
+  python tools/add_water.py assets/busan_zones.json && python tools/build_map.py assets/busan_zones.json && python tools/add_water.py --carve assets/busan_zones.json
+  ```
+  먼 섬은 `tools/adjust_islands.py`로 제외(drop)하거나 본토 가까이 옮김(shift).
 - 행정동 맵 만들기:
   ```bash
   curl -L -o HangJeongDong.geojson \

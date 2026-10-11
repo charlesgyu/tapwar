@@ -37,7 +37,7 @@ def rings(g, min_area=2e-6):
 
 def process(path):
     d = json.load(open(path, encoding='utf-8'))
-    cfg = SPEC['maps'].get(os.path.basename(path), {})
+    cfg = SPEC['maps'].get(os.path.basename(path), SPEC.get('defaultMap', {}))
     b = d.get('meta', {}).get('bounds')
     allp = [Polygon(r) for z in d['zones'] for r in z['polygons']]
     allp += [Polygon(r) for bd in d.get('backdrop', []) for r in bd['polygons']]
@@ -64,6 +64,9 @@ def process(path):
             parts = [p for p in parts if p.intersects(target)] or []
             # 기준점이 빈 공간이 아니면(이 맵에선 다른 구역에 덮여 있음) 건너뜀
         parts = [p for p in parts if p.area > 1e-5]
+        # 주변이 땅으로 둘러싸인 경우에만 물로 인정 (맵 가장자리에서 엉뚱한 바다를 채우지 않도록)
+        landb = land.buffer(1e-4)
+        parts = [p for p in parts if p.boundary.intersection(landb).length / max(p.boundary.length, 1e-12) >= 0.5]
         if parts:
             water.append({'name': lake['name'], 'polygons': rings(unary_union(parts)), 'generated': True})
 
@@ -94,10 +97,15 @@ if __name__ == '__main__' and (len(sys.argv) < 2 or sys.argv[1] != '--carve'):
 # ---------------------------------------------------------------------------
 def carve(path):
     d = json.load(open(path, encoding='utf-8'))
-    cfg = SPEC['maps'].get(os.path.basename(path), {})
+    cfg = SPEC['maps'].get(os.path.basename(path), SPEC.get('defaultMap', {}))
     width = cfg.get('carveWidth')
+    river_names = {rv['name'] for rv in SPEC['rivers']}
     if not width or not d.get('waterLinks'):
-        print(f'{path}: carve 생략')
+        # 구역을 가르는 강이 없으면, 근사 중심선으로 덧그린 강은 지움 (구역 위에 어긋나게 겹치지 않도록)
+        before = len(d.get('water', []))
+        d['water'] = [w for w in d.get('water', []) if not (w.get('generated') and w['name'] in river_names and not w.get('carved'))]
+        json.dump(d, open(path, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
+        print(f'{path}: 구역을 가르는 강 없음 (덧그린 강 {before - len(d["water"])}개 제거)')
         return
     zones = {z['id']: z for z in d['zones']}
     geo = {i: unary_union([make_valid(Polygon(r)) for r in z['polygons']]) for i, z in zones.items()}
@@ -125,7 +133,6 @@ def carve(path):
     if leftovers:
         river = unary_union([river] + leftovers)
     # 기존: 근사 중심선으로 그린 강(generated 강)은 제거, 호수는 유지
-    river_names = {rv['name'] for rv in SPEC['rivers']}
     kept = [w for w in d.get('water', []) if not (w.get('generated') and w['name'] in river_names)]
     if cfg.get('keepExisting'):
         kept = [w for w in kept if w.get('generated')]  # 원래 있던 대략적인 강 폴리곤도 대체

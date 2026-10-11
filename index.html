@@ -414,9 +414,13 @@
       .logo-dots i { animation: none; }
     }
     .start-card .stage-grid {
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
       margin-bottom: 18px;
+      max-height: min(56vh, 520px);
+      overflow-y: auto;
+      padding: 4px;
+      margin-inline: -4px;
     }
     .start-card .stage-card {
       font: inherit;
@@ -440,8 +444,8 @@
     }
     .start-card .stage-card:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
     .stage-thumb {
-      width: 84px;
-      height: 84px;
+      width: 64px;
+      height: 64px;
       margin-bottom: 4px;
     }
     .start-card .stage-name {
@@ -553,32 +557,8 @@
       <div class="modal-card start-card">
         <h1 class="start-logo">TAPWAR<span class="logo-dots"><i></i><i></i><i></i></span></h1>
 
-        <div class="stage-grid">
-          <button id="modal-map-korea" class="stage-card active" onclick="selectModalMap('KOREA')">
-            <canvas class="stage-thumb" id="thumb-korea"></canvas>
-            <span class="stage-name">전국</span>
-            <span class="stage-sub">164</span>
-            <span class="stage-record" id="modal-korea-record"></span>
-          </button>
-          <button id="modal-map-seoul" class="stage-card" onclick="selectModalMap('SEOUL')">
-            <canvas class="stage-thumb" id="thumb-seoul"></canvas>
-            <span class="stage-name">서울</span>
-            <span class="stage-sub">25</span>
-            <span class="stage-record" id="modal-seoul-record"></span>
-          </button>
-          <button id="modal-map-gyeonggi" class="stage-card" onclick="selectModalMap('GYEONGGI')">
-            <canvas class="stage-thumb" id="thumb-gyeonggi"></canvas>
-            <span class="stage-name">경기</span>
-            <span class="stage-sub">31</span>
-            <span class="stage-record" id="modal-gyeonggi-record"></span>
-          </button>
-          <button id="modal-map-suwon" class="stage-card" onclick="selectModalMap('SUWON')">
-            <canvas class="stage-thumb" id="thumb-suwon"></canvas>
-            <span class="stage-name">수원</span>
-            <span class="stage-sub">44</span>
-            <span class="stage-record" id="modal-suwon-record"></span>
-          </button>
-        </div>
+        <!-- 전장 카드는 game.js의 MAP_CONFIGS에서 자동 생성 -->
+        <div class="stage-grid" id="stage-grid"></div>
 
         <button class="start-btn" id="start-btn" onclick="onStartBtnClick()">시작</button>
         <!-- 지도 데이터 출처(라이선스상 표시 필수): 첫 화면에는 ⓘ 버튼만, 누르면 표시 -->

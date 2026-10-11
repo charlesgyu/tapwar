@@ -168,7 +168,30 @@ def process(path):
         if geoms[ia].distance(geoms[ib]) > 1e-4:
             keep.add((a, b))  # 섬 연결 등 맞닿지 않은 기존 연결
     # 게임 인접 관계 안정성을 위해 기존 연결은 모두 유지하고, 새로 맞닿은 연결만 추가
-    d['links'] = sorted([list(l) for l in touching | old])
+    links = touching | old
+    # 섬처럼 어떤 구역과도 이어지지 않은 덩어리는 가장 가까운 구역과 바닷길로 연결 (고립 방지)
+    idx = {zid: i for i, zid in enumerate(ids)}
+    while True:
+        parent = list(range(len(ids)))
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+        for a2, b2 in links:
+            parent[find(idx[a2])] = find(idx[b2])
+        comps = {}
+        for i in range(len(ids)):
+            comps.setdefault(find(i), []).append(i)
+        if len(comps) <= 1:
+            break
+        groups = sorted(comps.values(), key=len, reverse=True)
+        main_grp, rest = groups[0], [i for g in groups[1:] for i in g]
+        best = min(((geoms[i].distance(geoms[j]), i, j) for i in rest for j in main_grp), key=lambda t: t[0])
+        _, i, j = best
+        links.add(tuple(sorted((ids[i], ids[j]))))
+        print(f'  바닷길 연결: {zones[i]["name"]} – {zones[j]["name"]}')
+    d['links'] = sorted([list(l) for l in links])
 
     # 물(강·호수)로 갈라진 연결 판정: 두 구역의 공유 경계 중 물 위에 있는 비율이 높으면 '물 건너 연결'
     # → 게임에서 완전점령 판정 시 물 건너 이웃은 세지 않음 (강이 아군 지역처럼 방어선 역할)
@@ -178,7 +201,8 @@ def process(path):
         spec_path = os.path.join(os.path.dirname(__file__), 'water_spec.json')
         eps = WATER_EPS
         if os.path.exists(spec_path):
-            eps = json.load(open(spec_path, encoding='utf-8'))['maps'].get(os.path.basename(path), {}).get('waterEps', WATER_EPS)
+            spec = json.load(open(spec_path, encoding='utf-8'))
+            eps = spec['maps'].get(os.path.basename(path), spec.get('defaultMap', {})).get('waterEps', WATER_EPS)
         wp = unary_union([make_valid(Polygon(r)) for w in water for r in w['polygons']]).buffer(eps)
         zg = {z['id']: g for z, g in zip(zones, geoms)}
         # 이미 강을 깎아낸 맵(carved)은 구역이 더 이상 맞닿지 않으므로 기존 waterLinks 유지

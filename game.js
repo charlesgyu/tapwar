@@ -496,15 +496,25 @@ const MAP_CONFIGS = {
     aspectRatio: 0.82,
     guide: '🌲 경기도 전선 작전: 시작할 시·군(예: 수원, 고양, 용인 등)을 탭하세요!'
   },
-  // 행정구가 4곳뿐이라 행정동(44개) 단위로 구성 (tools/make_dong_map.py)
-  SUWON: {
-    name: '수원시 전선 (44개 행정동)',
-    file: 'assets/suwon_exact_zones.json',
-    bounds: { minLng: 126.8973, maxLng: 127.1206, minLat: 37.1942, maxLat: 37.3816 },
-    aspectRatio: 0.95,
-    guide: '🏯 수원시 작전: 시작할 행정동(예: 행궁동, 광교1동, 영통1동 등)을 탭하세요!'
-  }
+  // 시·도 맵 (tools/make_region_map.py로 생성. 범위·화면 비율은 맵 JSON의 meta.bounds에서 계산)
+  BUSAN: { name: '부산', label: '부산', count: 16, file: 'assets/busan_zones.json', maxScale: 8 },
+  DAEGU: { name: '대구', label: '대구', count: 9, file: 'assets/daegu_zones.json', maxScale: 8 },
+  INCHEON: { name: '인천', label: '인천', count: 11, file: 'assets/incheon_zones.json', maxScale: 8 },
+  GWANGJU_JEONNAM: { name: '전남광주', label: '전남광주', count: 27, file: 'assets/gwangju_jeonnam_zones.json', maxScale: 8 },
+  DAEJEON: { name: '대전', label: '대전', count: 82, file: 'assets/daejeon_zones.json', maxScale: 8 },
+  ULSAN: { name: '울산', label: '울산', count: 55, file: 'assets/ulsan_zones.json', maxScale: 8 },
+  SEJONG: { name: '세종', label: '세종', count: 24, file: 'assets/sejong_zones.json', maxScale: 8 },
+  GANGWON: { name: '강원', label: '강원', count: 18, file: 'assets/gangwon_zones.json', maxScale: 8 },
+  CHUNGBUK: { name: '충북', label: '충북', count: 11, file: 'assets/chungbuk_zones.json', maxScale: 8 },
+  CHUNGNAM: { name: '충남', label: '충남', count: 15, file: 'assets/chungnam_zones.json', maxScale: 8 },
+  JEONBUK: { name: '전북', label: '전북', count: 14, file: 'assets/jeonbuk_zones.json', maxScale: 8 },
+  GYEONGBUK: { name: '경북', label: '경북', count: 22, file: 'assets/gyeongbuk_zones.json', maxScale: 8 },
+  GYEONGNAM: { name: '경남', label: '경남', count: 18, file: 'assets/gyeongnam_zones.json', maxScale: 8 },
+  JEJU: { name: '제주', label: '제주', count: 43, file: 'assets/jeju_zones.json', maxScale: 8 }
 };
+MAP_CONFIGS.KOREA.label = '전국'; MAP_CONFIGS.KOREA.count = 164;
+MAP_CONFIGS.SEOUL.label = '서울'; MAP_CONFIGS.SEOUL.count = 25;
+MAP_CONFIGS.GYEONGGI.label = '경기'; MAP_CONFIGS.GYEONGGI.count = 31;
 MAP_CONFIGS.KOREA.guide = '🗺️ 전국 전선 작전: 시작할 거점 도시를 탭하세요!';
 MAP_CONFIGS.SEOUL.guide = '🏙️ 서울특별시 작전: 시작할 자치구(예: 강남구, 마포구, 종로구 등)를 탭하세요!';
 
@@ -551,7 +561,7 @@ let cachedLinks = [];
 function loadSelectedMap(mapKey) {
   currentMapKey = mapKey || 'KOREA';
   const cfg = MAP_CONFIGS[currentMapKey] || MAP_CONFIGS.KOREA;
-  currentMapBounds = { ...cfg.bounds };
+  if (cfg.bounds) currentMapBounds = { ...cfg.bounds };
 
   // Reset in-game entities
   flyingOrbs = [];
@@ -581,6 +591,13 @@ function loadSelectedMap(mapKey) {
   fetch(cfg.file)
     .then(res => res.json())
     .then(data => {
+      // 범위·화면 비율이 설정에 없으면 맵 JSON의 meta.bounds로 계산 (위도에 따른 경도 축소 반영)
+      if (!cfg.bounds && data.meta && data.meta.bounds) {
+        const b = data.meta.bounds;
+        cfg.bounds = { ...b };
+        cfg.aspectRatio = ((b.maxLng - b.minLng) * Math.cos(((b.minLat + b.maxLat) / 2) * Math.PI / 180)) / (b.maxLat - b.minLat);
+      }
+      currentMapBounds = { ...cfg.bounds };
       rawLinks = data.links;
       backdropZones = (data.backdrop || []).map(b => ({ ...b, path: null }));
       // 큰 물(강·호수): 지도에 물로 표시. 점령 불가
@@ -1265,6 +1282,9 @@ function beginGameAtZone(zone) {
   const baseCount = ENEMY_CONFIG.startingEnemyBases;
 
   const enemyCandidates = rawZones.filter(z => z.id !== zone.id && !z.isHidden);
+  // 이웃이 1곳뿐인 외딴 섬(추자도·울릉도 등)에서는 적이 시작하지 않도록 제외 (후보가 남을 때만)
+  const wellConnected = enemyCandidates.filter(z => z.neighbors.length >= 2);
+  if (wellConnected.length > 0) enemyCandidates.splice(0, enemyCandidates.length, ...wellConnected);
   enemyCandidates.sort((a, b) => Math.hypot(b.cx - zone.cx, b.cy - zone.cy) - Math.hypot(a.cx - zone.cx, a.cy - zone.cy));
 
   const chosenEnemies = [];
@@ -2468,14 +2488,37 @@ if (minimapCanvas) {
 // -------------------------------------------------------------
 // 시작 화면 전장 썸네일: 각 맵 실제 모양을 파스텔 실루엣으로 그림
 // -------------------------------------------------------------
-const STAGE_THUMB_COLORS = { KOREA: '#93c5fd', SEOUL: '#fda4af', GYEONGGI: '#86efac', SUWON: '#fcd34d' };
+const THUMB_PALETTE = ['#93c5fd', '#fda4af', '#86efac', '#fcd34d', '#c4b5fd', '#fdba74', '#5eead4', '#f9a8d4'];
+
+// 시작 화면 전장 카드를 MAP_CONFIGS 순서대로 생성
+function buildStageCards() {
+  const grid = document.getElementById('stage-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  Object.keys(MAP_CONFIGS).forEach((key, i) => {
+    const cfg = MAP_CONFIGS[key];
+    const k = key.toLowerCase();
+    const btn = document.createElement('button');
+    btn.id = `modal-map-${k}`;
+    btn.className = 'stage-card' + (key === selectedModalMapKey ? ' active' : '');
+    btn.onclick = () => selectModalMap(key);
+    btn.innerHTML = `<canvas class="stage-thumb" id="thumb-${k}"></canvas>` +
+      `<span class="stage-name">${cfg.label || key}</span>` +
+      `<span class="stage-sub">${cfg.count || ''}</span>` +
+      `<span class="stage-record" id="modal-${k}-record"></span>`;
+    grid.appendChild(btn);
+  });
+}
+
 function renderStageThumbs() {
+  buildStageCards();
+  const keys = Object.keys(MAP_CONFIGS);
   Object.keys(MAP_CONFIGS).forEach(key => {
     const c = document.getElementById(`thumb-${key.toLowerCase()}`);
     if (!c) return;
     fetch(MAP_CONFIGS[key].file).then(r => r.json()).then(data => {
       const dpr = window.devicePixelRatio || 1;
-      const size = c.clientWidth || 84;
+      const size = c.clientWidth || 64;
       c.width = size * dpr;
       c.height = size * dpr;
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -2497,7 +2540,7 @@ function renderStageThumbs() {
         });
         path.closePath();
       }));
-      const color = STAGE_THUMB_COLORS[key] || '#cbd5e1';
+      const color = THUMB_PALETTE[keys.indexOf(key) % THUMB_PALETTE.length];
       g.fillStyle = color;
       g.strokeStyle = color;
       g.lineWidth = 2 * dpr;
