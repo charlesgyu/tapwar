@@ -1136,14 +1136,20 @@ class FlyingOrb {
     const power = itemHitPower(attack, own, t);
     const wasRival = t.owner !== OWNER.NEUTRAL && t.owner !== own;
     applyOrbHit(t, own, power, this.sourceZone);
-    // [아이템 관통탄] 맞닿은 공격·원거리 공격 모두: 맞힌 상대 지역에서 옆의 상대 지역으로 튕겨 나가는 구슬
-    // (공격력 50%, 다시 튕기지는 않음. 도착할 때 파워샷·크리티컬·철벽 등은 그대로 계산)
-    if (wasRival && !this.pierced && hasItem(own, 'pierce')) {
-      const next = t.neighbors.filter(n => n !== this.sourceZone && n.owner !== OWNER.NEUTRAL && n.owner !== own);
+    // [아이템 관통탄] 맞닿은 공격·원거리 공격 모두: 맞힌 상대 지역에서 옆의 상대 지역으로 튕겨 나감
+    // 첫 타격 → 두 번째(원래 공격력의 50%) → 세 번째(30%)까지. 이미 맞힌 지역으로는 튕기지 않음
+    // (도착할 때마다 파워샷·크리티컬·철벽 등은 그대로 계산)
+    const step = this.pierceStep || 0;
+    if (wasRival && step < PIERCE_RATIOS.length && hasItem(own, 'pierce')) {
+      const hit = this.pierceHit || [this.sourceZone];
+      const next = t.neighbors.filter(n => !hit.includes(n) && n !== t && n.owner !== OWNER.NEUTRAL && n.owner !== own);
       if (next.length) {
         const n2 = next[Math.floor(Math.random() * next.length)];
-        const bounce = new FlyingOrb(t, n2, own, this.power * PIERCE_RATIO);
-        bounce.pierced = true;
+        const basePower = this.pierceBase || this.power;
+        const bounce = new FlyingOrb(t, n2, own, basePower * PIERCE_RATIOS[step]);
+        bounce.pierceStep = step + 1;
+        bounce.pierceBase = basePower;
+        bounce.pierceHit = hit.concat([t]);
         flyingOrbs.push(bounce);
       }
     }
@@ -2496,7 +2502,7 @@ const ITEM_EVERY_SEC = 30;
 const REBUILD_EVERY_SEC = 5;
 const REBUILD_HP = 2;
 const ITEM_CHANCE = 0.3; // 반사·흡수·크리티컬 확률
-const PIERCE_RATIO = 0.5; // 관통탄 튕긴 구슬 공격력
+const PIERCE_RATIOS = [0.5, 0.3]; // 관통탄 튕긴 구슬 공격력: 두 번째 50%, 세 번째 30%
 const ITEM_ICON = {
   rapid: '<path d="M3 8h9M5 12h10M3 16h9"/><circle cx="18" cy="12" r="3"/>',
   power: '<circle cx="12" cy="12" r="6"/><path d="M12 9v6M9 12h6"/>',
@@ -2512,7 +2518,7 @@ const ITEM_ICON = {
 const ITEMS = [
   { key: 'rapid', name: '속사', desc: '상대 땅으로 가는 원거리 구슬이 빠르게 (발사 간격 그대로)' },
   { key: 'power', name: '파워샷', desc: '상대 땅 공격력 2배 (상대 색이 조금이라도 있는 곳)' },
-  { key: 'pierce', name: '관통탄', desc: '맞힌 상대 지역에서 옆 상대 지역으로 튕김 (50%)' },
+  { key: 'pierce', name: '관통탄', desc: '옆 상대 지역으로 두 번 더 튕김 (50% → 30%)' },
   { key: 'fortress', name: '철벽', desc: '상대 공격을 50%만 받음' },
   { key: 'rebuild', name: '재건', desc: '5초마다 내 모든 지역 피 +2' },
   { key: 'reflect', name: '반사 방패', desc: '30% 확률로 상대 구슬을 쏜 곳으로 되돌림' },
