@@ -770,7 +770,7 @@
     }
     .splash-caret { width: 4px; height: 0.9em; background: #1e293b; margin-left: 4px; animation: caret 0.6s steps(1) infinite; }
     @keyframes caret { 50% { opacity: 0; } }
-    /* 화면 가운데 글자만 1초 떴다 사라지는 안내 */
+    /* 화면 가운데 글자만 2초 떴다 사라지는 안내 */
     #center-toast {
       position: fixed; left: 0; right: 0; top: 50%;
       transform: translateY(-50%);
@@ -779,11 +779,11 @@
       text-shadow: 0 0 6px #fff, 0 0 3px #fff, 0 0 12px #fff;
       opacity: 0;
     }
-    #center-toast.show { animation: center-toast 1.3s ease forwards; }
+    #center-toast.show { animation: center-toast 2.5s ease forwards; } /* 약 2초 보였다 사라짐 */
     @keyframes center-toast {
       0% { opacity: 0; transform: translateY(-40%); }
-      15% { opacity: 1; transform: translateY(-50%); }
-      77% { opacity: 1; }
+      8% { opacity: 1; transform: translateY(-50%); }
+      88% { opacity: 1; }
       100% { opacity: 0; }
     }
   </style>
