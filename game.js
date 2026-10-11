@@ -204,6 +204,20 @@ function isMainZone(zone) {
 // 충전 게이지·번쩍임 표시는 그대로. false 로 바꾸면 특수 기술 버전으로 돌아감 (저장본: save/special-skill 브랜치)
 const EXPERIMENT_NO_SKILL = true;
 const FULL_ZONE_HP = 100; // [실험] 완전점령 지역 피
+const EXP_MAIN_POWER = 5;   // [실험] 메인 지역 공격력 (완전점령 지역은 1)
+
+// 원거리 공격(맞닿지 않은 지역 공격) 가능 여부
+// [실험] 완전점령 지역만 원거리 가능 (메인도 완전점령이어야 원거리). 일반 지역·메인은 맞닿은 곳만
+function canRangeAttack(zone) {
+  if (EXPERIMENT_NO_SKILL) return zone.owner !== OWNER.NEUTRAL && isFullyConquered(zone);
+  return isUnleashed(zone);
+}
+
+// 구슬 공격력: [실험] 메인 5, 그 외(완전점령 포함) 1 / 기존: 메인·해제 지역 2
+function getZonePower(zone) {
+  if (EXPERIMENT_NO_SKILL) return isMainZone(zone) ? EXP_MAIN_POWER : 1;
+  return isUnleashed(zone) ? MAIN_ZONE_POWER : 1;
+}
 
 function isUnleashed(zone) {
   if (EXPERIMENT_NO_SKILL && zone.owner !== OWNER.NEUTRAL && isFullyConquered(zone)) return true;
@@ -868,7 +882,7 @@ function pickAutoTarget(zone) {
   // [자동 공격 규칙]: 모든 점령지역(메인 포함)은 맞닿은 지역만 무작위로 공격.
   // 메인 지역은 공격을 멈추지 않으므로, 자기와 맞닿은 목표가 없으면
   // 내 점령지역 전체와 맞닿아 있는 전선 지역 중 무작위 1곳을 원거리 공격.
-  if (isUnleashed(zone)) {
+  if (canRangeAttack(zone)) {
     return pickAdjacentTarget(zone) || pickMainZoneFrontierTarget(zone);
   }
   if (isFullyConquered(zone)) return null;
@@ -1522,7 +1536,8 @@ function handleZoneDoubleClick(targetZone) {
 
   // 점령 중인 아군의 전선 거점 탐색 (완전점령지역은 사격 제외! 목표가 아군 거점이면 자기 자신 제외)
   const allPlayerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && z.id !== targetZone.id &&
-    (!isFullyConquered(z) || isUnleashed(z)) && canAttackTarget(z, targetZone));
+    (!isFullyConquered(z) || isUnleashed(z)) && canAttackTarget(z, targetZone) &&
+    (canRangeAttack(z) || z.neighbors.includes(targetZone))); // 원거리 불가 지역은 맞닿은 경우만 참여
 
   if (allPlayerZones.length === 0) {
     document.getElementById('status-guide').innerText = `출격 가능한 전선 아군 점령지가 없습니다! (완전점령지역은 집중포화 제외)`;
@@ -1970,7 +1985,7 @@ function triggerEnemyFocusFire() {
   enemyFocusReticleTimer = 3.5;
 
   // 해당 타겟을 향해 출격 가능한 적 전선 기지들
-  const firingBases = activeEnemyZones.filter(e => e.neighbors.includes(target) || Math.random() < 0.45);
+  const firingBases = activeEnemyZones.filter(e => e.neighbors.includes(target) || (canRangeAttack(e) && canAttackTarget(e, target) && Math.random() < 0.45));
   if (firingBases.length === 0) return;
 
   // 적군도 동일 규칙: 즉시 추가 발사 없이 점령할 때까지 고정 사격
@@ -2017,6 +2032,7 @@ function shouldJoinPlayerFocus(zone) {
   const focus = currentFocusZone;
   if (!focus || zone.owner !== OWNER.PLAYER || zone === focus || zone.focusOptOut) return false;
   if (isFullyConquered(zone) && !isUnleashed(zone)) return false;
+  if (!canRangeAttack(zone) && !zone.neighbors.includes(focus)) return false; // 원거리 불가 지역은 맞닿은 경우만
   return true;
 }
 
@@ -2074,8 +2090,8 @@ function updateOrbSpawners(currentTime) {
       zone.lastShotTime = currentTime;
       
       let power = 1;
-      if (isUnleashed(zone)) {
-        power = MAIN_ZONE_POWER;
+      if (EXPERIMENT_NO_SKILL || isUnleashed(zone)) {
+        power = getZonePower(zone);
       } else if (zone.owner === OWNER.PLAYER) {
         const isPowerZone = (currentPowerZone && currentPowerZone.id === zone.id);
         power = isPowerZone ? (1 + playerBuffs.powerLevel * 2) : 1;
@@ -3030,7 +3046,7 @@ const TUTORIAL = [
     art: svgWrap(hex(45, 45, TC.blue, TC.blueS) + hex(45, 105, TC.blue, TC.blueS) + hex(160, 75, TC.red, TC.blueS, 4) +
       orb(88, 57) + orb(114, 65) + orb(88, 93) + orb(114, 85)) },
   { title: EXPERIMENT_NO_SKILL ? '완전 점령' : '완전 점령과 특수 기술',
-    text: (EXPERIMENT_NO_SKILL ? '이웃을 모두 차지하면 초록색이 돼요. 피가 100이 되고, 멀리까지 두 배로 강하게 공격해요. 상대의 초록 지역은 내 초록 지역만 공격할 수 있어요.' : '이웃을 모두 차지하면 초록색이 돼요. 진한 초록일 때 탭하면 적 3곳의 피를 깎고, 그 지역은 기지처럼 멀리까지 강하게 공격해요.'),
+    text: (EXPERIMENT_NO_SKILL ? '이웃을 모두 차지하면 초록색이 돼요. 피가 100이 되고, 떨어진 곳까지 공격할 수 있어요. 상대의 초록 지역은 내 초록 지역만 공격할 수 있어요.' : '이웃을 모두 차지하면 초록색이 돼요. 진한 초록일 때 탭하면 적 3곳의 피를 깎고, 그 지역은 기지처럼 멀리까지 강하게 공격해요.'),
     art: svgWrap(hex(60, 48, TC.blue, TC.blueS) + hex(150, 48, TC.blue, TC.blueS) + hex(60, 102, TC.blue, TC.blueS) +
       hex(150, 102, TC.blue, TC.blueS) + hex(105, 75, TC.grn2, TC.grnS, 3) ) },
   { title: '적 기지를 무너뜨려요',
