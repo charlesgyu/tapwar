@@ -3052,17 +3052,19 @@ const TUTORIAL = [
       `<rect x="115" y="80" width="60" height="30" fill="${TC.blue}" clip-path="url(#tut-c1)"/>` +
       orb(97, 75) + orb(110, 75)) },
   { title: '지정 공격',
-    text: '내 지역을 꾹 눌러 맞닿은 곳으로 끌면 그곳을 공격해요. 내 땅으로 끌면 피를 채워 줘요. 먼 곳은 초록 지역만 지정할 수 있어요.',
-    art: svgWrap(hex(55, 70, TC.blue, TC.blueS) + hex(155, 70, TC.red, TC.redS) +
-      `<path d="M60 70 L148 70" stroke="${TC.blueS}" stroke-width="3" stroke-dasharray="6 6"/>` ) },
+    text: '내 지역을 꾹 눌러 맞닿은 곳으로 끌면 그곳을 공격해요. 내 땅으로 끌면 피를 채워 줘요.',
+    art: svgWrap(hex(82, 75, TC.blue, TC.blueS) + hex(127, 75, TC.red, TC.redS) +
+      `<path d="M84 75 L118 75" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round"/>` +
+      `<path d="M112 69 L120 75 L112 81" fill="none" stroke="#ffffff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`) },
   { title: '집중 포화',
     text: '아무 지역이나 두 번 탭하면 전선의 내 지역이 모두 그곳을 쏴요. 점령할 때까지 계속돼요.',
     art: svgWrap(hex(45, 45, TC.blue, TC.blueS) + hex(45, 105, TC.blue, TC.blueS) + hex(160, 75, TC.red, TC.blueS, 4) +
       orb(88, 57) + orb(114, 65) + orb(88, 93) + orb(114, 85)) },
-  { title: EXPERIMENT_NO_SKILL ? '완전 점령' : '완전 점령과 특수 기술',
-    text: (EXPERIMENT_NO_SKILL ? '이웃을 모두 차지하면 초록색이 돼요. 피가 100이 되고, 지정 공격·집중 포화로 떨어진 곳도 공격할 수 있어요. 상대의 초록 지역은 내 초록 지역만 공격할 수 있어요.' : '이웃을 모두 차지하면 초록색이 돼요. 진한 초록일 때 탭하면 적 3곳의 피를 깎고, 그 지역은 기지처럼 멀리까지 강하게 공격해요.'),
-    art: svgWrap(hex(60, 48, TC.blue, TC.blueS) + hex(150, 48, TC.blue, TC.blueS) + hex(60, 102, TC.blue, TC.blueS) +
-      hex(150, 102, TC.blue, TC.blueS) + hex(105, 75, TC.grn2, TC.grnS, 3) ) },
+  { title: '완전 점령',
+    text: '이웃을 모두 차지하면 초록색이 돼요. 초록 지역은 원거리 공격이 가능해져요.',
+    // 가운데 지역을 내 지역 6곳이 빈틈없이 둘러싼 모양
+    art: svgWrap([[105, 75], [150, 75], [60, 75], [127.5, 36], [82.5, 36], [127.5, 114], [82.5, 114]]
+      .map(([x, y], i) => i === 0 ? '' : hex(x, y, TC.blue, TC.blueS)).join('') + hex(105, 75, TC.grn2, TC.grnS, 3)) },
   { title: '적 기지를 무너뜨려요',
     text: '적 지역을 모두 점령하면 승리!',
     art: svgWrap(hex(60, 70, TC.yel, '#fff', 3) + hex(150, 70, TC.wine, '#fff', 3) ) }
