@@ -2786,7 +2786,7 @@ const orb = (x, y, c = TC.blueS) => `<circle cx="${x}" cy="${y}" r="4.5" fill="$
 
 const TUTORIAL = [
   { title: '시작 지역 고르기',
-    text: '지도를 확대·이동하며 둘러보고, 시작할 지역을 한 번 탭해 고른 뒤 한 번 더 탭하면 시작해요.',
+    text: '지도를 확대·이동하며 둘러보고, 시작할 지역을 탭한 뒤 확인을 누르면 그곳이 내 기지가 돼요.',
     art: svgWrap(hex(60, 70, TC.b, TC.s) + hex(105, 70, TC.yel, '#fff', 3) + hex(150, 70, TC.b, TC.s) ) },
   { title: '자동으로 넓혀요',
     text: '내 지역은 붙어 있는 땅을 자동으로 공격해요. 아래에서부터 파란색이 꽉 차면 내 땅이 돼요.',
@@ -2803,7 +2803,7 @@ const TUTORIAL = [
     art: svgWrap(hex(45, 45, TC.blue, TC.blueS) + hex(45, 105, TC.blue, TC.blueS) + hex(160, 75, TC.red, TC.blueS, 4) +
       orb(88, 57) + orb(114, 65) + orb(88, 93) + orb(114, 85)) },
   { title: '완전 점령과 특수 기술',
-    text: '이웃을 모두 차지하면 초록색이 돼요. 10초 뒤 진한 초록이 되면 탭해서 적 3곳의 피를 깎아요.',
+    text: '이웃을 모두 차지하면 초록색이 돼요. 진한 초록일 때 탭하면 적 3곳의 피를 깎고, 그 지역은 기지처럼 멀리까지 강하게 공격해요.',
     art: svgWrap(hex(60, 48, TC.blue, TC.blueS) + hex(150, 48, TC.blue, TC.blueS) + hex(60, 102, TC.blue, TC.blueS) +
       hex(150, 102, TC.blue, TC.blueS) + hex(105, 75, TC.grn2, TC.grnS, 3) ) },
   { title: '적 기지를 무너뜨려요',
