@@ -786,6 +786,19 @@
       88% { opacity: 1; }
       100% { opacity: 0; }
     }
+    /* 결과 창 */
+    .end-card { text-align: center; }
+    .end-sub { font-size: 17px; font-weight: 800; color: #334155; margin-bottom: 22px; }
+    .end-record-label { font-size: 13px; font-weight: 800; color: #94a3b8; letter-spacing: 2px; }
+    .end-record { font-size: 44px; font-weight: 900; color: #111; font-variant-numeric: tabular-nums; line-height: 1.15; }
+    .end-best { font-size: 13px; font-weight: 700; color: #94a3b8; margin-top: 4px; }
+    .end-best.new { color: #16a34a; }
+    #end-next-btn[hidden] { display: none; }
+    .end-home-btn {
+      display: block; width: 100%; margin-top: 10px;
+      font: inherit; font-size: 16px; font-weight: 800; color: #57534e;
+      background: #f7f6f2; border: none; border-radius: 999px; padding: 14px; cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -917,10 +930,11 @@
 
     <!-- Game Over Modal -->
     <div class="modal-overlay" id="end-modal" style="display: none;">
-      <div class="modal-card" style="max-width: 440px;">
-        <h2 id="end-title" style="font-size: 22px; font-weight: 800; margin-bottom: 12px;">게임 종료</h2>
+      <div class="modal-card end-card" style="max-width: 440px;">
+        <h2 id="end-title" style="font-size: 26px; font-weight: 900; margin-bottom: 6px;">게임 종료</h2>
         <div id="end-message" style="margin-bottom: 20px;"></div>
-        <button class="start-btn" onclick="location.reload()">홈으로 ➔</button>
+        <button class="start-btn" id="end-next-btn" onclick="goNextStage()" hidden>다음 맵으로</button>
+        <button class="end-home-btn" onclick="location.reload()">홈으로</button>
       </div>
     </div>
   </div>
