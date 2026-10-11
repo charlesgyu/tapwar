@@ -2484,6 +2484,8 @@ let quakeUntilMs = 0;
 // -------------------------------------------------------------
 const ITEM_ROUNDS = 4;
 const ITEM_EVERY_SEC = 30;
+const REBUILD_EVERY_SEC = 5;
+const REBUILD_HP = 2;
 const ITEM_CHANCE = 0.3; // 반사·흡수·크리티컬 확률
 const ITEM_ICON = {
   double: '<circle cx="6" cy="12" r="3"/><path d="M9 12 L19 5 M9 12 L19 19"/><circle cx="19" cy="5" r="1.6"/><circle cx="19" cy="19" r="1.6"/>',
@@ -2504,7 +2506,7 @@ const ITEMS = [
   { key: 'power', name: '파워샷', desc: '상대 땅 공격력 2배 (상대 색이 조금이라도 있는 곳)' },
   { key: 'pierce', name: '관통탄', desc: '맞힌 지역 옆의 상대 지역도 한 번 더 타격' },
   { key: 'fortress', name: '철벽', desc: '상대 공격을 50%만 받음' },
-  { key: 'rebuild', name: '재건', desc: '30초마다 내 모든 지역 피 가득' },
+  { key: 'rebuild', name: '재건', desc: '5초마다 내 모든 지역 피 +2' },
   { key: 'reflect', name: '반사 방패', desc: '30% 확률로 상대 구슬을 쏜 곳으로 되돌림' },
   { key: 'longrange', name: '장거리 사격', desc: '모든 내 지역이 원거리 공격 가능' },
   { key: 'supply', name: '보급', desc: '내 생산 속도 30% 빠르게' },
@@ -2589,7 +2591,7 @@ function openItemPick() {
 
 function gainItem(owner, key) {
   itemsOf[owner].push(key);
-  if (key === 'rebuild') rebuildAt[owner] = gameElapsedTime + ITEM_EVERY_SEC;
+  if (key === 'rebuild') rebuildAt[owner] = gameElapsedTime + REBUILD_EVERY_SEC;
 }
 
 function chooseItem(key) {
@@ -2633,10 +2635,10 @@ window.showItemInfo = showItemInfo;
 function updateItems() {
   if (!itemMode) return;
   [OWNER.PLAYER, OWNER.ENEMY].forEach(owner => {
+    // [아이템 재건] 5초마다 내 모든 지역 피 +2
     if (hasItem(owner, 'rebuild') && gameElapsedTime >= rebuildAt[owner]) {
-      rebuildAt[owner] = gameElapsedTime + ITEM_EVERY_SEC;
-      rawZones.forEach(z => { if (z.owner === owner) z.orbs = z.maxOrbs; });
-      if (owner === OWNER.PLAYER) flashCenterText('재건!');
+      rebuildAt[owner] = gameElapsedTime + REBUILD_EVERY_SEC;
+      rawZones.forEach(z => { if (z.owner === owner) z.orbs = Math.min(z.maxOrbs, z.orbs + REBUILD_HP); });
     }
   });
   if (itemRound < ITEM_ROUNDS && gameElapsedTime >= nextItemAt) openItemPick();
