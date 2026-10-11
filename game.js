@@ -184,6 +184,10 @@ let focusSalvoCount = 3;
 const SKILL_CHARGE_SEC = 10;
 const SKILL_GCD_SEC = 10;       // 특수 기술 글로벌 쿨타임 (게임 시간)
 let playerSkillGcdUntil = 0;    // 아군 글로벌 쿨타임 종료 시각 (gameElapsedTime 기준)
+let enemySkillGcdUntil = 0;     // 적군 글로벌 쿨타임 종료 시각
+// 최초 해금: 완전점령 지역을 동시에 3곳 이상 확보한 적이 있어야 특수 기술 충전·사용 가능 (이후에는 조건 없음)
+const SKILL_UNLOCK_FULL_COUNT = 3;
+const skillUnlocked = { player: false, enemy: false };
 let specialSkillCooldown = 0; // (미사용) 이전 글로벌 쿨타임 호환용
 
 // Enemy AI Special Skill & Focus Fire
@@ -346,6 +350,7 @@ function useEnemySpecialSkill() {
   if (playerZones.length === 0) return;
 
   enemySpecialSkillCooldown = ENEMY_SPECIAL_SKILL_MIN_GAP;
+  enemySkillGcdUntil = gameElapsedTime + SKILL_GCD_SEC;
   consumeSkillCharge(OWNER.ENEMY);
 
   const targetPlayerZones = pickSpecialSkillTargets(playerZones, playerMainAlive);
@@ -394,9 +399,20 @@ function useEnemySpecialSkill() {
 
 // 지역별 충전 상태 갱신: state = null(완전점령 아님) | 'charging' | 'ready' | 'spent'
 function updateSkillCharges(dt) {
+  // 최초 해금 판정: 완전점령 3곳 이상을 처음 달성하면 그 진영은 이후 계속 해금 상태
+  [OWNER.PLAYER, OWNER.ENEMY].forEach(owner => {
+    if (skillUnlocked[owner]) return;
+    let count = 0;
+    for (let i = 0; i < rawZones.length; i++) {
+      if (rawZones[i].owner === owner && isFullyConquered(rawZones[i])) count++;
+    }
+    if (count >= SKILL_UNLOCK_FULL_COUNT) skillUnlocked[owner] = true;
+  });
+
   for (let i = 0; i < rawZones.length; i++) {
     const z = rawZones[i];
-    const full = z.owner !== OWNER.NEUTRAL && isFullyConquered(z);
+    // 해금 전에는 충전이 시작되지 않음 (연한 완전점령 색 유지)
+    const full = z.owner !== OWNER.NEUTRAL && isFullyConquered(z) && skillUnlocked[z.owner];
     if (!full || z.chargeOwner !== z.owner) {
       z.chargeState = full ? 'charging' : null;
       z.chargeTime = 0;
@@ -554,6 +570,9 @@ function loadSelectedMap(mapKey) {
   playerMainZone = null;
   enemyMainZone = null;
   playerSkillGcdUntil = 0;
+  enemySkillGcdUntil = 0;
+  skillUnlocked.player = false;
+  skillUnlocked.enemy = false;
   currentPowerZone = null;
   currentEnemyPowerZone = null;
   specialSkillCooldown = 0;
@@ -1430,7 +1449,10 @@ function onPointerUp(e) {
     // [특수 기술]: 드래그 없이 아군 완전점령 지역을 탭하면 그 지역의 충전 1발 사용
     if (endZone === dragSourceZone && isFullyConquered(endZone)) {
       const guide = document.getElementById('status-guide');
-      if (endZone.chargeState === 'ready' && gameElapsedTime < playerSkillGcdUntil) {
+      if (!skillUnlocked[OWNER.PLAYER]) {
+        const n = rawZones.filter(z => z.owner === OWNER.PLAYER && isFullyConquered(z)).length;
+        guide.innerText = `🔒 특수 기술은 완전점령 지역 ${SKILL_UNLOCK_FULL_COUNT}곳을 처음 확보하면 열립니다 (${n}/${SKILL_UNLOCK_FULL_COUNT})`;
+      } else if (endZone.chargeState === 'ready' && gameElapsedTime < playerSkillGcdUntil) {
         guide.innerText = `⏳ 특수 기술 글로벌 쿨타임 (${Math.ceil(playerSkillGcdUntil - gameElapsedTime)}초 남음)`;
         flashZone(endZone, '#94a3b8');
       } else if (endZone.chargeState === 'ready') {
@@ -2062,6 +2084,37 @@ function getZoneStyle(zone) {
     : { base: ZONE_COLORS.base, gauge: ZONE_COLORS.enemy, ratio: hpRatio, stroke: ZONE_COLORS.enemyStroke, width: 2.0 };
 }
 
+// 특수 기술 글로벌 쿨타임 표시: 해당 진영의 충전 완료 지역 위 어두운 부채꼴이 시계 방향으로 걷힘
+function drawSkillGcdSweep(ctx, owner, gcdUntil) {
+  const remain = gcdUntil - gameElapsedTime;
+  if (remain <= 0) return;
+  const f = Math.min(1, remain / SKILL_GCD_SEC); // 남은 비율
+  const start = -Math.PI / 2 + (1 - f) * Math.PI * 2;
+  const end = -Math.PI / 2 + Math.PI * 2;
+  for (let i = 0; i < rawZones.length; i++) {
+    const zone = rawZones[i];
+    if (zone.owner !== owner || zone.chargeState !== 'ready' || !zone.path || !zone.bbox) continue;
+    const { minX, maxX, minY, maxY } = zone.bbox;
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    const r = Math.hypot(maxX - minX, maxY - minY);
+    ctx.save();
+    ctx.clip(zone.path);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, end);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.5)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(start) * r, cy + Math.sin(start) * r);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 1.5 / view.scale;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 function drawExactDistrictsMap(ctx) {
   drawBackdropZones(ctx);
 
@@ -2118,35 +2171,8 @@ function drawExactDistrictsMap(ctx) {
 
   // 3.5 특수 기술 글로벌 쿨타임: 충전 완료된 내 지역 위로 어두운 부채꼴이 시계 방향으로 걷히며 돌아감
   //     (월드 오브 워크래프트 스킬 아이콘 쿨타임 방식)
-  const gcdRemain = playerSkillGcdUntil - gameElapsedTime;
-  if (gcdRemain > 0) {
-    const f = Math.min(1, gcdRemain / SKILL_GCD_SEC); // 남은 비율
-    const start = -Math.PI / 2 + (1 - f) * Math.PI * 2;
-    const end = -Math.PI / 2 + Math.PI * 2;
-    for (let i = 0; i < rawZones.length; i++) {
-      const zone = rawZones[i];
-      if (zone.owner !== OWNER.PLAYER || zone.chargeState !== 'ready' || !zone.path || !zone.bbox) continue;
-      const { minX, maxX, minY, maxY } = zone.bbox;
-      const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-      const r = Math.hypot(maxX - minX, maxY - minY);
-      ctx.save();
-      ctx.clip(zone.path);
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, r, start, end);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.5)';
-      ctx.fill();
-      // 쿨타임 경계선
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(start) * r, cy + Math.sin(start) * r);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.restore();
-    }
-  }
+  drawSkillGcdSweep(ctx, OWNER.PLAYER, playerSkillGcdUntil);
+  drawSkillGcdSweep(ctx, OWNER.ENEMY, enemySkillGcdUntil);
 
   // 4. 번쩍 효과 (점령 순간, 특수 기술 충전 완료 순간)
   const now = performance.now();
