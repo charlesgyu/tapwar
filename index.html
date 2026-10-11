@@ -734,6 +734,42 @@
       background: rgba(0, 0, 0, 0.5);
       pointer-events: none;
     }
+    /* 홈: 국가 고르기 → 도시 맵 고르기 2단계 */
+    .home-view { display: flex; flex-direction: column; align-items: center; width: 100%; }
+    .home-view[hidden] { display: none; }
+    .home-view > :not(.start-logo):not(.back-btn) { width: 100%; max-width: 460px; }
+    .back-btn {
+      position: absolute;
+      top: max(14px, calc(env(safe-area-inset-top) + 4px));
+      left: 16px;
+      width: 38px; height: 38px;
+      border: none; border-radius: 50%;
+      background: #f7f6f2; color: #1e293b;
+      font: 800 24px/1 -apple-system, sans-serif;
+      cursor: pointer;
+    }
+    .stage-progress {
+      text-align: center;
+      font-size: 17px; font-weight: 900; color: #78716c;
+      margin: -14px 0 18px;
+      font-variant-numeric: tabular-nums;
+    }
+    .country-flag { font-size: 120px; line-height: 1.25; margin-bottom: 6px; }
+    .start-card .stage-card.locked .country-flag { filter: saturate(0.7); }
+    #enter-btn.locked { opacity: 0.45; }
+    #splash {
+      position: fixed; inset: 0; z-index: 400;
+      background: #ffffff;
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity 0.45s ease;
+    }
+    #splash.hide { opacity: 0; pointer-events: none; }
+    .splash-text {
+      font-size: 50px; font-weight: 900; letter-spacing: -1px; color: #1e293b;
+      display: inline-flex; align-items: center;
+    }
+    .splash-caret { width: 4px; height: 0.9em; background: #1e293b; margin-left: 4px; animation: caret 0.6s steps(1) infinite; }
+    @keyframes caret { 50% { opacity: 0; } }
   </style>
 </head>
 <body>
@@ -773,22 +809,36 @@
       </div>
     </div>
 
+    <!-- 앱 첫 실행 연출: TAPWAR 가 가운데에서 타이핑되듯 완성된 뒤 홈으로 -->
+    <div id="splash" aria-hidden="true"><h1 class="splash-text"><span id="splash-text"></span><i class="splash-caret"></i></h1></div>
+
     <!-- Start Choice Modal (Mini Metro Style) -->
     <div class="modal-overlay" id="start-modal">
       <div class="modal-card start-card">
-        <h1 class="start-logo" id="start-logo">TAPWAR</h1>
-
-        <!-- 나라 선택: 대한민국 외에는 인앱 구매로 열림 -->
-        <div class="country-row" id="country-row"></div>
-
-        <!-- 스테이지 카드: 구역이 적은 맵부터, 앞 맵을 클리어하면 다음 맵이 열림 (game.js에서 생성) -->
-        <div class="stage-wrap">
-          <button class="slide-arrow left" aria-label="이전 맵" onclick="slideStages(-1)">‹</button>
-          <div class="stage-grid" id="stage-grid"></div>
-          <button class="slide-arrow right" aria-label="다음 맵" onclick="slideStages(1)">›</button>
+        <!-- 1단계: 국가 고르기 (맵 고르기처럼 가로 슬라이드) -->
+        <div class="home-view" id="country-view">
+          <h1 class="start-logo" id="start-logo">TAPWAR</h1>
+          <div class="stage-wrap">
+            <button class="slide-arrow left" aria-label="이전 국가" onclick="slideGrid('country-grid', -1)">‹</button>
+            <div class="stage-grid" id="country-grid"></div>
+            <button class="slide-arrow right" aria-label="다음 국가" onclick="slideGrid('country-grid', 1)">›</button>
+          </div>
+          <button class="start-btn" id="enter-btn" onclick="enterCountry()">참전하기</button>
         </div>
 
-        <button class="start-btn" id="start-btn" onclick="onStartBtnClick()">시작</button>
+        <!-- 2단계: 고른 국가의 도시 맵 (구역이 적은 맵부터, 앞 맵을 클리어하면 다음 맵이 열림) -->
+        <div class="home-view" id="stage-view" hidden>
+          <button class="back-btn" aria-label="국가 선택으로" onclick="showCountryView()">‹</button>
+          <h1 class="start-logo" id="country-title">대한민국</h1>
+          <div class="stage-progress" id="stage-progress">0/17</div>
+          <div class="stage-wrap">
+            <button class="slide-arrow left" aria-label="이전 맵" onclick="slideGrid('stage-grid', -1)">‹</button>
+            <div class="stage-grid" id="stage-grid"></div>
+            <button class="slide-arrow right" aria-label="다음 맵" onclick="slideGrid('stage-grid', 1)">›</button>
+          </div>
+          <button class="start-btn" id="start-btn" onclick="onStartBtnClick()">시작</button>
+        </div>
+
         <div class="home-links">
           <button class="link-btn" onclick="openTutorial()">튜토리얼</button>
           <span aria-hidden="true">·</span>
