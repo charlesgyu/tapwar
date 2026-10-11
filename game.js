@@ -497,19 +497,19 @@ const MAP_CONFIGS = {
     guide: '🌲 경기도 전선 작전: 시작할 시·군(예: 수원, 고양, 용인 등)을 탭하세요!'
   },
   // 시·도 맵 (tools/make_region_map.py로 생성. 범위·화면 비율은 맵 JSON의 meta.bounds에서 계산)
-  BUSAN: { name: '부산', label: '부산', count: 16, file: 'assets/busan_zones.json', maxScale: 8 },
-  DAEGU: { name: '대구', label: '대구', count: 9, file: 'assets/daegu_zones.json', maxScale: 8 },
-  INCHEON: { name: '인천', label: '인천', count: 11, file: 'assets/incheon_zones.json', maxScale: 8 },
+  BUSAN: { name: '부산', label: '부산', count: 20, file: 'assets/busan_zones.json', maxScale: 8 },
+  DAEGU: { name: '대구', label: '대구', count: 24, file: 'assets/daegu_zones.json', maxScale: 8 },
+  INCHEON: { name: '인천', label: '인천', count: 26, file: 'assets/incheon_zones.json', maxScale: 8 },
   GWANGJU_JEONNAM: { name: '전남광주', label: '전남광주', count: 27, file: 'assets/gwangju_jeonnam_zones.json', maxScale: 8 },
   DAEJEON: { name: '대전', label: '대전', count: 82, file: 'assets/daejeon_zones.json', maxScale: 8 },
-  ULSAN: { name: '울산', label: '울산', count: 55, file: 'assets/ulsan_zones.json', maxScale: 8 },
+  ULSAN: { name: '울산', label: '울산', count: 16, file: 'assets/ulsan_zones.json', maxScale: 8 },
   SEJONG: { name: '세종', label: '세종', count: 24, file: 'assets/sejong_zones.json', maxScale: 8 },
-  GANGWON: { name: '강원', label: '강원', count: 18, file: 'assets/gangwon_zones.json', maxScale: 8 },
-  CHUNGBUK: { name: '충북', label: '충북', count: 11, file: 'assets/chungbuk_zones.json', maxScale: 8 },
-  CHUNGNAM: { name: '충남', label: '충남', count: 15, file: 'assets/chungnam_zones.json', maxScale: 8 },
-  JEONBUK: { name: '전북', label: '전북', count: 14, file: 'assets/jeonbuk_zones.json', maxScale: 8 },
-  GYEONGBUK: { name: '경북', label: '경북', count: 22, file: 'assets/gyeongbuk_zones.json', maxScale: 8 },
-  GYEONGNAM: { name: '경남', label: '경남', count: 18, file: 'assets/gyeongnam_zones.json', maxScale: 8 },
+  GANGWON: { name: '강원', label: '강원', count: 25, file: 'assets/gangwon_zones.json', maxScale: 8 },
+  CHUNGBUK: { name: '충북', label: '충북', count: 25, file: 'assets/chungbuk_zones.json', maxScale: 8 },
+  CHUNGNAM: { name: '충남', label: '충남', count: 25, file: 'assets/chungnam_zones.json', maxScale: 8 },
+  JEONBUK: { name: '전북', label: '전북', count: 25, file: 'assets/jeonbuk_zones.json', maxScale: 8 },
+  GYEONGBUK: { name: '경북', label: '경북', count: 25, file: 'assets/gyeongbuk_zones.json', maxScale: 8 },
+  GYEONGNAM: { name: '경남', label: '경남', count: 25, file: 'assets/gyeongnam_zones.json', maxScale: 8 },
   JEJU: { name: '제주', label: '제주', count: 43, file: 'assets/jeju_zones.json', maxScale: 8 }
 };
 MAP_CONFIGS.KOREA.label = '전국'; MAP_CONFIGS.KOREA.count = 164;
@@ -2561,7 +2561,18 @@ const INTRO_ZOOM_MS = 1700;
 const INTRO_FADE_FROM = 0.72; // 확대 구간의 이 지점부터 게임 지도로 서서히 전환
 let worldLand = null;
 let introAnim = null;
-fetch('assets/world_land.json').then(r => r.json()).then(d => { worldLand = d; }).catch(() => {});
+// world: Natural Earth 110m 육지, korea: 우리 전국 맵을 합친 한국 윤곽(제주도 등 섬 포함)
+fetch('assets/world_land.json').then(r => r.json()).then(d => {
+  worldLand = Array.isArray(d) ? d : d.world.concat(d.korea || []);
+}).catch(() => {});
+
+// 두 색(#rrggbb) 사이 보간
+function mixColor(a, b, t) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const ch = (v, sh) => (v >> sh) & 255;
+  const m = sh => Math.round(ch(pa, sh) + (ch(pb, sh) - ch(pa, sh)) * t);
+  return `rgb(${m(16)},${m(8)},${m(0)})`;
+}
 
 function startIntroZoom(mapKey) {
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -2604,7 +2615,7 @@ function drawIntro(ctx) {
   const area = getMapArea();
   const R0 = Math.min(W, H) * 0.36;
   const Rf = area.h / (introAnim.dLat * Math.PI / 180);
-  let R, lon0, lat0, alpha = 1;
+  let R, lon0, lat0, alpha = 1, seaBlend = 0;
 
   if (el < INTRO_SPIN_MS) {
     const t = easeInOut(el / INTRO_SPIN_MS);
@@ -2617,6 +2628,8 @@ function drawIntro(ctx) {
     lon0 = introAnim.lon;
     lat0 = introAnim.lat;
     R = R0 * Math.pow(Rf / R0, e);
+    // 확대될수록 바다색을 게임 지도 바탕색으로 서서히 바꿔, 지도로 넘어갈 때 번쩍이지 않게 함
+    seaBlend = Math.min(1, Math.max(0, (t - 0.35) / (INTRO_FADE_FROM - 0.35)));
     if (t > INTRO_FADE_FROM) alpha = 1 - (t - INTRO_FADE_FROM) / (1 - INTRO_FADE_FROM);
     if (t >= 1) {
       introAnim = null;
@@ -2629,10 +2642,13 @@ function drawIntro(ctx) {
   ctx.fillStyle = '#f6f5f0';
   ctx.fillRect(0, 0, W, H);
   const cx = W / 2, cy = area.y + area.h / 2;
-  // 바다
+  // 바다 (지구가 화면보다 훨씬 커지면 원 대신 화면 전체를 칠함: 거대한 원 그리기에서 생기는 깜빡임 방지)
+  const seaColor = mixColor('#bfe5fa', '#f6f5f0', seaBlend);
+  const huge = R > Math.hypot(W, H) * 2;
   ctx.beginPath();
-  ctx.arc(cx, cy, R, 0, Math.PI * 2);
-  ctx.fillStyle = '#bfe5fa';
+  if (huge) ctx.rect(0, 0, W, H);
+  else ctx.arc(cx, cy, R, 0, Math.PI * 2);
+  ctx.fillStyle = seaColor;
   ctx.fill();
   // 육지
   ctx.save();
