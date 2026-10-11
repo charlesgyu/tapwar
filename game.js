@@ -3299,9 +3299,26 @@ function enterCountry() {
     openSheet('', `${c ? c.name : ''} 전선`, '곧 출시돼요.\n출시되면 인앱 구매로 열 수 있어요.');
     return;
   }
+  // 맵이 하나뿐인 나라(전세계): 맵 고르기 없이 바로 본진 선택으로
+  const only = getCampaignOrder(c.key);
+  if (only.length === 1) {
+    selectedModalMapKey = only[0];
+    showStageView();
+    startWhenMapLoaded(only[0]);
+    return;
+  }
   showStageView();
 }
 window.enterCountry = enterCountry;
+// 맵 데이터가 다 불러와진 뒤 시작 (최대 5초 대기)
+function startWhenMapLoaded(key) {
+  const t0 = performance.now();
+  const waitStart = () => {
+    if (currentMapKey === key && rawZones.length > 0 && MAP_CONFIGS[key].bounds) onStartBtnClick();
+    else if (performance.now() - t0 < 5000) setTimeout(waitStart, 50);
+  };
+  setTimeout(waitStart, 50);
+}
 
 function showStageView() {
   const c = COUNTRIES.find(x => x.key === selectedCountryKey) || COUNTRIES[0];
@@ -3797,7 +3814,7 @@ function mixColor(a, b, t) {
 function startIntroZoom(mapKey) {
   const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const cfg = MAP_CONFIGS[mapKey];
-  if (reduce || !cfg || !worldLand) return;
+  if (reduce || !cfg || !cfg.bounds || !worldLand) return;
   const b = cfg.bounds;
   introAnim = {
     start: performance.now(),
@@ -4127,13 +4144,13 @@ function maybeOpenTutorial() {
     if (auto && MAP_CONFIGS[auto] && isStageUnlocked(auto)) {
       selectedModalMapKey = auto;
       showStageView();
-      // 맵 데이터가 다 불러와진 뒤 시작 (최대 5초 대기)
-      const t0 = performance.now();
-      const waitStart = () => {
-        if (currentMapKey === auto && rawZones.length > 0 && currentMapBounds && currentMapBounds.minLng !== undefined) onStartBtnClick();
-        else if (performance.now() - t0 < 5000) setTimeout(waitStart, 50);
-      };
-      setTimeout(waitStart, 50);
+      startWhenMapLoaded(auto);
+      return;
+    }
+    // 맵이 하나뿐인 나라는 맵 화면 없이 나라 고르기로
+    if (getCampaignOrder(returning).length === 1) {
+      requestAnimationFrame(() => selectCountry(returning));
+      maybeOpenTutorial();
       return;
     }
     showStageView();
