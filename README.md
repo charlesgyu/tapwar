@@ -117,8 +117,7 @@ python tools/build_map.py assets/새맵.json
   ```bash
   curl -L -o HangJeongDong.geojson \
     https://raw.githubusercontent.com/vuski/admdongkor/master/ver20260701/HangJeongDong_ver20260701.geojson
-  python tools/make_dong_map.py HangJeongDong.geojson "경기도 수원시" "수원시 44개 행정동 전선" assets/suwon_exact_zones.json \
-    --backdrop-from assets/south_korea_exact_zones.json
+  python tools/make_dong_map.py HangJeongDong.geojson "경기도 수원시" "수원시 44개 행정동 전선" assets/suwon_exact_zones.json
   python tools/build_map.py assets/suwon_exact_zones.json
   ```
   그다음 `game.js`의 `MAP_CONFIGS`에 전장을 추가하고(`bounds`는 생성된 JSON의 `meta.bounds`), `index.html`에 카드(`modal-map-<키>`)와 버튼(`map-btn-<키>`)을 추가합니다.

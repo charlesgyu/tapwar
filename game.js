@@ -169,6 +169,7 @@ let enemySkillGcdUntil = 0;     // 적군 글로벌 쿨타임 종료 시각
 // 최초 해금: 완전점령 지역을 동시에 3곳 이상 확보한 적이 있어야 특수 기술 충전·사용 가능 (이후에는 조건 없음)
 const SKILL_UNLOCK_FULL_COUNT = 3;
 const skillUnlocked = { player: false, enemy: false };
+const gcdWasActive = { player: false, enemy: false };
 let specialSkillCooldown = 0; // (미사용) 이전 글로벌 쿨타임 호환용
 
 // Enemy AI Special Skill & Focus Fire
@@ -388,6 +389,21 @@ function updateSkillCharges(dt) {
       if (rawZones[i].owner === owner && isFullyConquered(rawZones[i])) count++;
     }
     if (count >= SKILL_UNLOCK_FULL_COUNT) skillUnlocked[owner] = true;
+  });
+
+  // 글로벌 쿨타임이 끝나는 순간: 다시 사용 가능해진 충전 지역의 테두리를 번쩍
+  [[OWNER.PLAYER, playerSkillGcdUntil], [OWNER.ENEMY, enemySkillGcdUntil]].forEach(([owner, until]) => {
+    const active = gameElapsedTime < until;
+    if (gcdWasActive[owner] && !active) {
+      for (let i = 0; i < rawZones.length; i++) {
+        const z = rawZones[i];
+        if (z.owner === owner && z.chargeState === 'ready') {
+          const isMyMain = z.owner === OWNER.PLAYER && z === playerMainZone;
+          flashZone(z, isMyMain ? ZONE_COLORS.mainCharged : (owner === OWNER.PLAYER ? ZONE_COLORS.playerFullCharged : ZONE_COLORS.enemyFullCharged));
+        }
+      }
+    }
+    gcdWasActive[owner] = active;
   });
 
   for (let i = 0; i < rawZones.length; i++) {
