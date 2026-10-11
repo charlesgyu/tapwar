@@ -619,7 +619,41 @@ const MAP_CONFIGS = {
   JP_KYUSHU: { country: 'JP', name: '규슈·오키나와', label: '규슈·오키나와', count: 25, file: 'assets/jp_kyushu_zones.json', maxScale: 8 },
   JP_CHUBU: { country: 'JP', name: '주부', label: '주부', count: 27, file: 'assets/jp_chubu_zones.json', maxScale: 8 },
   JP_TOKYO: { country: 'JP', name: '도쿄', label: '도쿄', count: 29, file: 'assets/jp_tokyo_zones.json', maxScale: 10 },
-  JP_JAPAN: { country: 'JP', name: '일본 전국', label: '일본 전국', count: 47, file: 'assets/jp_japan_zones.json', maxScale: 14 }
+  JP_JAPAN: { country: 'JP', name: '일본 전국', label: '일본 전국', count: 47, file: 'assets/jp_japan_zones.json', maxScale: 14 },
+  // CN — tools/build_*_maps.sh 로 생성
+  CN_DONGBEI: { country: 'CN', name: '둥베이', label: '둥베이', count: 20, file: 'assets/cn_dongbei_zones.json', maxScale: 8 },
+  CN_HUAZHONG: { country: 'CN', name: '화중', label: '화중', count: 22, file: 'assets/cn_huazhong_zones.json', maxScale: 8 },
+  CN_HUANAN: { country: 'CN', name: '화난', label: '화난', count: 22, file: 'assets/cn_huanan_zones.json', maxScale: 8 },
+  CN_HUABEI: { country: 'CN', name: '화북', label: '화북', count: 25, file: 'assets/cn_huabei_zones.json', maxScale: 8 },
+  CN_HUADONG: { country: 'CN', name: '화둥', label: '화둥', count: 27, file: 'assets/cn_huadong_zones.json', maxScale: 8 },
+  CN_XINAN: { country: 'CN', name: '시난', label: '시난', count: 25, file: 'assets/cn_xinan_zones.json', maxScale: 8 },
+  CN_XIBEI: { country: 'CN', name: '시베이', label: '시베이', count: 25, file: 'assets/cn_xibei_zones.json', maxScale: 8 },
+  CN_CHINA: { country: 'CN', name: '중국 전국', label: '중국 전국', count: 31, file: 'assets/cn_china_zones.json', maxScale: 14 },
+  // US — tools/build_*_maps.sh 로 생성
+  US_NEWENGLAND: { country: 'US', name: '뉴잉글랜드', label: '뉴잉글랜드', count: 16, file: 'assets/us_newengland_zones.json', maxScale: 8 },
+  US_MIDATLANTIC: { country: 'US', name: '중부 대서양', label: '중부 대서양', count: 18, file: 'assets/us_midatlantic_zones.json', maxScale: 8 },
+  US_SOUTHCENTRAL: { country: 'US', name: '남부 내륙', label: '남부 내륙', count: 20, file: 'assets/us_southcentral_zones.json', maxScale: 8 },
+  US_PACIFIC: { country: 'US', name: '태평양 연안', label: '태평양 연안', count: 20, file: 'assets/us_pacific_zones.json', maxScale: 8 },
+  US_GREATLAKES: { country: 'US', name: '오대호', label: '오대호', count: 22, file: 'assets/us_greatlakes_zones.json', maxScale: 8 },
+  US_PLAINS: { country: 'US', name: '중서부 평원', label: '중서부 평원', count: 24, file: 'assets/us_plains_zones.json', maxScale: 8 },
+  US_SOUTHWEST: { country: 'US', name: '남서부', label: '남서부', count: 24, file: 'assets/us_southwest_zones.json', maxScale: 8 },
+  US_SOUTHATLANTIC: { country: 'US', name: '남동부 해안', label: '남동부 해안', count: 25, file: 'assets/us_southatlantic_zones.json', maxScale: 8 },
+  US_MOUNTAIN: { country: 'US', name: '로키 산맥', label: '로키 산맥', count: 25, file: 'assets/us_mountain_zones.json', maxScale: 8 },
+  US_USA: { country: 'US', name: '미국 본토', label: '미국 본토', count: 48, file: 'assets/us_usa_zones.json', maxScale: 14 },
+  // EU — tools/build_*_maps.sh 로 생성
+  EU_BRITAIN: { country: 'EU', name: '영국·아일랜드', label: '영국·아일랜드', count: 18, file: 'assets/eu_britain_zones.json', maxScale: 8 },
+  EU_BALKAN: { country: 'EU', name: '발칸', label: '발칸', count: 20, file: 'assets/eu_balkan_zones.json', maxScale: 8 },
+  EU_CENTRAL: { country: 'EU', name: '중부 유럽', label: '중부 유럽', count: 22, file: 'assets/eu_central_zones.json', maxScale: 8 },
+  EU_EAST: { country: 'EU', name: '동유럽', label: '동유럽', count: 24, file: 'assets/eu_east_zones.json', maxScale: 8 },
+  EU_NORTH: { country: 'EU', name: '북유럽', label: '북유럽', count: 24, file: 'assets/eu_north_zones.json', maxScale: 8 },
+  EU_WEST: { country: 'EU', name: '서유럽', label: '서유럽', count: 25, file: 'assets/eu_west_zones.json', maxScale: 8 },
+  EU_SOUTH: { country: 'EU', name: '남유럽', label: '남유럽', count: 25, file: 'assets/eu_south_zones.json', maxScale: 8 },
+  EU_EUROPE: { country: 'EU', name: '유럽 전체', label: '유럽 전체', count: 37, file: 'assets/eu_europe_zones.json', maxScale: 14 },
+  // WD — tools/build_*_maps.sh 로 생성
+  WD_AMERICA: { country: 'WD', name: '아메리카', label: '아메리카', count: 29, file: 'assets/w_america_zones.json', maxScale: 14 },
+  WD_AFRICA: { country: 'WD', name: '아프리카', label: '아프리카', count: 49, file: 'assets/w_africa_zones.json', maxScale: 14 },
+  WD_ASIA: { country: 'WD', name: '아시아·오세아니아', label: '아시아·오세아니아', count: 51, file: 'assets/w_asia_zones.json', maxScale: 14 },
+  WD_WORLD: { country: 'WD', name: '전세계', label: '전세계', count: 155, file: 'assets/w_world_zones.json', maxScale: 20 },
 };
 MAP_CONFIGS.KOREA.label = '전국'; MAP_CONFIGS.KOREA.count = 164;
 MAP_CONFIGS.SEOUL.label = '서울'; MAP_CONFIGS.SEOUL.count = 25;
@@ -2894,12 +2928,13 @@ const THUMB_PALETTE = ['#93c5fd', '#fda4af', '#86efac', '#fcd34d', '#c4b5fd', '#
 const COUNTRIES = [
   { key: 'KR', flag: '🇰🇷', name: '대한민국', open: true },
   { key: 'JP', flag: '🇯🇵', name: '일본', open: false, paid: true },
-  { key: 'CN', flag: '🇨🇳', name: '중국', open: false },
-  { key: 'US', flag: '🇺🇸', name: '미국', open: false },
-  { key: 'EU', flag: '🇪🇺', name: '유럽', open: false }
+  { key: 'CN', flag: '🇨🇳', name: '중국', open: false, paid: true },
+  { key: 'US', flag: '🇺🇸', name: '미국', open: false, paid: true },
+  { key: 'EU', flag: '🇪🇺', name: '유럽', open: false, paid: true },
+  { key: 'WD', flag: '🌏', name: '전세계', open: false, paid: true }
 ];
 const DEV_UNLOCK_KEY = 'tapwar_dev_unlock_all';
-// [테스트용] 유료 나라(일본)를 구매 없이 열기. 출시 전 false (인앱 구매 'country_jp' 로 열림)
+// [테스트용] 유료 나라(일본·중국·미국·유럽·전세계)를 구매 없이 열기. 출시 전 false (인앱 구매 'country_jp' 등으로 열림)
 const DEV_TEST_COUNTRIES = true;
 function isCountryOpen(c) {
   return !!c && (c.open || (c.paid && (DEV_TEST_COUNTRIES || isOwned(`country_${c.key.toLowerCase()}`))));
@@ -3043,7 +3078,11 @@ function getCampaignTotalTime() {
 // -------------------------------------------------------------
 const LEADERBOARDS = {
   KR: 'tapwar.leaderboard.kr.totaltime', // TODO: App Store Connect 순위표 ID
-  JP: 'tapwar.leaderboard.jp.totaltime'
+  JP: 'tapwar.leaderboard.jp.totaltime',
+  CN: 'tapwar.leaderboard.cn.totaltime',
+  US: 'tapwar.leaderboard.us.totaltime',
+  EU: 'tapwar.leaderboard.eu.totaltime',
+  WD: 'tapwar.leaderboard.wd.totaltime'
 };
 const GameCenter = (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() &&
   window.Capacitor.registerPlugin) ? window.Capacitor.registerPlugin('GameCenter') : null;

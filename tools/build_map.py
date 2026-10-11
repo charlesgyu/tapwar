@@ -147,6 +147,12 @@ def process(path):
             print(f'  {zones[i]["name"]}: 다른 지역 안에 갇힌 조각 {len(g.geoms) - len(keep_parts)}개 제거')
             geoms[i] = MultiPolygon(keep_parts)
 
+    # 커버리지 정리 중 면적이 사라진 아주 작은 지역은 뺌
+    alive = [(z, g) for z, g in zip(zones, geoms) if not g.is_empty and rings_of(g)]
+    if len(alive) != len(zones):
+        print(f'  너무 작아 사라진 지역 {len(zones) - len(alive)}개 제외: ' + ', '.join(z['name'] for z, g in zip(zones, geoms) if (z, g) not in alive))
+    zones[:] = [z for z, _ in alive]
+    geoms = [g for _, g in alive]
     for z, g in zip(zones, geoms):
         z['polygons'] = rings_of(g)
         z['lng'], z['lat'] = label_point(g)
