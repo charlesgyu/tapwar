@@ -2332,8 +2332,8 @@ function updateOrbSpawners(currentTime) {
     const slow = zone.slowUntil && gameElapsedTime < zone.slowUntil ? 2 : 1;
     // [원거리] 맞닿지 않은 곳을 쏘는 지역은 발사 간격 2배
     const ranged = zone.targetZones.some(t => isRangedShot(zone, t));
-    // [아이템 속사] 원거리 간격 늘어남 없음 / [아이템 방해 공작] 상대가 가졌으면 생산 20% 느림
-    const rangedMult = ranged && !hasItem(zone.owner, 'rapid') ? RANGED_INTERVAL_MULT : 1;
+    // [아이템 방해 공작] 상대가 가졌으면 생산 20% 느림 (속사는 구슬 속도만, 발사 간격은 그대로)
+    const rangedMult = ranged ? RANGED_INTERVAL_MULT : 1;
     const sabotage = hasItem(itemRival(zone.owner), 'sabotage') ? 1.25 : 1;
     const interval = baseInterval * rangedMult * sabotage * slow / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
 
@@ -2481,7 +2481,7 @@ const ITEM_ICON = {
 };
 const ITEMS = [
   { key: 'double', name: '더블샷', desc: '한 번에 두 발, 서로 다른 곳으로' },
-  { key: 'rapid', name: '속사', desc: '원거리 구슬이 느려지지 않고 더 빠르게' },
+  { key: 'rapid', name: '속사', desc: '원거리 구슬이 빠르게 날아감 (발사 간격은 그대로)' },
   { key: 'power', name: '파워샷', desc: '구슬 공격력 2배' },
   { key: 'pierce', name: '관통탄', desc: '맞힌 지역 옆의 상대 지역도 한 번 더 타격' },
   { key: 'fortress', name: '철벽', desc: '상대 공격을 50%만 받음' },
