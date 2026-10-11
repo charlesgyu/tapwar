@@ -571,11 +571,17 @@ function projectGeo(lng, lat, mapArea) {
   };
 }
 
+function getMapHeaderHeight() {
+  return Math.max(84, Math.min(viewH * 0.15, 150));
+}
+
 function getMapArea() {
   const w = viewW;
   const h = viewH;
   const targetRatio = MAP_CONFIGS[currentMapKey] ? MAP_CONFIGS[currentMapKey].aspectRatio : 0.82;
-  let mapH = Math.min(h * 0.94, 980);
+  // 위쪽에 맵 이름·진행 시간을 새길 머리 공간을 비워 두고, 지도는 그 아래에만 배치 (글자가 지역을 가리지 않게)
+  const head = getMapHeaderHeight();
+  let mapH = Math.min((h - head) * 0.94, 980);
   let mapW = mapH * targetRatio;
 
   if (mapW > w * 0.94) {
@@ -584,7 +590,7 @@ function getMapArea() {
   }
 
   const startX = (w - mapW) / 2;
-  const startY = (h - mapH) / 2;
+  const startY = head + (h - head - mapH) / 2;
   return { x: startX, y: startY, w: mapW, h: mapH };
 }
 
@@ -2153,37 +2159,55 @@ function updateSurrenderButtonVisibility() {
   if (hidden) resetSurrenderButton();
 }
 
+// 받침 유무에 따라 을/를
+function josaEulReul(word) {
+  const c = word.charCodeAt(word.length - 1);
+  if (c < 0xAC00 || c > 0xD7A3) return '을(를)';
+  return (c - 0xAC00) % 28 ? '을' : '를';
+}
+
+// 승리 후 '다음 맵으로': 다음 맵을 골라 둔 채 홈을 다시 열고 바로 시작
+let nextStageAfterWin = null;
+function goNextStage() {
+  try {
+    if (nextStageAfterWin) sessionStorage.setItem('tapwar_autostart_map', nextStageAfterWin);
+    sessionStorage.setItem('tapwar_in_country', selectedCountryKey || 'KR');
+  } catch (e) {}
+  location.reload();
+}
+window.goNextStage = goNextStage;
+
 function gameOver(isWin, isSurrender = false) {
   currentState = GAME_STATE.GAME_OVER;
+  const toast = document.getElementById('center-toast');
+  if (toast) toast.classList.remove('show');
   const modal = document.getElementById('end-modal');
   const title = document.getElementById('end-title');
   const desc = document.getElementById('end-message');
   const timeStr = formatTimeString(gameElapsedTime);
   const mapName = MAP_CONFIGS[currentMapKey] ? MAP_CONFIGS[currentMapKey].name : currentMapKey;
   
-  if (isWin) {
-    title.style.color = '#2563eb';
-    title.innerText = '[전면 승리] 적군 섬멸 완료!';
+  const nextBtn = document.getElementById('end-next-btn');
+  if (nextBtn) nextBtn.hidden = true;
 
-    const wasCleared = isStageCleared(currentMapKey);
+  if (isWin) {
+    // 승리: 축하합니다. / [맵이름]을 점령했습니다. / 기록 / 다음 맵으로 · 홈으로
+    const label = MAP_CONFIGS[currentMapKey] ? MAP_CONFIGS[currentMapKey].label : currentMapKey;
+    title.style.color = '#1e293b';
+    title.innerText = '축하합니다.';
+
     const recordResult = saveBattleRecord(currentMapKey, gameElapsedTime);
     const bestStr = formatTimeString(recordResult.bestTime);
+    desc.innerHTML =
+      `<div class="end-sub">${label}${josaEulReul(label)} 점령했습니다.</div>` +
+      `<div class="end-record-label">기록</div>` +
+      `<div class="end-record">${timeStr}</div>` +
+      (recordResult.isNewBest ? `<div class="end-best new">최고 기록</div>` : `<div class="end-best">최고 기록 ${bestStr}</div>`);
 
-    let recordMsg = `<div style="font-size: 15px; margin-bottom: 12px; color: #0f172a;">작전 소요 시간: <b style="color: #2563eb; font-size: 18px;">${timeStr}</b></div>`;
-    if (recordResult.isNewBest) {
-      recordMsg += `<div style="background: #dcfce7; border: 1px solid #22c55e; color: #15803d; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; font-weight: 700;">전장 최고 기록 경신! 신기록 달성 (${timeStr})</div>`;
-    } else {
-      recordMsg += `<div style="color: #475569; font-size: 13px; margin-bottom: 10px;">전장 최고 기록: <b style="color: #b45309;">${bestStr}</b></div>`;
-    }
-    recordMsg += `<div style="font-size: 12px; color: #475569; line-height: 1.5;">[${mapName}] 누적 평정: <b>${recordResult.clearCount}회</b><br>적의 모든 거점을 격파하고 전선을 완전히 평정했습니다!</div>`;
-
-    // 캠페인: 처음 클리어한 맵이면 다음 맵이 열림
+    // 캠페인 다음 맵 (클리어로 열림)
     const order = getCampaignOrder();
-    const nextKey = order[order.indexOf(currentMapKey) + 1];
-    if (!wasCleared && nextKey) {
-      recordMsg = `<div style="background:#fef9c3; border:1.5px solid #fde047; color:#1e293b; padding:10px 12px; border-radius:14px; margin-bottom:12px; font-weight:800;">다음 맵 열림: ${MAP_CONFIGS[nextKey].label}</div>` + recordMsg;
-    }
-    desc.innerHTML = recordMsg;
+    nextStageAfterWin = order[order.indexOf(currentMapKey) + 1] || null;
+    if (nextBtn) nextBtn.hidden = !nextStageAfterWin;
   } else {
     title.style.color = '#ef4444';
     if (isSurrender) {
@@ -2393,24 +2417,22 @@ function drawMapTitle(ctx) {
   const cfg = MAP_CONFIGS[currentMapKey];
   if (!cfg || !cfg.label || introAnim) return;
   const area = getMapArea();
-  const size = Math.max(18, Math.min(area.w, area.h) * 0.085);
+  const head = getMapHeaderHeight();
+  const showTime = currentState === GAME_STATE.PLAYING || currentState === GAME_STATE.GAME_OVER;
+  // 머리 공간(지도 위쪽 빈 곳) 안에만 그림: 이름 + 시계, 지도와는 여유 간격
+  const size = head * 0.36;
+  const clockH = head * 0.26;
+  const blockH = size + (showTime ? size * 0.18 + clockH : 0);
+  const top = area.y - head * 0.12 - blockH;
+  const tx = area.x + area.w / 2;
   ctx.save();
   ctx.font = `900 ${size}px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.lineJoin = 'round';
-  ctx.lineWidth = size * 0.12;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-  const tx = area.x + area.w / 2; // 지도 가운데 위
-  ctx.strokeText(cfg.label, tx, area.y);
-  ctx.fillStyle = 'rgba(30, 41, 59, 0.55)';
-  ctx.fillText(cfg.label, tx, area.y);
-
-  // 게임 진행 시간: 맵 이름 아래에 진한 검정 7세그먼트(디지털 시계) 숫자로 새김 (게임 시작 후)
-  if (currentState === GAME_STATE.PLAYING || currentState === GAME_STATE.GAME_OVER) {
-    drawSevenSegment(ctx, formatTimeString(gameElapsedTime), tx, area.y + size * 1.15, size * 0.8);
-  }
+  ctx.fillStyle = 'rgba(30, 41, 59, 0.6)';
+  ctx.fillText(cfg.label, tx, top);
   ctx.restore();
+  if (showTime) drawSevenSegment(ctx, formatTimeString(gameElapsedTime), tx, top + size * 1.18, clockH);
 }
 
 function drawExactDistrictsMap(ctx) {
@@ -3329,6 +3351,20 @@ function maybeOpenTutorial() {
     if (splash) splash.remove();
     selectedCountryKey = returning;
     buildCountryCards();
+    let auto = null;
+    try { auto = sessionStorage.getItem('tapwar_autostart_map'); sessionStorage.removeItem('tapwar_autostart_map'); } catch (e) {}
+    if (auto && MAP_CONFIGS[auto] && isStageUnlocked(auto)) {
+      selectedModalMapKey = auto;
+      showStageView();
+      // 맵 데이터가 다 불러와진 뒤 시작 (최대 5초 대기)
+      const t0 = performance.now();
+      const waitStart = () => {
+        if (currentMapKey === auto && rawZones.length > 0 && currentMapBounds && currentMapBounds.minLng !== undefined) onStartBtnClick();
+        else if (performance.now() - t0 < 5000) setTimeout(waitStart, 50);
+      };
+      setTimeout(waitStart, 50);
+      return;
+    }
     showStageView();
     maybeOpenTutorial();
     return;
