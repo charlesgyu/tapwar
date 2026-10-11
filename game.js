@@ -934,6 +934,8 @@ class FlyingOrb {
     this.targetZone = targetZone;
     this.owner = owner;
     this.power = power;
+    // 완전점령 지역(메인 제외)에서 쏜 구슬은 더 진한 색으로 표시
+    this.fromFull = sourceZone.owner !== OWNER.NEUTRAL && isFullyConquered(sourceZone) && !isMainZone(sourceZone);
 
     this.x = sourceZone.cx;
     this.y = sourceZone.cy;
@@ -992,44 +994,28 @@ function drawFlyingOrbs(ctx) {
   // 확대해도 구슬이 지역을 덮지 않도록 배율에 따라 크기 보정 (화면상 크기 증가를 완만하게)
   const k = 1 / Math.sqrt(view.scale);
 
-  // 1. Draw Player Orbs (Solid Cobalt Blue + Clean White Border)
+  // 진영·완전점령 여부별로 한 번에 그림 (아군 파랑 / 아군 완전점령 진한 파랑 / 적 빨강 / 적 완전점령 진한 빨강)
   ctx.save();
-  ctx.fillStyle = '#2563eb';
   ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 1.2 * k;
-  ctx.beginPath();
-  let pCount = 0;
-  for (let i = 0; i < flyingOrbs.length; i++) {
-    const orb = flyingOrbs[i];
-    if (!orb.isDead && orb.owner === OWNER.PLAYER) {
+  const passes = [
+    [OWNER.PLAYER, false, '#2563eb'], [OWNER.PLAYER, true, '#1e3a8a'],
+    [OWNER.ENEMY, false, '#dc2626'], [OWNER.ENEMY, true, '#7f1d1d']
+  ];
+  passes.forEach(([owner, full, color]) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    let count = 0;
+    for (let i = 0; i < flyingOrbs.length; i++) {
+      const orb = flyingOrbs[i];
+      if (orb.isDead || orb.owner !== owner || !!orb.fromFull !== full) continue;
       const r = (orb.power > 1 ? 4.5 : 3.2) * k;
       ctx.moveTo(orb.x + r, orb.y);
       ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
-      pCount++;
+      count++;
     }
-  }
-  if (pCount > 0) {
-    ctx.fill();
-    ctx.stroke();
-  }
-
-  // 2. Draw Enemy Orbs (Solid Vermilion Red + Clean White Border)
-  ctx.fillStyle = '#dc2626';
-  ctx.beginPath();
-  let eCount = 0;
-  for (let i = 0; i < flyingOrbs.length; i++) {
-    const orb = flyingOrbs[i];
-    if (!orb.isDead && orb.owner === OWNER.ENEMY) {
-      const r = (orb.power > 1 ? 4.5 : 3.2) * k;
-      ctx.moveTo(orb.x + r, orb.y);
-      ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
-      eCount++;
-    }
-  }
-  if (eCount > 0) {
-    ctx.fill();
-    ctx.stroke();
-  }
+    if (count > 0) { ctx.fill(); ctx.stroke(); }
+  });
   ctx.restore();
 }
 
@@ -2235,11 +2221,13 @@ function josaEulReul(word) {
 // 승리 후 '다음 맵으로': 다음 맵을 골라 둔 채 홈을 다시 열고 바로 시작
 let nextStageAfterWin = null;
 function goNextStage() {
-  try {
-    if (nextStageAfterWin) sessionStorage.setItem('tapwar_autostart_map', nextStageAfterWin);
-    sessionStorage.setItem('tapwar_in_country', selectedCountryKey || 'KR');
-  } catch (e) {}
-  location.reload();
+  const next = nextStageAfterWin;
+  if (!next || !MAP_CONFIGS[next]) { location.reload(); return; }
+  // 화면을 빠져나갔다 들어오는 시작 연출 없이 그 자리에서 바로 다음 맵을 불러옴
+  document.getElementById('end-modal').style.display = 'none';
+  selectedModalMapKey = next;
+  selectModalMap(next);
+  updateStageProgress();
 }
 window.goNextStage = goNextStage;
 
