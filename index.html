@@ -708,7 +708,12 @@
     .start-card .stage-grid { margin-inline: -24px; padding-inline: calc(50% + 24px - var(--stage-card-w) / 2); scroll-padding-inline: 0; --stage-card-w: min(250px, 62vw); }
     .start-card .stage-grid .stage-card { flex: 0 0 var(--stage-card-w); padding: 22px 10px 20px; box-sizing: border-box; }
     .stage-thumb { width: 170px; height: 170px; }
-    .start-card .stage-name { font-size: 18px; }
+    /* 맵 카드 글씨 크게: 이름 옆에 지역 수, 아래 최고 기록 */
+    .start-card .stage-title { display: flex; align-items: baseline; justify-content: center; gap: 6px; }
+    .start-card .stage-name { font-size: 26px; }
+    .start-card .stage-title .stage-sub { font-size: 16px; font-weight: 800; color: #a8a29e; }
+    .start-card .stage-record { font-size: 22px; font-weight: 900; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .start-card .stage-no { font-size: 14px; }
     .start-card .start-btn { font-size: 21px; padding-block: 20px; margin-top: 10px; }
     .home-links { font-size: 15px; }
     /* 잠긴 맵: 검은 막(투명도 50%)을 씌워 어둡게 */
