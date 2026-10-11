@@ -813,7 +813,7 @@ function pickAdjacentTarget(zone) {
 }
 
 // 초기 맵 로드 (기본: 전국 전선)
-loadSelectedMap('KOREA');
+// 초기 맵은 파일 끝의 홈 화면 초기화에서 다음 스테이지로 로드
 
 // Troop/Orb Class
 class FlyingOrb {
@@ -2050,6 +2050,7 @@ function gameOver(isWin, isSurrender = false) {
     title.style.color = '#2563eb';
     title.innerText = '🎉 [전면 승리] 적군 섬멸 완료!';
 
+    const wasCleared = isStageCleared(currentMapKey);
     const recordResult = saveBattleRecord(currentMapKey, gameElapsedTime);
     const bestStr = formatTimeString(recordResult.bestTime);
 
@@ -2061,6 +2062,12 @@ function gameOver(isWin, isSurrender = false) {
     }
     recordMsg += `<div style="font-size: 12px; color: #475569; line-height: 1.5;">🎖️ [${mapName}] 누적 평정: <b>${recordResult.clearCount}회</b><br>적의 모든 거점을 격파하고 전선을 완전히 평정했습니다!</div>`;
 
+    // 캠페인: 처음 클리어한 맵이면 다음 맵이 열림
+    const order = getCampaignOrder();
+    const nextKey = order[order.indexOf(currentMapKey) + 1];
+    if (!wasCleared && nextKey) {
+      recordMsg = `<div style="background:#fef9c3; border:1.5px solid #fde047; color:#1e293b; padding:10px 12px; border-radius:14px; margin-bottom:12px; font-weight:800;">🔓 다음 맵 열림: ${MAP_CONFIGS[nextKey].label}</div>` + recordMsg;
+    }
     desc.innerHTML = recordMsg;
   } else {
     title.style.color = '#ef4444';
@@ -2490,27 +2497,212 @@ if (minimapCanvas) {
 // -------------------------------------------------------------
 const THUMB_PALETTE = ['#93c5fd', '#fda4af', '#86efac', '#fcd34d', '#c4b5fd', '#fdba74', '#5eead4', '#f9a8d4'];
 
-// 시작 화면 전장 카드를 MAP_CONFIGS 순서대로 생성
+// -------------------------------------------------------------
+// 홈 화면: 나라 선택 + 대한민국 캠페인(구역 적은 맵부터, 클리어하면 다음 맵 열림) + 튜토리얼
+// -------------------------------------------------------------
+const COUNTRIES = [
+  { key: 'KR', flag: '🇰🇷', name: '대한민국', open: true },
+  { key: 'JP', flag: '🇯🇵', name: '일본', open: false },
+  { key: 'CN', flag: '🇨🇳', name: '중국', open: false },
+  { key: 'US', flag: '🇺🇸', name: '미국', open: false },
+  { key: 'EU', flag: '🇪🇺', name: '유럽', open: false }
+];
+const DEV_UNLOCK_KEY = 'tapwar_dev_unlock_all';
+
+// 대한민국 캠페인 순서: 구역 수가 적은 맵부터 (같으면 MAP_CONFIGS 순서)
+function getCampaignOrder() {
+  const keys = Object.keys(MAP_CONFIGS);
+  return keys.slice().sort((a, b) => (MAP_CONFIGS[a].count - MAP_CONFIGS[b].count) || (keys.indexOf(a) - keys.indexOf(b)));
+}
+
+function isDevUnlockAll() {
+  try { return localStorage.getItem(DEV_UNLOCK_KEY) === '1'; } catch (e) { return false; }
+}
+
+function isStageCleared(key) {
+  const r = getBattleRecords()[key];
+  return !!(r && r.cleared);
+}
+
+function isStageUnlocked(key) {
+  if (isDevUnlockAll()) return true;
+  const order = getCampaignOrder();
+  const i = order.indexOf(key);
+  return i <= 0 || isStageCleared(order[i - 1]);
+}
+
+// 다음에 할 스테이지: 열려 있고 아직 클리어하지 않은 첫 맵 (모두 깼으면 마지막 맵)
+function getNextStageKey() {
+  const order = getCampaignOrder();
+  return order.find(k => isStageUnlocked(k) && !isStageCleared(k)) || order[order.length - 1];
+}
+
+function openSheet(icon, title, text) {
+  document.getElementById('sheet-icon').textContent = icon;
+  document.getElementById('sheet-title').textContent = title;
+  document.getElementById('sheet-text').textContent = text;
+  document.getElementById('sheet').style.display = 'flex';
+}
+function closeSheet() {
+  document.getElementById('sheet').style.display = 'none';
+}
+window.closeSheet = closeSheet;
+
+function restorePurchases() {
+  // TODO(IAP): App Store 상품 등록 후 StoreKit 구매 복원 연결
+  openSheet('🧾', '구매 복원', '앱스토어 결제를 연결한 뒤에 사용할 수 있어요.\n같은 Apple ID로 산 나라·기능을 다시 열어 줍니다.');
+}
+window.restorePurchases = restorePurchases;
+
+function buildCountryRow() {
+  const row = document.getElementById('country-row');
+  if (!row) return;
+  row.innerHTML = '';
+  COUNTRIES.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'country-chip' + (c.open ? ' active' : ' locked');
+    b.textContent = `${c.flag} ${c.name}${c.open ? '' : ' 🔒'}`;
+    b.onclick = () => {
+      if (c.open) return;
+      // TODO(IAP): 출시 후 인앱 구매 시트로 연결
+      openSheet(c.flag, `${c.name} 전선`, '곧 출시돼요.\n출시되면 인앱 구매로 열 수 있어요.');
+    };
+    row.appendChild(b);
+  });
+}
+
+// 시작 화면 스테이지 카드 (캠페인 순서, 잠김·클리어 표시)
 function buildStageCards() {
   const grid = document.getElementById('stage-grid');
   if (!grid) return;
   grid.innerHTML = '';
-  Object.keys(MAP_CONFIGS).forEach((key, i) => {
+  const order = getCampaignOrder();
+  order.forEach((key, i) => {
     const cfg = MAP_CONFIGS[key];
     const k = key.toLowerCase();
+    const unlocked = isStageUnlocked(key);
+    const cleared = isStageCleared(key);
     const btn = document.createElement('button');
     btn.id = `modal-map-${k}`;
-    btn.className = 'stage-card' + (key === selectedModalMapKey ? ' active' : '');
-    btn.onclick = () => selectModalMap(key);
-    btn.innerHTML = `<canvas class="stage-thumb" id="thumb-${k}"></canvas>` +
+    btn.className = 'stage-card' + (key === selectedModalMapKey ? ' active' : '') +
+      (unlocked ? '' : ' locked') + (cleared ? ' cleared' : '');
+    btn.onclick = () => {
+      if (!unlocked) {
+        const prev = MAP_CONFIGS[order[i - 1]];
+        openSheet('🔒', `${cfg.label} 잠김`, `${prev.label} 맵을 클리어하면 열려요.`);
+        return;
+      }
+      selectModalMap(key);
+    };
+    btn.innerHTML = `<span class="stage-no">${i + 1}</span>` +
+      (unlocked ? '' : '<span class="stage-lock">🔒</span>') +
+      `<canvas class="stage-thumb" id="thumb-${k}"></canvas>` +
       `<span class="stage-name">${cfg.label || key}</span>` +
       `<span class="stage-sub">${cfg.count || ''}</span>` +
       `<span class="stage-record" id="modal-${k}-record"></span>`;
     grid.appendChild(btn);
   });
+  updateRecordDisplays();
 }
 
+// 로고 5번 탭: (개발·테스트용) 모든 맵 열기/닫기
+(function setupDevUnlock() {
+  const logo = document.getElementById('start-logo');
+  if (!logo) return;
+  let taps = 0, timer = null;
+  logo.addEventListener('click', () => {
+    taps++;
+    clearTimeout(timer);
+    timer = setTimeout(() => { taps = 0; }, 1500);
+    if (taps >= 5) {
+      taps = 0;
+      const on = !isDevUnlockAll();
+      try { localStorage.setItem(DEV_UNLOCK_KEY, on ? '1' : '0'); } catch (e) {}
+      renderStageThumbs();
+      openSheet('🛠️', on ? '테스트: 모든 맵 열림' : '테스트: 잠금 복원',
+        on ? '개발 확인용으로 모든 스테이지를 열었어요.' : '캠페인 잠금을 다시 적용했어요.');
+    }
+  });
+})();
+
+// -------------------------------------------------------------
+// 튜토리얼 (처음 실행 시 자동, 홈의 '튜토리얼'로 다시 보기)
+// -------------------------------------------------------------
+const TUTORIAL_KEY = 'tapwar_tutorial_seen';
+const TC = { b: '#edebe3', s: '#cfcdc4', blue: '#60a5fa', blueS: '#2563eb', red: '#f87171', redS: '#b91c1c', yel: '#fde047', grn2: '#22c55e', grnS: '#16a34a', wine: '#be123c' };
+function hexPoints(x, y, r = 26) {
+  return [0, 1, 2, 3, 4, 5].map(k => {
+    const a = Math.PI / 3 * k + Math.PI / 6;
+    return `${(x + r * Math.cos(a)).toFixed(1)},${(y + r * Math.sin(a)).toFixed(1)}`;
+  }).join(' ');
+}
+const hex = (x, y, fill, stroke = '#ffffff', w = 2) =>
+  `<polygon points="${hexPoints(x, y)}" fill="${fill}" stroke="${stroke}" stroke-width="${w}" stroke-linejoin="round"/>`;
+const svgWrap = inner => `<svg viewBox="0 0 210 150" aria-hidden="true">${inner}</svg>`;
+const orb = (x, y, c = TC.blueS) => `<circle cx="${x}" cy="${y}" r="4.5" fill="${c}" stroke="#fff" stroke-width="1.5"/>`;
+
+const TUTORIAL = [
+  { title: '시작 지역 고르기',
+    text: '지도를 확대·이동하며 둘러보고, 시작할 지역을 한 번 탭해 고른 뒤 한 번 더 탭하면 시작해요.',
+    art: svgWrap(hex(60, 70, TC.b, TC.s) + hex(105, 70, TC.yel, '#fff', 3) + hex(150, 70, TC.b, TC.s) +
+      '<text x="105" y="130" text-anchor="middle" font-size="22">👆👆</text>') },
+  { title: '자동으로 넓혀요',
+    text: '내 지역은 붙어 있는 땅을 자동으로 공격해요. 아래에서부터 파란색이 꽉 차면 내 땅이 돼요.',
+    art: svgWrap(hex(65, 75, TC.yel, '#fff', 3) +
+      `<clipPath id="tut-c1"><polygon points="${hexPoints(145, 75)}"/></clipPath>` + hex(145, 75, TC.b, TC.s) +
+      `<rect x="115" y="80" width="60" height="30" fill="${TC.blue}" clip-path="url(#tut-c1)"/>` +
+      orb(97, 75) + orb(110, 75)) },
+  { title: '지정 공격',
+    text: '내 지역을 꾹 눌러 원하는 곳으로 끌면 그곳을 공격해요. 내 땅으로 끌면 피를 채워 줘요.',
+    art: svgWrap(hex(55, 70, TC.blue, TC.blueS) + hex(155, 70, TC.red, TC.redS) +
+      `<path d="M60 70 L148 70" stroke="${TC.blueS}" stroke-width="3" stroke-dasharray="6 6"/>` +
+      '<text x="62" y="122" font-size="22">👆</text>') },
+  { title: '집중 포화',
+    text: '아무 지역이나 두 번 탭하면 전선의 내 지역이 모두 그곳을 쏴요. 점령할 때까지 계속돼요.',
+    art: svgWrap(hex(45, 45, TC.blue, TC.blueS) + hex(45, 105, TC.blue, TC.blueS) + hex(160, 75, TC.red, TC.blueS, 4) +
+      orb(88, 57) + orb(114, 65) + orb(88, 93) + orb(114, 85)) },
+  { title: '완전 점령과 특수 기술',
+    text: '이웃을 모두 차지하면 초록색이 돼요. 10초 뒤 진한 초록이 되면 탭해서 적 3곳의 피를 깎아요.',
+    art: svgWrap(hex(60, 48, TC.blue, TC.blueS) + hex(150, 48, TC.blue, TC.blueS) + hex(60, 102, TC.blue, TC.blueS) +
+      hex(150, 102, TC.blue, TC.blueS) + hex(105, 75, TC.grn2, TC.grnS, 3) +
+      '<text x="105" y="83" text-anchor="middle" font-size="20">💥</text>') },
+  { title: '적 메인을 무너뜨려요',
+    text: '메인 지역은 피 400이라 단단해요. 주변부터 차지하고, 적 지역을 모두 점령하면 승리! 다음 맵이 열려요.',
+    art: svgWrap(hex(60, 70, TC.yel, '#fff', 3) + hex(150, 70, TC.wine, '#fff', 3) +
+      '<text x="105" y="79" text-anchor="middle" font-size="24">⚔️</text><text x="105" y="135" text-anchor="middle" font-size="22">🏆</text>') }
+];
+let tutorialIndex = 0;
+
+function renderTutorial() {
+  const t = TUTORIAL[tutorialIndex];
+  document.getElementById('tut-art').innerHTML = t.art;
+  document.getElementById('tut-title').textContent = t.title;
+  document.getElementById('tut-text').textContent = t.text;
+  document.getElementById('tut-dots').innerHTML = TUTORIAL.map((_, i) => `<i class="${i === tutorialIndex ? 'on' : ''}"></i>`).join('');
+  document.getElementById('tut-prev').disabled = tutorialIndex === 0;
+  document.getElementById('tut-next').textContent = tutorialIndex === TUTORIAL.length - 1 ? '시작하기' : '다음';
+}
+function openTutorial() {
+  tutorialIndex = 0;
+  renderTutorial();
+  document.getElementById('tutorial').style.display = 'flex';
+}
+function closeTutorial() {
+  document.getElementById('tutorial').style.display = 'none';
+  try { localStorage.setItem(TUTORIAL_KEY, '1'); } catch (e) {}
+}
+function tutorialStep(d) {
+  const n = tutorialIndex + d;
+  if (n >= TUTORIAL.length) { closeTutorial(); return; }
+  tutorialIndex = Math.max(0, n);
+  renderTutorial();
+}
+window.openTutorial = openTutorial;
+window.closeTutorial = closeTutorial;
+window.tutorialStep = tutorialStep;
+
 function renderStageThumbs() {
+  buildCountryRow();
   buildStageCards();
   const keys = Object.keys(MAP_CONFIGS);
   Object.keys(MAP_CONFIGS).forEach(key => {
@@ -2550,8 +2742,6 @@ function renderStageThumbs() {
     }).catch(() => {});
   });
 }
-renderStageThumbs();
-
 // -------------------------------------------------------------
 // 시작 연출: 지구본이 돌며 한국으로 다가간 뒤 선택한 맵 범위까지 확대 → 게임 지도로 전환
 // (화면을 탭하면 건너뜀, '동작 줄이기' 설정 시 생략)
@@ -2806,3 +2996,9 @@ function gameLoop(timestamp) {
 
 resizeCanvas();
 requestAnimationFrame(gameLoop);
+
+// 홈 화면 초기화: 다음에 할 스테이지 선택, 처음 실행이면 튜토리얼
+selectedModalMapKey = getNextStageKey();
+renderStageThumbs();
+selectModalMap(selectedModalMapKey);
+try { if (localStorage.getItem(TUTORIAL_KEY) !== '1') openTutorial(); } catch (e) { openTutorial(); }

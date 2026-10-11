@@ -499,6 +499,118 @@
     }
     .info-btn:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
     .map-credit[hidden] { display: none; }
+
+    /* ---------- Home: 나라 선택 · 스테이지 잠금 · 튜토리얼 ---------- */
+    .country-row {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      margin: -6px -4px 14px;
+      padding: 2px 4px;
+      scrollbar-width: none;
+    }
+    .country-row::-webkit-scrollbar { display: none; }
+    .country-chip {
+      flex: 0 0 auto;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background: #f7f6f2;
+      color: #1e293b;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .country-chip.active { background: #1e293b; color: #fff; }
+    .country-chip.locked { color: #a8a29e; }
+    .country-chip:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
+    .start-card .stage-card { position: relative; }
+    .stage-no {
+      position: absolute;
+      top: 8px;
+      left: 10px;
+      font-size: 11px;
+      font-weight: 900;
+      color: #a8a29e;
+      font-variant-numeric: tabular-nums;
+    }
+    .stage-card.locked { cursor: pointer; }
+    .stage-card.locked .stage-thumb { filter: grayscale(1) opacity(0.35); }
+    .stage-card.locked .stage-name, .stage-card.locked .stage-sub { color: #c4c0b8; }
+    .stage-lock {
+      position: absolute;
+      top: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 20px;
+    }
+    .stage-card.cleared .stage-no::after { content: ' ✓'; color: #16a34a; }
+    .home-links {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      color: #c4c0b8;
+    }
+    .link-btn {
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      color: #78716c;
+      background: none;
+      border: none;
+      padding: 6px 4px;
+      cursor: pointer;
+    }
+    .sheet-overlay { z-index: 300; }
+    .sheet-card, .tutorial-card {
+      max-width: 340px;
+      border-radius: 26px;
+      border: none;
+      padding: 26px 22px 20px;
+      position: relative;
+    }
+    .sheet-icon { font-size: 40px; margin-bottom: 6px; }
+    .sheet-title { font-size: 19px; font-weight: 900; color: #1e293b; margin-bottom: 6px; }
+    .sheet-text { font-size: 14px; color: #57534e; line-height: 1.5; margin-bottom: 18px; white-space: pre-line; }
+    #tutorial { z-index: 250; }
+    .tut-skip {
+      position: absolute;
+      top: 14px;
+      right: 16px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      color: #a8a29e;
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+    .tut-art { height: 150px; display: flex; align-items: center; justify-content: center; margin: 8px 0 10px; }
+    .tut-art svg { width: 210px; height: 150px; }
+    .tut-title { font-size: 20px; font-weight: 900; color: #1e293b; margin-bottom: 6px; text-wrap: balance; }
+    .tut-text { font-size: 14px; color: #57534e; line-height: 1.55; min-height: 66px; text-wrap: balance; }
+    .tut-dots { display: flex; justify-content: center; gap: 6px; margin: 14px 0; }
+    .tut-dots i { width: 7px; height: 7px; border-radius: 50%; background: #e7e5e4; display: block; }
+    .tut-dots i.on { background: #1e293b; width: 18px; border-radius: 999px; }
+    .tut-nav { display: flex; gap: 10px; align-items: center; }
+    .tut-prev {
+      font: inherit;
+      font-weight: 800;
+      font-size: 15px;
+      color: #78716c;
+      background: #f7f6f2;
+      border: none;
+      border-radius: 999px;
+      padding: 14px 18px;
+      cursor: pointer;
+    }
+    .tut-prev[disabled] { visibility: hidden; }
+    .tutorial-card .start-btn { flex: 1; border-radius: 999px; background: #fde047; box-shadow: 0 5px 0 #eab308; font-size: 16px; }
+    .sheet-card .start-btn { border-radius: 999px; background: #fde047; box-shadow: 0 5px 0 #eab308; }
   </style>
 </head>
 <body>
@@ -555,15 +667,48 @@
     <!-- Start Choice Modal (Mini Metro Style) -->
     <div class="modal-overlay" id="start-modal">
       <div class="modal-card start-card">
-        <h1 class="start-logo">TAPWAR<span class="logo-dots"><i></i><i></i><i></i></span></h1>
+        <h1 class="start-logo" id="start-logo">TAPWAR<span class="logo-dots"><i></i><i></i><i></i></span></h1>
 
-        <!-- 전장 카드는 game.js의 MAP_CONFIGS에서 자동 생성 -->
+        <!-- 나라 선택: 대한민국 외에는 인앱 구매로 열림 -->
+        <div class="country-row" id="country-row"></div>
+
+        <!-- 스테이지 카드: 구역이 적은 맵부터, 앞 맵을 클리어하면 다음 맵이 열림 (game.js에서 생성) -->
         <div class="stage-grid" id="stage-grid"></div>
 
         <button class="start-btn" id="start-btn" onclick="onStartBtnClick()">시작</button>
+        <div class="home-links">
+          <button class="link-btn" onclick="openTutorial()">튜토리얼</button>
+          <span aria-hidden="true">·</span>
+          <button class="link-btn" onclick="restorePurchases()">구매 복원</button>
+        </div>
         <!-- 지도 데이터 출처(라이선스상 표시 필수): 첫 화면에는 ⓘ 버튼만, 누르면 표시 -->
         <button class="info-btn" id="info-btn" aria-label="지도 출처" onclick="document.getElementById('map-credit').hidden = !document.getElementById('map-credit').hidden">i</button>
         <p class="map-credit" id="map-credit" hidden>지도: 통계청 SGIS(공공누리 제1유형) · vuski/admdongkor (CC BY 4.0) · southkorea/seoul-maps</p>
+      </div>
+    </div>
+
+    <!-- 안내 시트 (잠긴 나라·잠긴 맵·구매 복원 등) -->
+    <div class="modal-overlay sheet-overlay" id="sheet" style="display: none;" onclick="if (event.target === this) closeSheet()">
+      <div class="modal-card sheet-card">
+        <div class="sheet-icon" id="sheet-icon"></div>
+        <h2 class="sheet-title" id="sheet-title"></h2>
+        <p class="sheet-text" id="sheet-text"></p>
+        <button class="start-btn" onclick="closeSheet()">확인</button>
+      </div>
+    </div>
+
+    <!-- 튜토리얼 -->
+    <div class="modal-overlay" id="tutorial" style="display: none;">
+      <div class="modal-card tutorial-card">
+        <button class="tut-skip" onclick="closeTutorial()">건너뛰기</button>
+        <div class="tut-art" id="tut-art"></div>
+        <h2 class="tut-title" id="tut-title"></h2>
+        <p class="tut-text" id="tut-text"></p>
+        <div class="tut-dots" id="tut-dots"></div>
+        <div class="tut-nav">
+          <button class="tut-prev" id="tut-prev" onclick="tutorialStep(-1)">이전</button>
+          <button class="start-btn tut-next" id="tut-next" onclick="tutorialStep(1)">다음</button>
+        </div>
       </div>
     </div>
 
@@ -572,7 +717,7 @@
       <div class="modal-card" style="max-width: 440px;">
         <h2 id="end-title" style="font-size: 22px; font-weight: 800; margin-bottom: 12px;">게임 종료</h2>
         <div id="end-message" style="margin-bottom: 20px;"></div>
-        <button class="start-btn" onclick="location.reload()">새로운 작전 시작 ➔</button>
+        <button class="start-btn" onclick="location.reload()">홈으로 ➔</button>
       </div>
     </div>
   </div>
