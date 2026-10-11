@@ -203,6 +203,7 @@ function isMainZone(zone) {
 // [실험] 특수 기술 없음: 완전점령 지역은 곧바로 메인처럼 공격 (원거리 + 공격력 2).
 // 충전 게이지·번쩍임 표시는 그대로. false 로 바꾸면 특수 기술 버전으로 돌아감 (저장본: save/special-skill 브랜치)
 const EXPERIMENT_NO_SKILL = true;
+const FULL_ZONE_HP = 100; // [실험] 완전점령 지역 피
 
 function isUnleashed(zone) {
   if (EXPERIMENT_NO_SKILL && zone.owner !== OWNER.NEUTRAL && isFullyConquered(zone)) return true;
@@ -214,10 +215,19 @@ function unleashZone(zone) {
 }
 
 // 공격 가능한 자동 목표인지: 내 점령지가 아니고, 적의 완전점령() 철벽 기지가 아님
-function isAutoAttackable(target, owner) {
+function isAutoAttackable(target, owner, attacker) {
   if (target.owner === owner || target.isHidden) return false;
-  if (target.owner !== OWNER.NEUTRAL && isFullyConquered(target)) return false;
-  return true;
+  return canAttackTarget(attacker, target);
+}
+
+// 상대의 완전점령 지역(철벽)을 이 지역이 공격할 수 있는지
+// [실험] 완전점령 지역은 상대의 완전점령 지역으로만 공격 가능 (양쪽 동일). 실험이 아니면 항상 면역
+function canAttackTarget(attacker, target) {
+  if (!target || target.owner === OWNER.NEUTRAL) return true;
+  if (attacker && target.owner === attacker.owner) return true;
+  if (!isFullyConquered(target)) return true;
+  return EXPERIMENT_NO_SKILL && !!attacker && attacker.owner !== OWNER.NEUTRAL &&
+    attacker.owner !== target.owner && isFullyConquered(attacker);
 }
 
 // 메인 지역 원거리 자동 목표: 내 점령지역 전체와 맞닿아 있는 지역(전선) 중 무작위 1곳
@@ -227,7 +237,7 @@ function pickMainZoneFrontierTarget(zone) {
     const own = rawZones[i];
     if (own.owner !== zone.owner) continue;
     own.neighbors.forEach(n => {
-      if (isAutoAttackable(n, zone.owner)) frontier.add(n);
+      if (isAutoAttackable(n, zone.owner, zone)) frontier.add(n);
     });
   }
   if (frontier.size === 0) return null;
@@ -428,6 +438,21 @@ function updateSkillCharges(dt) {
   for (let i = 0; i < rawZones.length; i++) {
     const z = rawZones[i];
     if (z.unleashed && z.owner !== z.unleashedOwner) z.unleashed = false; // 잃은 지역은 해제
+    // [실험] 완전점령 지역은 피 100 (메인 제외). 완전점령이 풀리면 다시 50
+    if (EXPERIMENT_NO_SKILL && !isMainZone(z)) {
+      const fortress = z.owner !== OWNER.NEUTRAL && isFullyConquered(z);
+      if (fortress && !z.fortressHp) {
+        z.fortressHp = true;
+        z.maxOrbs = FULL_ZONE_HP;
+        z.orbs = FULL_ZONE_HP;
+      } else if (!fortress && z.fortressHp) {
+        z.fortressHp = false;
+        if (z.owner !== OWNER.NEUTRAL) {
+          z.maxOrbs = ZONE_MAX_HP;
+          z.orbs = Math.min(z.orbs, ZONE_MAX_HP);
+        }
+      }
+    }
     // 해금 전에는 충전이 시작되지 않음 (연한 완전점령 색 유지)
     const full = z.owner !== OWNER.NEUTRAL && isFullyConquered(z) && skillUnlocked[z.owner];
     if (!full || z.chargeOwner !== z.owner) {
@@ -856,7 +881,7 @@ function pickAdjacentTarget(zone) {
   if (!neighbors || neighbors.length === 0) return null;
 
   // 맞닿아 있는 적군·중립 지역 중 무작위 1곳 (적 철벽 기지 제외)
-  const targets = neighbors.filter(n => isAutoAttackable(n, zone.owner));
+  const targets = neighbors.filter(n => isAutoAttackable(n, zone.owner, zone));
   if (targets.length === 0) return null;
   return targets[Math.floor(Math.random() * targets.length)];
 }
@@ -1069,7 +1094,7 @@ function applyOrbHit(zone, hitOwner, power, sourceZone) {
   } else {
     // Enemy contest: Troops fight and die 1:1
     // [규칙]: 완전 점령된 지역()은 일반 구슬 공격 절대 불가(면역)!
-    if (isFullyConquered(zone)) {
+    if (!canAttackTarget(sourceZone && sourceZone.owner === hitOwner ? sourceZone : null, zone)) {
       createImmuneShieldParticles(zone.cx, zone.cy);
       if (sourceZone && sourceZone.owner === hitOwner) {
         reRouteZone(sourceZone);
@@ -1302,7 +1327,7 @@ function reRouteZone(zone) {
   if (zone.isManualTarget) {
     // [사용자 요구사항]: 내가 적의 구역을 집중포화/수동지정으로 공격하다가 적의 지역이 완전점령지역으로 바뀌면
     // 즉시 그쪽 공격을 멈추고 인접지역 공격으로 자동 전환!
-    const targetIsFullyConqueredEnemy = zone.targetZones.some(t => t.owner !== zone.owner && t.owner !== OWNER.NEUTRAL && isFullyConquered(t));
+    const targetIsFullyConqueredEnemy = zone.targetZones.some(t => !canAttackTarget(zone, t));
     const allFriendlyFull = zone.targetZones.every(t => t.owner === zone.owner && t.orbs >= t.maxOrbs);
     if (!targetIsFullyConqueredEnemy && !allFriendlyFull) return;
   }
@@ -1488,13 +1513,16 @@ function handleZoneDoubleClick(targetZone) {
   }
 
   // [면역 규칙]: 완전 점령된 적 기지는 일반 공격 절대 불가!
-  if (targetZone.owner === OWNER.ENEMY && isFullyConquered(targetZone)) {
+  // [실험] 적 완전점령 지역은 내 완전점령 지역만 사격에 참여
+  const targetIsFortress = targetZone.owner === OWNER.ENEMY && isFullyConquered(targetZone);
+  if (targetIsFortress && !EXPERIMENT_NO_SKILL) {
     document.getElementById('status-guide').innerText = `[${targetZone.name}]은(는) 완전 점령된 철벽 기지입니다!`;
     return;
   }
 
   // 점령 중인 아군의 전선 거점 탐색 (완전점령지역은 사격 제외! 목표가 아군 거점이면 자기 자신 제외)
-  const allPlayerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && z.id !== targetZone.id && (!isFullyConquered(z) || isUnleashed(z)));
+  const allPlayerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && z.id !== targetZone.id &&
+    (!isFullyConquered(z) || isUnleashed(z)) && canAttackTarget(z, targetZone));
 
   if (allPlayerZones.length === 0) {
     document.getElementById('status-guide').innerText = `출격 가능한 전선 아군 점령지가 없습니다! (완전점령지역은 집중포화 제외)`;
@@ -1671,7 +1699,7 @@ function onPointerUp(e) {
     // 아군 지역 지정 = 방어 지원(피 회복). 피가 가득 차면 자동 공격으로 복귀
     if (sourceCanAttack && endZone && endZone.id !== dragSourceZone.id) {
       // 완전 점령된 적 기지는 일반 공격 불가!
-      if (endZone.owner !== dragSourceZone.owner && endZone.owner !== OWNER.NEUTRAL && isFullyConquered(endZone)) {
+      if (!canAttackTarget(dragSourceZone, endZone)) {
         document.getElementById('status-guide').innerText = `[${endZone.name}]은(는) 완전 점령된 철벽 기지입니다! [즉시 점령] 아이템으로만 공략 가능합니다.`;
         createImmuneShieldParticles(endZone.cx, endZone.cy);
       } else {
@@ -2028,7 +2056,7 @@ function updateOrbSpawners(currentTime) {
     }
 
     // If active targets are already captured by same owner, or target became a fully conquered immune zone, re-route immediately!
-    const targetBecameImmune = zone.targetZones.some(t => t.owner !== zone.owner && t.owner !== OWNER.NEUTRAL && isFullyConquered(t));
+    const targetBecameImmune = zone.targetZones.some(t => !canAttackTarget(zone, t));
     const allTargetsCaptured = zone.targetZones.length > 0 && zone.targetZones.every(t => t.owner === zone.owner);
     if (targetBecameImmune || allTargetsCaptured || zone.targetZones.length === 0) {
       // 집중포화 타겟이었을 경우 집중포화 타겟팅 해제 및 후속 구슬 소멸
@@ -3002,7 +3030,7 @@ const TUTORIAL = [
     art: svgWrap(hex(45, 45, TC.blue, TC.blueS) + hex(45, 105, TC.blue, TC.blueS) + hex(160, 75, TC.red, TC.blueS, 4) +
       orb(88, 57) + orb(114, 65) + orb(88, 93) + orb(114, 85)) },
   { title: EXPERIMENT_NO_SKILL ? '완전 점령' : '완전 점령과 특수 기술',
-    text: (EXPERIMENT_NO_SKILL ? '이웃을 모두 차지하면 초록색이 돼요. 그 지역은 기지처럼 멀리까지 두 배로 강하게 공격해요.' : '이웃을 모두 차지하면 초록색이 돼요. 진한 초록일 때 탭하면 적 3곳의 피를 깎고, 그 지역은 기지처럼 멀리까지 강하게 공격해요.'),
+    text: (EXPERIMENT_NO_SKILL ? '이웃을 모두 차지하면 초록색이 돼요. 피가 100이 되고, 멀리까지 두 배로 강하게 공격해요. 상대의 초록 지역은 내 초록 지역만 공격할 수 있어요.' : '이웃을 모두 차지하면 초록색이 돼요. 진한 초록일 때 탭하면 적 3곳의 피를 깎고, 그 지역은 기지처럼 멀리까지 강하게 공격해요.'),
     art: svgWrap(hex(60, 48, TC.blue, TC.blueS) + hex(150, 48, TC.blue, TC.blueS) + hex(60, 102, TC.blue, TC.blueS) +
       hex(150, 102, TC.blue, TC.blueS) + hex(105, 75, TC.grn2, TC.grnS, 3) ) },
   { title: '적 기지를 무너뜨려요',
