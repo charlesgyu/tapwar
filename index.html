@@ -551,16 +551,32 @@
       font: inherit;
       font-size: 13px;
       font-weight: 800;
-      padding: 8px 12px;
-      border-radius: 999px;
+      padding: 10px 16px;
+      border-radius: 10px;
       border: 2px solid transparent;
       background: #f7f6f2;
       color: #1e293b;
       cursor: pointer;
       white-space: nowrap;
+      position: relative;
+      overflow: hidden;
+      isolation: isolate;
     }
+    /* 국기를 박스에 꽉 차게(비율 유지, 가운데 잘라 쓰기) 반투명 배경으로 */
+    .country-chip .flag-bg {
+      position: absolute;
+      left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 96px;
+      line-height: 1;
+      opacity: 0.5;
+      z-index: -1;
+      pointer-events: none;
+    }
+    .country-chip .chip-name { position: relative; text-shadow: 0 0 4px #fff, 0 0 2px #fff; }
+    .country-chip.active .chip-name { text-shadow: 0 0 4px #1e293b, 0 0 2px #1e293b; }
     .country-chip.active { background: #1e293b; color: #fff; }
-    .country-chip.locked { color: #a8a29e; }
+    .country-chip.locked { color: #57534e; }
     .country-chip:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
     .start-card .stage-card { position: relative; }
     .stage-no {
@@ -615,6 +631,14 @@
     .purchase-price { font-size: 22px; font-weight: 900; color: #1e293b; margin: -6px 0 16px; font-variant-numeric: tabular-nums; }
     .purchase-close { display: block; margin: 10px auto 0; }
     #confirm-base .tut-nav { margin-top: 4px; }
+    /* 본진 확인 창: 뒤의 지도와 선택한 지역(노란색)이 비쳐 보이도록 흐림 없이 옅게 */
+    #confirm-base {
+      background: rgba(30, 41, 59, 0.12);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      align-items: center;
+    }
+    #confirm-base .sheet-card { box-shadow: 0 12px 40px rgba(30, 41, 59, 0.22); }
     .sheet-card, .tutorial-card {
       max-width: 340px;
       border-radius: 26px;
@@ -693,7 +717,7 @@
         <!-- Surrender -->
         <!-- Home: 시작 지역을 고르는 동안에만 표시, 전장 선택 화면으로 돌아감 -->
         <button id="home-btn" class="surrender-btn" onclick="goHome()" hidden>← 홈</button>
-        <button id="surrender-btn" class="surrender-btn" onclick="onSurrenderClick()" hidden>🏳️ 항복</button>
+        <button id="surrender-btn" class="surrender-btn" onclick="onSurrenderClick()" hidden>항복</button>
         <!-- 게임 중 ×2 배속 (유료: 구매 전에는 결제 화면으로) -->
         <button id="speed2-btn" class="surrender-btn speed2-btn" onclick="onSpeed2Click()" hidden>×2</button>
         </div>
@@ -703,7 +727,7 @@
     <!-- Start Choice Modal (Mini Metro Style) -->
     <div class="modal-overlay" id="start-modal">
       <div class="modal-card start-card">
-        <h1 class="start-logo" id="start-logo">TAPWAR<span class="logo-dots"><i></i><i></i><i></i></span></h1>
+        <h1 class="start-logo" id="start-logo">TAPWAR</h1>
 
         <!-- 나라 선택: 대한민국 외에는 인앱 구매로 열림 -->
         <div class="country-row" id="country-row"></div>
@@ -740,7 +764,6 @@
     <!-- 본진 지정 확인 -->
     <div class="modal-overlay sheet-overlay" id="confirm-base" style="display: none;">
       <div class="modal-card sheet-card">
-        <div class="sheet-icon">🏰</div>
         <h2 class="sheet-title" id="confirm-base-name"></h2>
         <p class="sheet-text">본진으로 지정하시겠습니까?</p>
         <div class="tut-nav">
@@ -753,7 +776,6 @@
     <!-- 결제 화면 (인앱 구매) -->
     <div class="modal-overlay sheet-overlay" id="purchase" style="display: none;" onclick="if (event.target === this) closePurchase()">
       <div class="modal-card sheet-card">
-        <div class="sheet-icon" id="purchase-icon">⏩</div>
         <h2 class="sheet-title" id="purchase-title"></h2>
         <p class="sheet-text" id="purchase-text"></p>
         <div class="purchase-price" id="purchase-price"></div>
