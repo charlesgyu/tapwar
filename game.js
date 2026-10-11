@@ -222,7 +222,7 @@ function isMainZone(zone) {
 // [정식 규칙: 완전점령 전략 버전] 특수 기술 없음. 원거리는 완전점령 지역이 지시받을 때만, 메인 공격력 5 등.
 // (코드 안의 '[실험]' 표시는 이 규칙을 뜻함. false 로 바꾸면 예전 특수 기술 버전 동작)
 const EXPERIMENT_NO_SKILL = true;
-const FULL_ZONE_HP = 75; // [실험] 완전점령 지역 피
+const FULL_ZONE_HP = 100; // [실험] 완전점령 지역 피
 const EXP_MAIN_POWER = 5;   // [실험] 메인 지역 공격력 (완전점령 지역은 1)
 
 // 원거리 공격(맞닿지 않은 지역 공격) 가능 여부
@@ -2011,7 +2011,9 @@ function triggerEnemyItemSelection() {
 
 // 적군 AI 집중포화 (아군 전선 거점을 향해 일제 사격)
 // [적 지정 공격] 사람이 손으로 하듯 한 번에 한 지역만, 정해진 간격으로
-const ENEMY_COMMAND_SEC = 2.5;
+const ENEMY_COMMAND_SEC = 1.5;
+// [난이도] 적 생산 속도 배율 (1 = 플레이어와 같음). 방치하면 적이 아슬아슬하게 이기도록 맞춘 값
+const ENEMY_PRODUCTION = 1.1;
 let enemyCommandTimer = ENEMY_COMMAND_SEC;
 let lastEnemyCommandCheck = 0;
 function issueEnemyCommand() {
@@ -2145,7 +2147,7 @@ function updateOrbSpawners(currentTime) {
 
   // 완전점령 1개당 100ms(0.1초) 단축, 최소 500ms(0.5초) 한계
   const playerBaseInterval = Math.max(500, playerBuffs.interval - playerFullCount * 100);
-  const enemyBaseInterval = Math.max(500, enemyBuffs.interval - enemyFullCount * 100);
+  const enemyBaseInterval = Math.max(500, enemyBuffs.interval - enemyFullCount * 100) / ENEMY_PRODUCTION;
 
   rawZones.forEach(zone => {
     if (zone.owner === OWNER.NEUTRAL) return;
