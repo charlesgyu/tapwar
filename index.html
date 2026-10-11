@@ -686,12 +686,18 @@
     .tut-prev { white-space: nowrap; min-width: 72px; }
     .tutorial-card .start-btn { flex: 1; border-radius: 999px; background: #fde047; box-shadow: 0 5px 0 #eab308; font-size: 16px; }
     .sheet-card .start-btn { border-radius: 999px; background: #fde047; box-shadow: 0 5px 0 #eab308; }
-    /* 홈 화면 크게: 휴대폰 화면을 넉넉히 채우도록 */
+    /* 홈 화면: 흰 화면이 휴대폰 전체를 꽉 채움 */
+    #start-modal { padding: 0; background: #ffffff; }
+    .start-card > :not(.info-btn):not(.start-logo) { width: 100%; max-width: 460px; margin-inline: auto; }
+    .start-card > .info-btn { top: max(14px, calc(env(safe-area-inset-top) + 4px)); }
     .start-card {
-      width: calc(100vw - 20px);
-      max-width: 460px;
-      min-height: min(760px, 88vh);
-      padding: 36px 24px 24px;
+      width: 100%;
+      max-width: none;
+      height: 100%;
+      min-height: 0;
+      border-radius: 0;
+      box-shadow: none;
+      padding: max(36px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
       display: flex;
       flex-direction: column;
       justify-content: center;
