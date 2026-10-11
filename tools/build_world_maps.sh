@@ -1,12 +1,15 @@
 #!/bin/bash
-# 대륙 맵: bash tools/build_world_maps.sh <ne_50m_admin_0.geojson> [python] [ne_10m_admin_1.geojson]  (유럽은 build_europe_maps.sh 의 '유럽 전체')
+# 대륙 맵: bash tools/build_world_maps.sh <ne_10m_admin_1.geojson> <ne_50m_admin_0.geojson> <aus_adm2.geojson> <png_adm2.geojson> [python]
+# 각 대륙 250개, 전세계 1000개: 1급 행정구역을 작은 것부터 같은 나라 이웃과 합침
+# 호주·파푸아뉴기니는 1급 행정구역이 너무 커서 geoBoundaries ADM2(CC BY 4.0 / CC BY 3.0 IGO)로 나눔
 set -e
-A0=$1; PY=${2:-python3}; A1=${3:-ne_10m_admin_1_states_provinces.geojson}
-mk() { $PY tools/make_ne_map.py world "$A0" "$A1" "$@"; }
-mk "아메리카" assets/w_america_zones.json --continent "North America|South America" --island-radius 4 --min-area 0.5 --max-lat 72 --simplify 0.08
-mk "아프리카" assets/w_africa_zones.json --continent Africa --exclude LSO --island-radius 3 --min-area 0.3 --simplify 0.05
-mk "아시아" assets/w_asia_zones.json --continent "Asia" --extra RUS --island-radius 6 --min-area 0.5 --max-lat 72 --simplify 0.1
-mk "전세계" assets/w_world_zones.json --exclude LSO --island-radius 8 --min-area 1.5 --max-lat 72 --simplify 0.15
-# 오세아니아: 나라가 적어 1급 행정구역(주)으로 나눔
-$PY tools/make_ne_map.py europe "$A1" "$A0" "오세아니아" assets/w_oceania_zones.json --units AUS,NZL,PNG,SLB,VUT,FJI,NCL --target 22 --island-radius 20 --simplify 0.05 --min-lat -48
-for f in america africa asia oceania world; do $PY tools/build_map.py assets/w_${f}_zones.json; done
+A1=$1; A0=$2; AUS=$3; PNG=$4; PY=${5:-python3}
+X=TWN,HKG,MAC,LSO
+mk() { $PY tools/make_ne_map.py admin1 "$A1" "$A0" "$@"; }
+mk "아메리카" assets/w_america_zones.json --continent "North America|South America" --exclude $X --target 250 --island-radius 4 --max-lat 72 --simplify 0.04
+mk "아프리카" assets/w_africa_zones.json --continent Africa --exclude $X --target 250 --island-radius 3 --simplify 0.03
+mk "아시아" assets/w_asia_zones.json --continent Asia --extra RUS --exclude $X --target 250 --island-radius 6 --max-lat 72 --simplify 0.05
+mk "유럽" assets/w_europe_zones.json --units GBR,IRL,FRA,BEL,NLD,LUX,CHE,DEU,AUT,ITA,ESP,PRT,GRC,POL,CZE,SVK,HUN,SVN,HRV,BIH,SRB,MNE,MKD,ALB,KOS,ROU,BGR,MDA,UKR,BLR,LTU,LVA,EST,FIN,SWE,NOR,DNK,ISL --target 250 --max-lat 71.5 --min-lat 34.5 --island-radius 4 --simplify 0.02
+mk "오세아니아" assets/w_oceania_zones.json --units AUS,NZL,PNG,SLB,VUT,FJI,NCL --fine AUS=$AUS,PNG=$PNG --target 250 --island-radius 20 --min-lat -48 --simplify 0.03
+mk "전세계" assets/w_world_zones.json --exclude $X --target 1000 --island-radius 8 --max-lat 72 --simplify 0.06
+for f in america africa asia europe oceania world; do $PY tools/build_map.py assets/w_${f}_zones.json; done
