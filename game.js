@@ -756,6 +756,7 @@ function loadSelectedMap(mapKey) {
   focusFireCooldown = 0;
   enemyFocusFireCooldown = 0;
   gameElapsedTime = 0;
+  resetCountryEvent();
   enemyCommandTimer = ENEMY_COMMAND_SEC;
   lastEnemyCommandCheck = 0;
   lastTimerText = '';
@@ -2244,7 +2245,9 @@ function updateOrbSpawners(currentTime) {
     }
 
     const baseInterval = zone.owner === OWNER.PLAYER ? playerBaseInterval : enemyBaseInterval;
-    const interval = baseInterval / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
+    // [중국 사막] 모래폭풍에 걸린 지역은 공격 속도 50% (간격 2배)
+    const slow = zone.slowUntil && gameElapsedTime < zone.slowUntil ? 2 : 1;
+    const interval = baseInterval * slow / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
 
     if (currentTime - zone.lastShotTime >= interval) {
       zone.lastShotTime = currentTime;
@@ -2260,6 +2263,8 @@ function updateOrbSpawners(currentTime) {
         power = isEnemyPowerZone ? (1 + enemyBuffs.powerLevel * 2) : 1;
       }
 
+      // [미국 자본주의] 호황 지역은 구슬 공격력 5
+      if (zone.boostUntil && gameElapsedTime < zone.boostUntil) power = Math.max(power, COUNTRY_EVENT_CFG.US.power);
       zone.targetZones.forEach(target => {
         flyingOrbs.push(new FlyingOrb(zone, target, zone.owner, power));
       });
@@ -2267,6 +2272,74 @@ function updateOrbSpawners(currentTime) {
   });
 }
 
+
+// -------------------------------------------------------------
+// 나라별 컨셉 이벤트 (게임 시간 기준, 나·적 구분 없이 무작위 점령 지역에 적용, 메인 지역 제외)
+//   JP 지진: 주기마다 무작위 지역들의 피 50% 감소 + 화면 흔들림
+//   CN 사막: 1분마다 무작위 지역들의 공격 속도 10초 동안 50%
+//   US 자본주의: 1분마다 무작위 지역들의 구슬 공격력 10초 동안 5
+// -------------------------------------------------------------
+const COUNTRY_EVENT_CFG = {
+  JP: { every: 45, share: 0.15, min: 2, toast: '지진!', color: '#92400e' },
+  CN: { every: 60, share: 0.2, min: 2, duration: 10, toast: '모래폭풍', color: '#d97706' },
+  US: { every: 60, share: 0.15, min: 2, duration: 10, power: 5, toast: '자본주의 호황', color: '#eab308' }
+};
+let countryEventNext = 0;
+let quakeUntilMs = 0;
+function resetCountryEvent() {
+  const c = COUNTRY_EVENT_CFG[(MAP_CONFIGS[currentMapKey] || {}).country];
+  countryEventNext = c ? c.every : 0;
+  quakeUntilMs = 0;
+}
+function pickEventZones(c) {
+  const owned = rawZones.filter(z => z.owner !== OWNER.NEUTRAL && !isMainZone(z) && !z.isHidden);
+  const n = Math.min(owned.length, Math.max(c.min, Math.round(owned.length * c.share)));
+  for (let i = owned.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [owned[i], owned[j]] = [owned[j], owned[i]]; }
+  return owned.slice(0, n);
+}
+function updateCountryEvent() {
+  const country = (MAP_CONFIGS[currentMapKey] || {}).country;
+  const c = COUNTRY_EVENT_CFG[country];
+  if (!c || !countryEventNext || gameElapsedTime < countryEventNext) return;
+  countryEventNext = gameElapsedTime + c.every;
+  const zones = pickEventZones(c);
+  if (zones.length === 0) return;
+  zones.forEach(z => {
+    if (country === 'JP') z.orbs = Math.max(1, Math.floor(z.orbs * 0.5));
+    if (country === 'CN') z.slowUntil = gameElapsedTime + c.duration;
+    if (country === 'US') z.boostUntil = gameElapsedTime + c.duration;
+    flashZone(z, c.color);
+  });
+  if (country === 'JP') quakeUntilMs = performance.now() + 700;
+  flashCenterText(c.toast);
+}
+function quakeShakeOffset() {
+  const left = quakeUntilMs - performance.now();
+  if (left <= 0) return { x: 0, y: 0 };
+  const a = 7 * (left / 700);
+  return { x: (Math.random() - 0.5) * 2 * a, y: (Math.random() - 0.5) * 2 * a };
+}
+// 사막(모래색)·호황(금색) 효과가 걸린 지역 표시: 지역 위에 반투명 색 + 테두리
+function drawCountryEventMarks(ctx) {
+  const t = gameElapsedTime;
+  for (let i = 0; i < rawZones.length; i++) {
+    const z = rawZones[i];
+    if (!z.path) continue;
+    let color = null;
+    if (z.slowUntil && t < z.slowUntil) color = COUNTRY_EVENT_CFG.CN.color;
+    else if (z.boostUntil && t < z.boostUntil) color = COUNTRY_EVENT_CFG.US.color;
+    if (!color) continue;
+    ctx.save();
+    ctx.globalAlpha = 0.28 + 0.12 * Math.sin(performance.now() / 180);
+    ctx.fillStyle = color;
+    ctx.fill(z.path);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3 / view.scale;
+    ctx.stroke(z.path);
+    ctx.restore();
+  }
+}
 
 function checkWinConditions(isTimeUp = false) {
   if (currentState !== GAME_STATE.PLAYING) return;
@@ -3791,6 +3864,7 @@ function gameLoop(timestamp) {
       updateAI(timestamp);
       updateOrbSpawners(timestamp);
       updateSpecialSkillHUD(dt);
+      updateCountryEvent();
       updateParticles();
       updateFocusRings();
 
@@ -3829,12 +3903,14 @@ function gameLoop(timestamp) {
     ctx.save();
     const cx = viewW / 2;
     const cy = viewH / 2;
-    ctx.translate(cx + view.offsetX, cy + view.offsetY);
+    const shake = quakeShakeOffset();
+    ctx.translate(cx + view.offsetX + shake.x, cy + view.offsetY + shake.y);
     ctx.scale(view.scale, view.scale);
     ctx.translate(-cx, -cy);
 
     drawExactDistrictsMap(ctx);
     drawMapTitle(ctx);
+    drawCountryEventMarks(ctx);
     drawFocusRings(ctx);
     drawFlyingOrbs(ctx);
     drawParticles(ctx);
