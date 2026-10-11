@@ -3063,7 +3063,10 @@ function loadRankPercents() {
   });
   const totalEl = document.getElementById('rank-total');
   if (totalEl && LEADERBOARDS[c.key]) {
-    GameCenter.getRank({ leaderboardId: LEADERBOARDS[c.key] }).then(r => { totalEl.textContent = rankPercentText(r.rank, r.total); }).catch(() => {});
+    // 순위 카드(총 시간)는 정확한 순위: 'N위 / 전체 M명'
+    GameCenter.getRank({ leaderboardId: LEADERBOARDS[c.key] }).then(r => {
+      if (r.rank && r.total) totalEl.innerHTML = `<b class="rank-exact">${r.rank.toLocaleString()}위</b><span class="rank-of">${r.total.toLocaleString()}명 중</span>`;
+    }).catch(() => {});
   }
 }
 
