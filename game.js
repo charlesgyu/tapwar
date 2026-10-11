@@ -2960,7 +2960,10 @@ function getCampaignOrder(country) {
   return keys.slice().sort((a, b) => (MAP_CONFIGS[a].count - MAP_CONFIGS[b].count) || (keys.indexOf(a) - keys.indexOf(b)));
 }
 
+// [테스트용] true 면 모든 나라의 모든 맵을 클리어 여부와 관계없이 바로 플레이. 출시 전 false
+const DEV_UNLOCK_ALL_MAPS = true;
 function isDevUnlockAll() {
+  if (DEV_UNLOCK_ALL_MAPS) return true;
   try { return localStorage.getItem(DEV_UNLOCK_KEY) === '1'; } catch (e) { return false; }
 }
 
