@@ -1407,6 +1407,14 @@ function onPointerDown(e) {
 
   if (currentState !== GAME_STATE.PLAYING) return;
 
+  // [특수 기술 사용 완료 지역]: 완전점령 상태로 특수 기술을 이미 쓴 내 지역은 탭·드래그·더블탭 모두 반응 없음
+  if (targetZone && targetZone.owner === OWNER.PLAYER && isFullyConquered(targetZone) &&
+      !isMainZone(targetZone) && targetZone.chargeState === 'spent') {
+    lastTapTime = 0;
+    lastTapZoneId = null;
+    return;
+  }
+
   // 지역 더블클릭 / 더블탭 판정 (집중 포격 발동!)
   const now = performance.now();
   // 피가 가득 찬 아군 지역은 더블탭(방어 지원)할 일이 없으므로 탭으로 처리 (특수 기술 연속 사용 가능)
@@ -1469,9 +1477,12 @@ function onPointerUp(e) {
       }
     }
 
+    // [완전점령 지역 공격 불가]: 완전점령 지역(메인 제외)은 특수 기술 외 어떤 공격도 할 수 없음 → 지정 공격 무시
+    const sourceCanAttack = !isFullyConquered(dragSourceZone) || isMainZone(dragSourceZone);
+
     // [지정 공격 규칙]: 모든 지역(적군·중립·아군, 거리 무관) 지정 가능
     // 아군 지역 지정 = 방어 지원(피 회복). 피가 가득 차면 자동 공격으로 복귀
-    if (endZone && endZone.id !== dragSourceZone.id) {
+    if (sourceCanAttack && endZone && endZone.id !== dragSourceZone.id) {
       // 완전 점령된 적 기지는 일반 공격 불가!
       if (endZone.owner !== dragSourceZone.owner && endZone.owner !== OWNER.NEUTRAL && isFullyConquered(endZone)) {
         document.getElementById('status-guide').innerText = `🛡️ [${endZone.name}]은(는) 완전 점령된 철벽 기지입니다! [즉시 점령] 아이템으로만 공략 가능합니다.`;
@@ -1806,8 +1817,10 @@ function updateOrbSpawners(currentTime) {
     }
 
     // '완전 점령' Check: 수동 지정(전국 집중포화 등)이 아닌 경우에만 잉여 생산 중단!
-    if (isFullyConquered(zone) && !zone.isManualTarget && !isMainZone(zone)) {
+    // [완전점령 지역]: 메인 외에는 지정 공격·집중 포화 여부와 관계없이 구슬을 쏘지 않음
+    if (isFullyConquered(zone) && !isMainZone(zone)) {
       zone.targetZones = [];
+      zone.isManualTarget = false;
       return;
     }
 
@@ -2187,8 +2200,8 @@ function drawExactDistrictsMap(ctx) {
   // 2. Draw Network Links (구슬이 움직이는 선 표시 제거)
   // (Network links hidden per user request)
 
-  // 3. Drag line from source (Clean Dotted Transit Vector)
-  if (isDragging && dragSourceZone) {
+  // 3. Drag line from source (Clean Dotted Transit Vector) - 공격할 수 없는 완전점령 지역에서는 표시 안 함
+  if (isDragging && dragSourceZone && (!isFullyConquered(dragSourceZone) || isMainZone(dragSourceZone))) {
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(dragSourceZone.cx, dragSourceZone.cy);
