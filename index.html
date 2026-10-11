@@ -430,6 +430,7 @@
     }
     .start-card .stage-grid::-webkit-scrollbar { display: none; }
     .stage-wrap { position: relative; }
+    .start-card .stage-grid { position: relative; } /* 카드 offsetLeft 기준을 슬라이드 안쪽으로 */
     .slide-arrow {
       position: absolute;
       top: 50%;
@@ -698,8 +699,8 @@
     }
     .start-logo { font-size: 50px; margin-bottom: 30px; align-self: center; }
     .country-chip { font-size: 15px; padding: 13px 20px; }
-    .start-card .stage-grid { margin-inline: -24px; padding-inline: 24px; scroll-padding-inline: 24px; }
-    .start-card .stage-grid .stage-card { flex: 0 0 64%; padding: 22px 10px 20px; }
+    .start-card .stage-grid { margin-inline: -24px; padding-inline: calc(50% + 24px - var(--stage-card-w) / 2); scroll-padding-inline: 0; --stage-card-w: min(250px, 62vw); }
+    .start-card .stage-grid .stage-card { flex: 0 0 var(--stage-card-w); padding: 22px 10px 20px; box-sizing: border-box; }
     .stage-thumb { width: 170px; height: 170px; }
     .start-card .stage-name { font-size: 18px; }
     .start-card .start-btn { font-size: 21px; padding-block: 20px; margin-top: 10px; }

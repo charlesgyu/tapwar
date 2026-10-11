@@ -1758,6 +1758,7 @@ function selectModalMap(mapKey) {
       }
     }
   });
+  centerStageCard(mapKey);
   // 모달에서 카드 클릭 시 즉시 맵을 미리 로드하여 보여줌
   loadSelectedMap(mapKey);
   updateMapButtonsUI(mapKey);
@@ -2706,9 +2707,22 @@ enableHorizontalSlide(document.getElementById('stage-grid'));
 enableHorizontalSlide(document.getElementById('country-row'));
 
 // 스테이지 줄 좌우 화살표 (PC에서 넘길 수 있다는 걸 보여 줌)
+// 선택한 맵 카드를 슬라이드 가운데로
+function centerStageCard(mapKey, smooth = true) {
+  const grid = document.getElementById('stage-grid');
+  const card = document.getElementById(`modal-map-${mapKey.toLowerCase()}`);
+  if (!grid || !card) return;
+  const left = card.offsetLeft - (grid.clientWidth - card.offsetWidth) / 2;
+  grid.scrollTo({ left: Math.max(0, left), behavior: smooth ? 'smooth' : 'auto' });
+}
+
+// 화살표: 카드 한 장씩 이동 (가운데 정렬 유지)
 function slideStages(dir) {
   const grid = document.getElementById('stage-grid');
-  if (grid) grid.scrollBy({ left: dir * grid.clientWidth * 0.8, behavior: 'smooth' });
+  if (!grid) return;
+  const card = grid.querySelector('.stage-card');
+  const step = card ? card.offsetWidth + parseFloat(getComputedStyle(grid).columnGap || 12) : grid.clientWidth * 0.8;
+  grid.scrollBy({ left: dir * step, behavior: 'smooth' });
 }
 window.slideStages = slideStages;
 
