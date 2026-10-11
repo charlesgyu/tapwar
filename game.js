@@ -2651,21 +2651,69 @@ function restorePurchases() {
 }
 window.restorePurchases = restorePurchases;
 
-function buildCountryRow() {
-  const row = document.getElementById('country-row');
-  if (!row) return;
-  row.innerHTML = '';
+// 홈 1단계: 국가 카드 (맵 카드처럼 가로 슬라이드). 선택한 국가를 가운데로
+let selectedCountryKey = 'KR';
+function buildCountryCards() {
+  const grid = document.getElementById('country-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
   COUNTRIES.forEach(c => {
     const b = document.createElement('button');
-    b.className = 'country-chip' + (c.open ? ' active' : ' locked');
-    b.innerHTML = `<span class="flag-bg" aria-hidden="true">${c.flag}</span><span class="chip-name">${c.name}</span>`;
-    b.onclick = () => {
-      if (c.open) return;
-      // TODO(IAP): 출시 후 인앱 구매 시트로 연결
-      openSheet('', `${c.name} 전선`, '곧 출시돼요.\n출시되면 인앱 구매로 열 수 있어요.');
-    };
-    row.appendChild(b);
+    b.id = `country-${c.key.toLowerCase()}`;
+    b.className = 'stage-card country-card' + (c.key === selectedCountryKey ? ' active' : '') + (c.open ? '' : ' locked');
+    b.innerHTML = `<span class="country-flag" aria-hidden="true">${c.flag}</span><span class="stage-name">${c.name}</span>`;
+    b.onclick = () => selectCountry(c.key);
+    grid.appendChild(b);
   });
+}
+
+function selectCountry(key) {
+  selectedCountryKey = key;
+  document.querySelectorAll('#country-grid .country-card').forEach(el => {
+    el.classList.toggle('active', el.id === `country-${key.toLowerCase()}`);
+  });
+  centerCard('country-grid', document.getElementById(`country-${key.toLowerCase()}`));
+  const c = COUNTRIES.find(x => x.key === key);
+  const btn = document.getElementById('enter-btn');
+  if (btn) btn.classList.toggle('locked', !c.open);
+}
+
+// 참전하기: 열린 국가면 도시 맵 화면으로, 잠긴 국가면 안내
+function enterCountry() {
+  const c = COUNTRIES.find(x => x.key === selectedCountryKey);
+  if (!c || !c.open) {
+    // TODO(IAP): 출시 후 인앱 구매 시트로 연결
+    openSheet('', `${c ? c.name : ''} 전선`, '곧 출시돼요.\n출시되면 인앱 구매로 열 수 있어요.');
+    return;
+  }
+  showStageView();
+}
+window.enterCountry = enterCountry;
+
+function showStageView() {
+  const c = COUNTRIES.find(x => x.key === selectedCountryKey) || COUNTRIES[0];
+  document.getElementById('country-view').hidden = true;
+  document.getElementById('stage-view').hidden = false;
+  document.getElementById('country-title').textContent = c.name;
+  updateStageProgress();
+  try { sessionStorage.setItem('tapwar_in_country', c.key); } catch (e) {}
+  // 보이게 된 뒤에 썸네일 크기·가운데 정렬 계산
+  requestAnimationFrame(() => { renderStageThumbs(); selectModalMap(selectedModalMapKey); centerStageCard(selectedModalMapKey, false); });
+}
+function showCountryView() {
+  document.getElementById('stage-view').hidden = true;
+  document.getElementById('country-view').hidden = false;
+  try { sessionStorage.removeItem('tapwar_in_country'); } catch (e) {}
+  requestAnimationFrame(() => selectCountry(selectedCountryKey));
+}
+window.showCountryView = showCountryView;
+
+// 클리어한 맵 수 / 전체 맵 수
+function updateStageProgress() {
+  const el = document.getElementById('stage-progress');
+  if (!el) return;
+  const order = getCampaignOrder();
+  el.textContent = `${order.filter(isStageCleared).length}/${order.length}`;
 }
 
 // 가로 슬라이드 공통: 터치 스와이프(기본) + 마우스 끌기 + 마우스 휠(세로→가로)
@@ -2704,26 +2752,30 @@ function enableHorizontalSlide(el) {
   }, true);
 }
 enableHorizontalSlide(document.getElementById('stage-grid'));
-enableHorizontalSlide(document.getElementById('country-row'));
+enableHorizontalSlide(document.getElementById('country-grid'));
 
 // 스테이지 줄 좌우 화살표 (PC에서 넘길 수 있다는 걸 보여 줌)
-// 선택한 맵 카드를 슬라이드 가운데로
-function centerStageCard(mapKey, smooth = true) {
-  const grid = document.getElementById('stage-grid');
-  const card = document.getElementById(`modal-map-${mapKey.toLowerCase()}`);
+// 카드를 슬라이드 가운데로
+function centerCard(gridId, card, smooth = true) {
+  const grid = document.getElementById(gridId);
   if (!grid || !card) return;
   const left = card.offsetLeft - (grid.clientWidth - card.offsetWidth) / 2;
   grid.scrollTo({ left: Math.max(0, left), behavior: smooth ? 'smooth' : 'auto' });
 }
+function centerStageCard(mapKey, smooth = true) {
+  centerCard('stage-grid', document.getElementById(`modal-map-${mapKey.toLowerCase()}`), smooth);
+}
 
 // 화살표: 카드 한 장씩 이동 (가운데 정렬 유지)
-function slideStages(dir) {
-  const grid = document.getElementById('stage-grid');
+function slideGrid(gridId, dir) {
+  const grid = document.getElementById(gridId);
   if (!grid) return;
   const card = grid.querySelector('.stage-card');
   const step = card ? card.offsetWidth + parseFloat(getComputedStyle(grid).columnGap || 12) : grid.clientWidth * 0.8;
   grid.scrollBy({ left: dir * step, behavior: 'smooth' });
 }
+window.slideGrid = slideGrid;
+const slideStages = dir => slideGrid('stage-grid', dir);
 window.slideStages = slideStages;
 
 // 시작 화면 스테이지 카드 (캠페인 순서, 잠김·클리어 표시)
@@ -2855,8 +2907,8 @@ window.closeTutorial = closeTutorial;
 window.tutorialStep = tutorialStep;
 
 function renderStageThumbs() {
-  buildCountryRow();
   buildStageCards();
+  updateStageProgress();
   const keys = Object.keys(MAP_CONFIGS);
   Object.keys(MAP_CONFIGS).forEach(key => {
     const c = document.getElementById(`thumb-${key.toLowerCase()}`);
@@ -3155,4 +3207,38 @@ requestAnimationFrame(gameLoop);
 selectedModalMapKey = getNextStageKey();
 renderStageThumbs();
 selectModalMap(selectedModalMapKey);
-try { if (localStorage.getItem(TUTORIAL_KEY) !== '1') openTutorial(); } catch (e) { openTutorial(); }
+buildCountryCards();
+
+function maybeOpenTutorial() {
+  try { if (localStorage.getItem(TUTORIAL_KEY) !== '1') openTutorial(); } catch (e) { openTutorial(); }
+}
+
+// 앱 첫 실행: TAPWAR 가 가운데에서 한 글자씩 타이핑된 뒤 홈(국가 고르기)으로.
+// 게임을 마치고 홈으로 돌아온 경우(같은 세션)에는 연출 없이 그 국가의 도시 맵 화면으로.
+(function startHome() {
+  const splash = document.getElementById('splash');
+  let returning = null;
+  try { returning = sessionStorage.getItem('tapwar_in_country'); } catch (e) {}
+  if (returning && COUNTRIES.some(c => c.key === returning && c.open)) {
+    if (splash) splash.remove();
+    selectedCountryKey = returning;
+    buildCountryCards();
+    showStageView();
+    maybeOpenTutorial();
+    return;
+  }
+  requestAnimationFrame(() => selectCountry(selectedCountryKey));
+  const textEl = document.getElementById('splash-text');
+  if (!splash || !textEl) { maybeOpenTutorial(); return; }
+  const word = 'TAPWAR';
+  let i = 0;
+  const typeNext = () => {
+    textEl.textContent = word.slice(0, ++i);
+    if (i < word.length) { setTimeout(typeNext, 140); return; }
+    setTimeout(() => {
+      splash.classList.add('hide');
+      setTimeout(() => { splash.remove(); maybeOpenTutorial(); }, 450);
+    }, 650);
+  };
+  setTimeout(typeNext, 300);
+})();
