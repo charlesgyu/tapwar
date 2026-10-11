@@ -3148,8 +3148,7 @@ function buildStageCards() {
     };
     btn.innerHTML = `<span class="stage-no">${i + 1}</span>` +
       `<canvas class="stage-thumb" id="thumb-${k}"></canvas>` +
-      `<span class="stage-name">${cfg.label || key}</span>` +
-      `<span class="stage-sub">${cfg.count || ''}</span>` +
+      `<span class="stage-title"><span class="stage-name">${cfg.label || key}</span><span class="stage-sub">${cfg.count || ''}</span></span>` +
       `<span class="stage-record" id="modal-${k}-record"></span>`;
     grid.appendChild(btn);
   });
