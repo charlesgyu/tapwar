@@ -751,9 +751,11 @@
     .stage-progress {
       text-align: center;
       font-size: 17px; font-weight: 900; color: #78716c;
-      margin: -14px 0 18px;
+      margin: -14px 0 4px;
       font-variant-numeric: tabular-nums;
     }
+    .stage-total-time { text-align: center; font-size: 14px; font-weight: 800; color: #a8a29e; margin-bottom: 16px; min-height: 18px; font-variant-numeric: tabular-nums; }
+    .end-total { font-size: 14px; font-weight: 800; color: #475569; margin-top: 10px; font-variant-numeric: tabular-nums; }
     .country-flag { font-size: 120px; line-height: 1.25; margin-bottom: 6px; }
     .start-card .stage-card.locked .country-flag { filter: saturate(0.7); }
     #enter-btn.locked { opacity: 0.45; }
@@ -863,6 +865,7 @@
           <button class="back-btn" aria-label="국가 선택으로" onclick="showCountryView()">‹</button>
           <h1 class="start-logo" id="country-title">대한민국</h1>
           <div class="stage-progress" id="stage-progress">0/17</div>
+          <div class="stage-total-time" id="stage-total-time"></div>
           <div class="stage-wrap">
             <button class="slide-arrow left" aria-label="이전 맵" onclick="slideGrid('stage-grid', -1)">‹</button>
             <div class="stage-grid" id="stage-grid"></div>
