@@ -2532,10 +2532,20 @@ function layoutMinimap() {
   return { scale, area, cssW, cssH, dpr };
 }
 
+// 지도 전체가 화면 안에 다 보이면 true → 미니맵이 필요 없으니 숨김 (확대해서 화면을 넘어가면 나타남)
+function mapFitsOnScreen() {
+  const area = getMapArea();
+  const tl = screenToWorld(0, 0);
+  const br = screenToWorld(viewW, viewH);
+  const eps = 1;
+  return area.x >= tl.x - eps && area.y >= tl.y - eps &&
+         area.x + area.w <= br.x + eps && area.y + area.h <= br.y + eps;
+}
+
 function drawMinimap(timestamp) {
   if (!minimapCtx) return;
   const startModalOpen = document.getElementById('start-modal').style.display !== 'none';
-  const hidden = !!introAnim || !(currentState === GAME_STATE.PLAYING || (currentState === GAME_STATE.SELECT_START && !startModalOpen)) || rawZones.length === 0;
+  const hidden = !!introAnim || !(currentState === GAME_STATE.PLAYING || (currentState === GAME_STATE.SELECT_START && !startModalOpen)) || rawZones.length === 0 || mapFitsOnScreen();
   if (hidden !== lastMinimapHidden) {
     lastMinimapHidden = hidden;
     minimapCard.hidden = hidden;
