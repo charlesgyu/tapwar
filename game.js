@@ -13,9 +13,15 @@ let view = {
   panStartY: 0
 };
 
+// 화면(논리) 크기와 기기 픽셀 비율: 캔버스는 실제 픽셀 수(×DPR)로 그려 레티나에서도 선명하게
+let viewW = window.innerWidth, viewH = window.innerHeight;
+let DPR = Math.min(window.devicePixelRatio || 1, 3);
 function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  viewW = window.innerWidth;
+  viewH = window.innerHeight;
+  DPR = Math.min(window.devicePixelRatio || 1, 3);
+  canvas.width = Math.round(viewW * DPR);
+  canvas.height = Math.round(viewH * DPR);
   updateZoneScreenPositions();
 }
 window.addEventListener('resize', resizeCanvas);
@@ -566,8 +572,8 @@ function projectGeo(lng, lat, mapArea) {
 }
 
 function getMapArea() {
-  const w = canvas.width;
-  const h = canvas.height;
+  const w = viewW;
+  const h = viewH;
   const targetRatio = MAP_CONFIGS[currentMapKey] ? MAP_CONFIGS[currentMapKey].aspectRatio : 0.82;
   let mapH = Math.min(h * 0.94, 980);
   let mapW = mapH * targetRatio;
@@ -610,6 +616,7 @@ function loadSelectedMap(mapKey) {
   gameElapsedTime = 0;
   lastTimerText = '';
   currentState = GAME_STATE.SELECT_START;
+  startGuideShown = false;
   hanRiverData = null;
   hanRiverPath = null;
 
@@ -755,8 +762,8 @@ function updateZoneScreenPositions() {
 }
 
 function screenToWorld(sx, sy) {
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
+  const cx = viewW / 2;
+  const cy = viewH / 2;
   return {
     x: (sx - cx - view.offsetX) / view.scale + cx,
     y: (sy - cy - view.offsetY) / view.scale + cy
@@ -1433,9 +1440,22 @@ function updateHudVisibility() {
   lastHudKey = key;
   document.getElementById('top-timer').hidden = !playing;
   document.getElementById('speed2-btn').hidden = !playing;
-  const guide = document.getElementById('status-guide');
-  guide.hidden = !choosing;
-  if (choosing) guide.innerText = START_GUIDE_TEXT;
+  // 시작 안내는 상단 띠 대신, 처음 한 번 화면 가운데에 글자만 1초 떴다 사라짐
+  document.getElementById('status-guide').hidden = true;
+  if (choosing && !startGuideShown) {
+    startGuideShown = true;
+    flashCenterText(START_GUIDE_TEXT);
+  }
+}
+
+let startGuideShown = false;
+function flashCenterText(text) {
+  const el = document.getElementById('center-toast');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove('show');
+  void el.offsetWidth; // 애니메이션 다시 시작
+  el.classList.add('show');
 }
 
 let dragSourceZone = null;
@@ -1658,7 +1678,7 @@ function onPointerUp(e) {
 function zoomAt(newScale, sx, sy, worldAnchor) {
   const s2 = Math.min(view.maxScale, Math.max(view.minScale, newScale));
   const w = worldAnchor || screenToWorld(sx, sy);
-  const cx = canvas.width / 2, cy = canvas.height / 2;
+  const cx = viewW / 2, cy = viewH / 2;
   view.scale = s2;
   view.offsetX = sx - cx - (w.x - cx) * s2;
   view.offsetY = sy - cy - (w.y - cy) * s2;
@@ -2319,6 +2339,25 @@ function drawSkillGcdSweep(ctx, owner, gcdUntil) {
   }
 }
 
+// 맵 이름을 지도 도화지에 새김: 월드 좌표로 그려 확대·이동하면 지도와 함께 커지고 움직임
+function drawMapTitle(ctx) {
+  const cfg = MAP_CONFIGS[currentMapKey];
+  if (!cfg || !cfg.label || introAnim) return;
+  const area = getMapArea();
+  const size = Math.max(18, Math.min(area.w, area.h) * 0.085);
+  ctx.save();
+  ctx.font = `900 ${size}px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = size * 0.12;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+  ctx.strokeText(cfg.label, area.x, area.y);
+  ctx.fillStyle = 'rgba(30, 41, 59, 0.55)';
+  ctx.fillText(cfg.label, area.x, area.y);
+  ctx.restore();
+}
+
 function drawExactDistrictsMap(ctx) {
   drawBackdropZones(ctx);
 
@@ -2549,7 +2588,7 @@ function drawMinimap(timestamp) {
 
   // 현재 보고 있는 화면 영역
   const tl = screenToWorld(0, 0);
-  const br = screenToWorld(canvas.width, canvas.height);
+  const br = screenToWorld(viewW, viewH);
   m.strokeStyle = '#0f172a';
   m.lineWidth = 1.6 / L.scale;
   m.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
@@ -2563,8 +2602,8 @@ function moveViewToMinimapPoint(clientX, clientY) {
   const rect = minimapCanvas.getBoundingClientRect();
   const wx = minimapLayout.area.x + (clientX - rect.left) / minimapLayout.scale;
   const wy = minimapLayout.area.y + (clientY - rect.top) / minimapLayout.scale;
-  view.offsetX = (canvas.width / 2 - wx) * view.scale;
-  view.offsetY = (canvas.height / 2 - wy) * view.scale;
+  view.offsetX = (viewW / 2 - wx) * view.scale;
+  view.offsetY = (viewH / 2 - wy) * view.scale;
   lastMinimapDraw = 0; // 즉시 갱신
 }
 
@@ -3045,7 +3084,7 @@ function orthoProject(lon, lat, lon0, lat0, R, cx, cy) {
 // 반환값: 게임 지도 위에 덮을 인트로 불투명도 (0이면 종료)
 function drawIntro(ctx) {
   if (!introAnim) return;
-  const W = canvas.width, H = canvas.height;
+  const W = viewW, H = viewH;
   const el = performance.now() - introAnim.start;
   const area = getMapArea();
   const R0 = Math.min(W, H) * 0.36;
@@ -3121,7 +3160,8 @@ function gameLoop(timestamp) {
     const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
     lastTime = timestamp;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.clearRect(0, 0, viewW, viewH);
     updateSurrenderButtonVisibility();
     updateHomeButtonVisibility();
     updateHudVisibility();
@@ -3178,13 +3218,14 @@ function gameLoop(timestamp) {
 
     // Camera Matrix
     ctx.save();
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
+    const cx = viewW / 2;
+    const cy = viewH / 2;
     ctx.translate(cx + view.offsetX, cy + view.offsetY);
     ctx.scale(view.scale, view.scale);
     ctx.translate(-cx, -cy);
 
     drawExactDistrictsMap(ctx);
+    drawMapTitle(ctx);
     drawFocusRings(ctx);
     drawFlyingOrbs(ctx);
     drawParticles(ctx);
