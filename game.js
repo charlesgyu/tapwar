@@ -60,7 +60,7 @@ const ENEMY_CONFIG = {
   enemyInterval: 1000,          // 아군과 동일한 1.0초 기본 생성 주기
   enemyDecisionInterval: 800,   // AI 전황 판단 주기 (800ms)
   enemyOrbSpeed: 5.2,           // 아군(baseOrbSpeed=5.2)과 동일한 비행 속도
-  enemyFocusCooldown: 8.0,      // 적 집중포화 쿨타임 (8초)
+  enemyFocusCooldown: 5.0,      // 적 집중포화 재판단 주기 (5초)
   enemyFocusSalvo: 3,           // 적 집중포화 일제 사격 수
   enemySpecialCooldown: 20,     // 특수기술 쿨타임 (20초)
   startingEnemyBases: 1         // 시작 적 거점 수 (1개, 플레이어와 1:1 대등)
@@ -276,6 +276,7 @@ function pickMainZoneFrontierTarget(zone) {
   }
   if (frontier.size === 0) return null;
   const list = [...frontier];
+  if (zone.owner === OWNER.ENEMY) return pickBestAiTarget(list);
   return list[Math.floor(Math.random() * list.length)];
 }
 
@@ -916,6 +917,47 @@ function pickAutoTarget(zone) {
   return pickAdjacentTarget(zone);
 }
 
+// [적 AI 전략 점수] 높을수록 우선 공격
+// 1순위: 내(적) 완전점령 지역을 가장 빨리 만든다 → 완전점령까지 남은 이웃이 적은 적 지역의 빈 이웃일수록 높음
+// 2순위: 상대(플레이어)의 완전점령 지역을 풀어 버린다 → 플레이어 완전점령 지역과 맞닿은 플레이어 지역
+// 그 밖: 피가 적게 남은 곳, 중립 지역 소폭 가점
+function aiTargetScore(t) {
+  if (!t || t.owner === OWNER.ENEMY || t.isHidden) return -1;
+  let score = 0;
+  for (let i = 0; i < t.neighbors.length; i++) {
+    const n = t.neighbors[i];
+    if (n.owner === OWNER.ENEMY && !isFullyConquered(n)) {
+      let missing = 0;
+      for (let j = 0; j < n.neighbors.length; j++) {
+        const m = n.neighbors[j];
+        if (n.waterNeighbors && n.waterNeighbors.has(m)) continue;
+        if (m.owner !== OWNER.ENEMY) missing++;
+      }
+      if (missing > 0) score += 4 / missing; // 1곳만 더 먹으면 완전점령 → 4점
+    }
+    if (t.owner === OWNER.PLAYER && n.owner === OWNER.PLAYER && isFullyConquered(n) && !isMainZone(n)) score += 3;
+  }
+  // 빈 땅(중립) 확장이 기본: 방어 중인 플레이어 땅보다 우선. 플레이어 땅은 피가 많이 깎였을 때만 가점
+  if (t.owner === OWNER.NEUTRAL) score += 1.2 + (t.claimant === OWNER.ENEMY ? 0.6 : 0);
+  else score += (1 - t.orbs / Math.max(1, t.maxOrbs)) * 1.2;
+  return score;
+}
+
+// 전략 점수에 비례한 확률로 목표 선택. 이미 여러 적 지역이 쏘고 있는 곳은 점수를 깎아
+// 한 곳에 몰려 과잉 사격하지 않고 전선 전체로 고르게 퍼지게 함
+function pickBestAiTarget(list) {
+  if (list.length === 0) return null;
+  const crowd = new Map();
+  rawZones.forEach(z => { if (z.owner === OWNER.ENEMY) z.targetZones.forEach(t => crowd.set(t, (crowd.get(t) || 0) + 1)); });
+  const w = list.map(t => {
+    const sc = Math.max(0.05, aiTargetScore(t) - 0.6 * (crowd.get(t) || 0));
+    return sc * sc;
+  });
+  let r = Math.random() * w.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < list.length; i++) { r -= w[i]; if (r <= 0) return list[i]; }
+  return list[list.length - 1];
+}
+
 function pickAdjacentTarget(zone) {
 
   const neighbors = zone.neighbors;
@@ -924,6 +966,7 @@ function pickAdjacentTarget(zone) {
   // 맞닿아 있는 적군·중립 지역 중 무작위 1곳 (적 철벽 기지 제외)
   const targets = neighbors.filter(n => isAutoAttackable(n, zone.owner, zone));
   if (targets.length === 0) return null;
+  if (zone.owner === OWNER.ENEMY) return pickBestAiTarget(targets); // 적 AI는 전략 점수 우선
   return targets[Math.floor(Math.random() * targets.length)];
 }
 
@@ -1963,39 +2006,39 @@ function triggerEnemyFocusFire() {
   const activeEnemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY && (!isFullyConquered(z) || isUnleashed(z)));
   if (activeEnemyZones.length === 0) return;
 
-  // 적 거점과 맞닿은 아군 거점 중 완전점령되지 않은 거점 우선 탐색
-  const candidates = [];
-  activeEnemyZones.forEach(eZone => {
-    eZone.neighbors.forEach(n => {
-      if (n.owner === OWNER.PLAYER && !isFullyConquered(n) && !candidates.includes(n)) {
-        candidates.push(n);
-      }
-    });
-  });
+  // 공격 가능한 후보: 적 지역과 맞닿은 곳 + 원거리 완충 지역이 닿는 곳. 전략 점수가 가장 높은 곳을 집중 포화
+  const rangers = activeEnemyZones.filter(e => canRangeAttack(e));
+  const candSet = new Set();
+  activeEnemyZones.forEach(eZone => eZone.neighbors.forEach(n => {
+    if (n.owner !== OWNER.ENEMY && canAttackTarget(eZone, n)) candSet.add(n);
+  }));
+  rangers.forEach(r => rawZones.forEach(n => {
+    if (n.owner !== OWNER.ENEMY && !n.isHidden && canAttackTarget(r, n) &&
+        rawZones.some(e => e.owner === OWNER.ENEMY && e.neighbors.includes(n))) candSet.add(n);
+  }));
+  const candidates = [...candSet];
+  if (candidates.length === 0) return;
+  const target = pickBestAiTarget(candidates);
+  if (!target || aiTargetScore(target) < 1) return; // 전략적 가치가 낮으면 집중 포화 아낌
 
-  // 인접 아군 거점이 없으면 인접한 미점령(중립) 거점도 타겟
-  if (candidates.length === 0) {
-    activeEnemyZones.forEach(eZone => {
-      eZone.neighbors.forEach(n => {
-        if (n.owner === OWNER.NEUTRAL && !candidates.includes(n)) {
-          candidates.push(n);
-        }
-      });
+  // 이전 집중 포화 목표를 쏘던 기지는 풀어 새 목표에 합류
+  if (currentEnemyFocusZone && currentEnemyFocusZone !== target) {
+    rawZones.forEach(z => {
+      if (z.owner === OWNER.ENEMY && z.isManualTarget && z.targetZones.includes(currentEnemyFocusZone)) z.isManualTarget = false;
     });
   }
-
-  if (candidates.length === 0) return;
-
-  // 체력이 낮거나 전선에 노출된 취약 거점 우선 타겟
-  candidates.sort((a, b) => a.orbs - b.orbs);
-  const target = candidates[0];
-
   enemyFocusFireCooldown = ENEMY_CONFIG.enemyFocusCooldown;
   currentEnemyFocusZone = target;
   enemyFocusReticleTimer = 3.5;
 
   // 해당 타겟을 향해 출격 가능한 적 전선 기지들
-  const firingBases = activeEnemyZones.filter(e => e.neighbors.includes(target) || (canRangeAttack(e) && canAttackTarget(e, target) && Math.random() < 0.45));
+  // 맞닿은 기지 전부 + 원거리 완충 기지는 가까운 3곳만 (전 병력을 한 곳에 묶어 다른 전선을 비우지 않게)
+  const adjBases = activeEnemyZones.filter(e => canAttackTarget(e, target) && e.neighbors.includes(target));
+  const rangeBases = activeEnemyZones
+    .filter(e => !adjBases.includes(e) && canRangeAttack(e) && canAttackTarget(e, target))
+    .sort((a, b) => Math.hypot(a.cx - target.cx, a.cy - target.cy) - Math.hypot(b.cx - target.cx, b.cy - target.cy))
+    .slice(0, 3);
+  const firingBases = adjBases.concat(rangeBases);
   if (firingBases.length === 0) return;
 
   // 적군도 동일 규칙: 즉시 추가 발사 없이 점령할 때까지 고정 사격
