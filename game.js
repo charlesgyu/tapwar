@@ -1137,7 +1137,7 @@ class FlyingOrb {
     const wasRival = t.owner !== OWNER.NEUTRAL && t.owner !== own;
     applyOrbHit(t, own, power, this.sourceZone);
     // [아이템 관통탄] 맞닿은 공격·원거리 공격 모두: 맞힌 상대 지역에서 옆의 상대 지역으로 튕겨 나가는 구슬
-    // (공격력 30%, 다시 튕기지는 않음. 도착할 때 파워샷·크리티컬·철벽 등은 그대로 계산)
+    // (공격력 50%, 다시 튕기지는 않음. 도착할 때 파워샷·크리티컬·철벽 등은 그대로 계산)
     if (wasRival && !this.pierced && hasItem(own, 'pierce')) {
       const next = t.neighbors.filter(n => n !== this.sourceZone && n.owner !== OWNER.NEUTRAL && n.owner !== own);
       if (next.length) {
@@ -2388,11 +2388,6 @@ function updateOrbSpawners(currentTime) {
       zone.targetZones.forEach(target => {
         flyingOrbs.push(new FlyingOrb(zone, target, zone.owner, power));
       });
-      // [아이템 더블샷] 맞닿은 다른 곳으로 한 발 더
-      if (hasItem(zone.owner, 'double') && zone.targetZones.length === 1) {
-        const others = zone.neighbors.filter(n => n !== zone.targetZones[0] && isAutoAttackable(n, zone.owner, zone) && isRivalMarked(n, zone.owner));
-        if (others.length) flyingOrbs.push(new FlyingOrb(zone, others[Math.floor(Math.random() * others.length)], zone.owner, power));
-      }
     }
   });
 }
@@ -2501,9 +2496,8 @@ const ITEM_EVERY_SEC = 30;
 const REBUILD_EVERY_SEC = 5;
 const REBUILD_HP = 2;
 const ITEM_CHANCE = 0.3; // 반사·흡수·크리티컬 확률
-const PIERCE_RATIO = 0.3; // 관통탄 튕긴 구슬 공격력
+const PIERCE_RATIO = 0.5; // 관통탄 튕긴 구슬 공격력
 const ITEM_ICON = {
-  double: '<circle cx="6" cy="12" r="3"/><path d="M9 12 L19 5 M9 12 L19 19"/><circle cx="19" cy="5" r="1.6"/><circle cx="19" cy="19" r="1.6"/>',
   rapid: '<path d="M3 8h9M5 12h10M3 16h9"/><circle cx="18" cy="12" r="3"/>',
   power: '<circle cx="12" cy="12" r="6"/><path d="M12 9v6M9 12h6"/>',
   pierce: '<path d="M3 12h17M15 7l5 5-5 5"/><rect x="9" y="6" width="3" height="12" rx="1"/>',
@@ -2516,10 +2510,9 @@ const ITEM_ICON = {
   absorb: '<circle cx="12" cy="12" r="8"/><path d="M12 7v10M7 12h10"/>'
 };
 const ITEMS = [
-  { key: 'double', name: '더블샷', desc: '맞닿은 다른 상대 땅에 한 발 더' },
   { key: 'rapid', name: '속사', desc: '상대 땅으로 가는 원거리 구슬이 빠르게 (발사 간격 그대로)' },
   { key: 'power', name: '파워샷', desc: '상대 땅 공격력 2배 (상대 색이 조금이라도 있는 곳)' },
-  { key: 'pierce', name: '관통탄', desc: '맞힌 상대 지역에서 옆 상대 지역으로 튕김 (30%)' },
+  { key: 'pierce', name: '관통탄', desc: '맞힌 상대 지역에서 옆 상대 지역으로 튕김 (50%)' },
   { key: 'fortress', name: '철벽', desc: '상대 공격을 50%만 받음' },
   { key: 'rebuild', name: '재건', desc: '5초마다 내 모든 지역 피 +2' },
   { key: 'reflect', name: '반사 방패', desc: '30% 확률로 상대 구슬을 쏜 곳으로 되돌림' },
@@ -2629,14 +2622,38 @@ function renderItemBar() {
   if (!show) return;
   const chips = (owner, cls) => itemsOf[owner].map(k => {
     const it = ITEMS.find(x => x.key === k);
-    return `<span class="item-chip ${cls}" title="${it.name}: ${it.desc}" onclick="showItemInfo('${k}', '${owner}')">${itemIconSvg(k, 20)}</span>`;
+    return `<span class="item-chip ${cls}" data-key="${k}" data-owner="${owner}">${itemIconSvg(k, 20)}</span>`;
   }).join('');
   bar.innerHTML = `<div class="item-side mine">${chips(OWNER.PLAYER, 'mine')}</div><div class="item-vs">VS</div><div class="item-side theirs">${chips(OWNER.ENEMY, 'theirs')}</div>`;
+  // 카드를 누르고 있는 동안 이름·설명 말풍선 (손을 떼면 1.5초 뒤 사라짐)
+  bar.querySelectorAll('.item-chip').forEach(ch => {
+    const show = e => { e.preventDefault(); showItemInfo(ch.dataset.key, ch.dataset.owner, ch); };
+    ch.addEventListener('pointerdown', show);
+    ch.addEventListener('pointerup', () => hideItemInfo(1500));
+    ch.addEventListener('pointerleave', () => hideItemInfo(1500));
+    ch.addEventListener('pointercancel', () => hideItemInfo(1500));
+  });
 }
-function showItemInfo(key, owner) {
+let itemTipTimer = null;
+function hideItemInfo(delay) {
+  clearTimeout(itemTipTimer);
+  itemTipTimer = setTimeout(() => { const tip = document.getElementById('item-tip'); if (tip) tip.hidden = true; }, delay || 0);
+}
+function showItemInfo(key, owner, chip) {
   const it = ITEMS.find(x => x.key === key);
-  if (it) document.getElementById('status-guide').innerText = `${owner === OWNER.PLAYER ? '내' : '적'} 아이템 [${it.name}]: ${it.desc}`;
-  flashCenterText(`${owner === OWNER.PLAYER ? '나' : '적'}: ${it.name}`);
+  const tip = document.getElementById('item-tip');
+  if (!it || !tip) return;
+  clearTimeout(itemTipTimer);
+  tip.className = owner === OWNER.PLAYER ? 'mine' : 'theirs';
+  tip.innerHTML = `<div class="item-tip-name">${owner === OWNER.PLAYER ? '나' : '적'} · ${it.name}</div><div class="item-tip-desc">${it.desc}</div>`;
+  tip.hidden = false;
+  // 누른 카드 바로 위에 (화면 밖으로 나가지 않게)
+  if (chip) {
+    const r = chip.getBoundingClientRect();
+    const w = tip.offsetWidth;
+    tip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+    tip.style.top = (r.top - tip.offsetHeight - 8) + 'px';
+  }
 }
 window.showItemInfo = showItemInfo;
 
