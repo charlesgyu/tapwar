@@ -1908,9 +1908,9 @@ function onPointerDown(e) {
 
   // 지역 더블클릭 / 더블탭 판정 (집중 포격 발동!)
   const now = performance.now();
-  // 피가 가득 찬 아군 지역은 더블탭(방어 지원)할 일이 없으므로 탭으로 처리 (특수 기술 연속 사용 가능)
-  const isFullFriendly = targetZone && targetZone.owner === OWNER.PLAYER &&
-    (targetZone.orbs >= targetZone.maxOrbs || isFullyConquered(targetZone));
+  // 피가 가득 찬 아군 지역은 더블탭(방어 지원)할 일이 없으므로 탭으로 처리.
+  // 완전점령 지역이라도 피가 닳았으면(나라 컨셉·공격) 더블탭으로 방어 지원(집중포화) 가능
+  const isFullFriendly = targetZone && targetZone.owner === OWNER.PLAYER && targetZone.orbs >= targetZone.maxOrbs;
   if (targetZone && !isFullFriendly && targetZone.id === lastTapZoneId && (now - lastTapTime) < DOUBLE_TAP_MS) {
     handleZoneDoubleClick(targetZone);
     lastTapTime = 0;
