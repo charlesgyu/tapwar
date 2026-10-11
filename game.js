@@ -2666,13 +2666,13 @@ function renderItemBar() {
     return `<div class="item-side ${cls}">${h}</div>`;
   };
   bar.innerHTML = row(OWNER.PLAYER, 'mine') + row(OWNER.ENEMY, 'theirs');
-  // 카드를 누르고 있는 동안 이름·설명 말풍선 (손을 떼면 1.5초 뒤 사라짐)
+  // 카드를 누르고 있는 동안만 화면 가운데에 카드 (손을 떼면 바로 사라짐)
   bar.querySelectorAll('.item-chip').forEach(ch => {
     const show = e => { e.preventDefault(); showItemInfo(ch.dataset.key, ch.dataset.owner); };
     ch.addEventListener('pointerdown', show);
-    ch.addEventListener('pointerup', () => hideItemInfo(1500));
-    ch.addEventListener('pointerleave', () => hideItemInfo(1500));
-    ch.addEventListener('pointercancel', () => hideItemInfo(1500));
+    ch.addEventListener('pointerup', () => hideItemInfo(0));
+    ch.addEventListener('pointerleave', () => hideItemInfo(0));
+    ch.addEventListener('pointercancel', () => hideItemInfo(0));
   });
 }
 let itemTipTimer = null;
