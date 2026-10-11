@@ -466,6 +466,7 @@ const MAP_CONFIGS = {
 let currentMapBounds = { ...MAP_CONFIGS.KOREA.bounds };
 
 let rawZones = [];
+let backdropZones = []; // 플레이 불가 배경 지역 (예: 경기도 맵 안쪽의 서울·인천) - 빈 구멍 없이 지도를 채움
 let rawLinks = [];
 let flyingOrbs = [];
 let particles = [];
@@ -541,6 +542,7 @@ function loadSelectedMap(mapKey) {
     .then(res => res.json())
     .then(data => {
       rawLinks = data.links;
+      backdropZones = (data.backdrop || []).map(b => ({ ...b, path: null }));
       rawZones = data.zones.map(z => ({
         ...z,
         maxOrbs: ZONE_MAX_HP, // 모든 지역 피 50 고정 (주요 도시 가중치 없음)
@@ -619,6 +621,22 @@ function updateZoneScreenPositions() {
     });
     z.path = path;
     z.bbox = { minX, maxX, minY, maxY };
+  });
+
+  backdropZones.forEach(b => {
+    const path = new Path2D();
+    b.polygons.forEach(poly => {
+      if (poly.length < 3) return;
+      poly.forEach(([lng, lat], i) => {
+        const p = projectGeo(lng, lat, mapArea);
+        if (i === 0) path.moveTo(p.x, p.y); else path.lineTo(p.x, p.y);
+      });
+      path.closePath();
+    });
+    b.path = path;
+    const c = projectGeo(b.lng, b.lat, mapArea);
+    b.cx = c.x;
+    b.cy = c.y;
   });
 
   // Project Han River Path2D if present
@@ -1826,7 +1844,33 @@ function gameOver(isWin, isSurrender = false) {
 // -------------------------------------------------------------
 // RENDER TACTICAL ADMINISTRATIVE MAP
 // -------------------------------------------------------------
+function drawBackdropZones(ctx) {
+  if (backdropZones.length === 0) return;
+  ctx.save();
+  ctx.fillStyle = '#e2e0d8';
+  ctx.strokeStyle = '#cfcdc4';
+  ctx.lineWidth = 1.0;
+  ctx.lineJoin = 'round';
+  backdropZones.forEach(b => {
+    if (!b.path) return;
+    // 외곽선 없이 면만 칠함 (내부 구 경계선이 보이지 않도록, 미세 틈은 같은 색 선으로 메움)
+    ctx.fill(b.path);
+    ctx.strokeStyle = '#e2e0d8';
+    ctx.stroke(b.path);
+  });
+  ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif';
+  ctx.fillStyle = '#a8a59b';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  backdropZones.forEach(b => {
+    if (b.path) ctx.fillText(b.name, b.cx, b.cy);
+  });
+  ctx.restore();
+}
+
 function drawExactDistrictsMap(ctx) {
+  drawBackdropZones(ctx);
+
   // 1. Draw Polygons via pre-compiled Path2D (Mini Metro Light/Minimalist Aesthetic)
   for (let i = 0; i < rawZones.length; i++) {
     const zone = rawZones[i];
@@ -1836,11 +1880,11 @@ function drawExactDistrictsMap(ctx) {
     const isSelected = dragSourceZone && dragSourceZone.id === zone.id;
     const isFull = isFullyConquered(zone);
 
-    const isSeoul = (currentMapKey === 'SEOUL');
     // Reference image styling: Pure crisp white district cards with subtle shadow and light grey stroke
-    let fillColor = isSeoul ? '#ffffff' : '#edebe3';
-    let strokeColor = isSeoul ? '#cbd5e1' : '#cfcdc4';
-    let lineWidth = isSeoul ? 1.3 : 1.0;
+    // 모든 전장 동일한 지도 스타일 (전국 전선 기준)
+    let fillColor = '#edebe3';
+    let strokeColor = '#cfcdc4';
+    let lineWidth = 1.0;
 
     if (zone.owner === OWNER.PLAYER) {
       if (isFull) {
@@ -1874,19 +1918,8 @@ function drawExactDistrictsMap(ctx) {
       lineWidth = 2.4;
     }
 
-    // Subtle drop shadow for illustration card look in Seoul map
-    if (isSeoul) {
-      ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.06)';
-      ctx.shadowBlur = 6;
-      ctx.shadowOffsetY = 2;
-      ctx.fillStyle = fillColor;
-      ctx.fill(zone.path);
-      ctx.restore();
-    } else {
-      ctx.fillStyle = fillColor;
-      ctx.fill(zone.path);
-    }
+    ctx.fillStyle = fillColor;
+    ctx.fill(zone.path);
 
     ctx.strokeStyle = strokeColor;
     ctx.lineWidth = lineWidth;
