@@ -228,7 +228,8 @@ const EXP_MAIN_POWER = 5;   // [실험] 메인 지역 공격력 (완전점령 �
 // 원거리 공격(맞닿지 않은 지역 공격) 가능 여부
 // [실험] 완전점령 지역만 원거리 가능 (메인도 완전점령이어야 원거리). 일반 지역·메인은 맞닿은 곳만
 function canRangeAttack(zone) {
-  if (EXPERIMENT_NO_SKILL) return zone.owner !== OWNER.NEUTRAL && isFullyConquered(zone);
+  // 완전점령 후 충전 게이지(10초)가 다 차야 원거리 가능
+  if (EXPERIMENT_NO_SKILL) return zone.owner !== OWNER.NEUTRAL && isFullyConquered(zone) && zone.chargeState === 'ready';
   return isUnleashed(zone);
 }
 
@@ -3121,14 +3122,15 @@ const TUTORIAL = [
         [0.35, 0.5, 0.65].map(t => flyOrb(60, 45, 150, 75, t, t + 0.14, D) + flyOrb(60, 105, 150, 75, t + 0.03, t + 0.17, D) +
           flyOrb(105, 75, 150, 75, t + 0.06, t + 0.14, D)).join('')); })() },
   { title: '완전 점령',
-    text: '이웃을 모두 차지하면 초록색이 돼요. 초록 지역은 원거리 공격이 가능해져요.',
-    art: (() => { const D = 4.2, cx = 70, cy = 75;
+    text: '이웃을 모두 차지하면 초록색이 되고 게이지가 차올라요. 게이지가 다 차서 진한 초록이 되면 원거리 공격이 가능해져요.',
+    art: (() => { const D = 5, cx = 70, cy = 75;
       // 가운데 지역을 둘러싼 이웃 6곳이 하나씩 내 땅이 되고 → 가운데가 초록 → 먼 곳으로 원거리 공격
       const ring = [[cx + 45, cy], [cx + 22.5, cy - 39], [cx - 22.5, cy - 39], [cx - 45, cy], [cx - 22.5, cy + 39], [cx + 22.5, cy + 39]];
       return svgWrap(ring.map(([x, y], i) => hexAnim(x, y, D, [[0, TC.b], [0.06 + i * 0.07, TC.blue], [0.97, TC.blue], [1, TC.b]], TC.blueS)).join('') +
-        hexAnim(cx, cy, D, [[0, TC.blue], [0.5, TC.grn2], [0.97, TC.grn2], [1, TC.blue]], '#ffffff', 3) +
+        hexAnim(cx, cy, D, [[0, TC.blue], [0.46, '#bbf7d0'], [0.97, '#bbf7d0'], [1, TC.blue]], '#ffffff', 3) +
+        riseFill('tut-r5', cx, cy, 0.46, 0.66, D, TC.grn2) + outlineAnim(cx, cy, D, [[0, '#ffffff'], [1, '#ffffff']], 3) +
         `<polygon points="${hexPoints(185, 40, 17)}" fill="${TC.red}" stroke="${TC.redS}" stroke-width="2" stroke-linejoin="round"/>` +
-        [0.6, 0.72, 0.84].map(t => flyOrb(cx, cy, 185, 40, t, t + 0.1, D, TC.grnS)).join('')); })() },
+        [0.7, 0.8, 0.9].map(t => flyOrb(cx, cy, 185, 40, t, t + 0.07, D, TC.grnS)).join('')); })() },
   { title: '적 기지를 무너뜨려요',
     text: '적 지역을 모두 점령하면 승리!',
     art: (() => { const D = 3.6;
