@@ -222,7 +222,7 @@ function isMainZone(zone) {
 // [정식 규칙: 완전점령 전략 버전] 특수 기술 없음. 원거리는 완전점령 지역이 지시받을 때만, 메인 공격력 5 등.
 // (코드 안의 '[실험]' 표시는 이 규칙을 뜻함. false 로 바꾸면 예전 특수 기술 버전 동작)
 const EXPERIMENT_NO_SKILL = true;
-const FULL_ZONE_HP = 100; // [실험] 완전점령 지역 피
+const FULL_ZONE_HP = 75; // [실험] 완전점령 지역 피
 const EXP_MAIN_POWER = 5;   // [실험] 메인 지역 공격력 (완전점령 지역은 1)
 
 // 원거리 공격(맞닿지 않은 지역 공격) 가능 여부
@@ -276,7 +276,6 @@ function pickMainZoneFrontierTarget(zone) {
   }
   if (frontier.size === 0) return null;
   const list = [...frontier];
-  if (zone.owner === OWNER.ENEMY) return pickBestAiTarget(list);
   return list[Math.floor(Math.random() * list.length)];
 }
 
@@ -688,6 +687,8 @@ function loadSelectedMap(mapKey) {
   focusFireCooldown = 0;
   enemyFocusFireCooldown = 0;
   gameElapsedTime = 0;
+  enemyCommandTimer = ENEMY_COMMAND_SEC;
+  lastEnemyCommandCheck = 0;
   lastTimerText = '';
   currentState = GAME_STATE.SELECT_START;
   startGuideShown = false;
@@ -966,7 +967,6 @@ function pickAdjacentTarget(zone) {
   // 맞닿아 있는 적군·중립 지역 중 무작위 1곳 (적 철벽 기지 제외)
   const targets = neighbors.filter(n => isAutoAttackable(n, zone.owner, zone));
   if (targets.length === 0) return null;
-  if (zone.owner === OWNER.ENEMY) return pickBestAiTarget(targets); // 적 AI는 전략 점수 우선
   return targets[Math.floor(Math.random() * targets.length)];
 }
 
@@ -2010,6 +2010,31 @@ function triggerEnemyItemSelection() {
 }
 
 // 적군 AI 집중포화 (아군 전선 거점을 향해 일제 사격)
+// [적 지정 공격] 사람이 손으로 하듯 한 번에 한 지역만, 정해진 간격으로
+const ENEMY_COMMAND_SEC = 2.5;
+let enemyCommandTimer = ENEMY_COMMAND_SEC;
+let lastEnemyCommandCheck = 0;
+function issueEnemyCommand() {
+  if (currentState !== GAME_STATE.PLAYING) return;
+  let bestZone = null, bestTarget = null, bestScore = 1;
+  rawZones.forEach(z => {
+    if (z.owner !== OWNER.ENEMY || z.isManualTarget) return;
+    if (isFullyConquered(z) && !isUnleashed(z)) return;
+    const opts = canRangeAttack(z)
+      ? rawZones.filter(t => t.owner !== OWNER.ENEMY && rawZones.some(e => e.owner === OWNER.ENEMY && e.neighbors.includes(t)))
+      : z.neighbors;
+    opts.forEach(t => {
+      if (t.owner === OWNER.ENEMY || !canAttackTarget(z, t)) return;
+      const sc = aiTargetScore(t) + Math.random() * 0.2;
+      const cur = z.targetZones[0] ? aiTargetScore(z.targetZones[0]) : 0;
+      if (sc - cur > bestScore) { bestScore = sc - cur; bestZone = z; bestTarget = t; }
+    });
+  });
+  if (!bestZone) return;
+  bestZone.isManualTarget = true;
+  bestZone.targetZones = [bestTarget];
+}
+
 function triggerEnemyFocusFire() {
   if (currentState !== GAME_STATE.PLAYING) return;
   if (enemyFocusFireCooldown > 0) return;
@@ -2075,6 +2100,14 @@ function updateAI(currentTime) {
 
   // 2. 적군 집중포화 사용 검토 (쿨타임 완료 시 아군 거점에 일제 사격)
   triggerEnemyFocusFire();
+
+  // 2-1. 지정 공격: 사람처럼 일정 간격(ENEMY_COMMAND_SEC)마다 한 지역에만 지시
+  enemyCommandTimer -= (currentTime - (lastEnemyCommandCheck || currentTime)) / 1000 * gameSpeed;
+  lastEnemyCommandCheck = currentTime;
+  if (enemyCommandTimer <= 0) {
+    enemyCommandTimer = ENEMY_COMMAND_SEC;
+    issueEnemyCommand();
+  }
 
   // 3. 일반 전선 전진 및 재배치
   const enemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY);
