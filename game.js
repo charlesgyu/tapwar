@@ -648,11 +648,12 @@ const MAP_CONFIGS = {
   EU_NORTH: { country: 'EU', name: '북유럽', label: '북유럽', count: 24, file: 'assets/eu_north_zones.json', maxScale: 8 },
   EU_WEST: { country: 'EU', name: '서유럽', label: '서유럽', count: 25, file: 'assets/eu_west_zones.json', maxScale: 8 },
   EU_SOUTH: { country: 'EU', name: '남유럽', label: '남유럽', count: 25, file: 'assets/eu_south_zones.json', maxScale: 8 },
-  EU_EUROPE: { country: 'EU', name: '유럽 전체', label: '유럽 전체', count: 37, file: 'assets/eu_europe_zones.json', maxScale: 14 },
   // WD — tools/build_*_maps.sh 로 생성
   WD_AMERICA: { country: 'WD', name: '아메리카', label: '아메리카', count: 29, file: 'assets/w_america_zones.json', maxScale: 14 },
   WD_AFRICA: { country: 'WD', name: '아프리카', label: '아프리카', count: 49, file: 'assets/w_africa_zones.json', maxScale: 14 },
-  WD_ASIA: { country: 'WD', name: '아시아·오세아니아', label: '아시아·오세아니아', count: 51, file: 'assets/w_asia_zones.json', maxScale: 14 },
+  WD_ASIA: { country: 'WD', name: '아시아', label: '아시아', count: 45, file: 'assets/w_asia_zones.json', maxScale: 14 },
+  WD_OCEANIA: { country: 'WD', name: '오세아니아', label: '오세아니아', count: 22, file: 'assets/w_oceania_zones.json', maxScale: 14 },
+  WD_EUROPE: { country: 'WD', name: '유럽', label: '유럽', count: 37, file: 'assets/eu_europe_zones.json', maxScale: 14 },
   WD_WORLD: { country: 'WD', name: '전세계', label: '전세계', count: 155, file: 'assets/w_world_zones.json', maxScale: 20 },
 };
 MAP_CONFIGS.KOREA.label = '전국'; MAP_CONFIGS.KOREA.count = 164;
@@ -2931,7 +2932,7 @@ const COUNTRIES = [
   { key: 'CN', flag: '🇨🇳', name: '중국', open: false, paid: true },
   { key: 'US', flag: '🇺🇸', name: '미국', open: false, paid: true },
   { key: 'EU', flag: '🇪🇺', name: '유럽', open: false, paid: true },
-  { key: 'WD', flag: '🌏', name: '전세계', open: false, paid: true }
+  { key: 'WD', flag: '🌏', name: '대륙', open: false, paid: true }
 ];
 const DEV_UNLOCK_KEY = 'tapwar_dev_unlock_all';
 // [테스트용] 유료 나라(일본·중국·미국·유럽·전세계)를 구매 없이 열기. 출시 전 false (인앱 구매 'country_jp' 등으로 열림)
