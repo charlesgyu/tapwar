@@ -228,6 +228,18 @@ function pickMainZoneFrontierTarget(zone) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
+// [특수 기술 대상 우선순위] (메인 지역은 항상 제외, 피가 닳은 점령지도 대상)
+// 1순위: 일반 점령지역 (완전점령 아님) 중 무작위
+// 2순위: 1순위가 3곳보다 적으면 부족한 수만큼 완전점령지역 중 무작위로 채움
+//   예) 점령지역 2곳 → 점령지역 2 + 완전점령 1 / 점령지역 1곳 → 점령지역 1 + 완전점령 2
+function buildSkillTargetList(victimOwner) {
+  const shuffle = arr => arr.sort(() => Math.random() - 0.5);
+  const victims = rawZones.filter(z => z.owner === victimOwner && !isMainZone(z));
+  const normal = shuffle(victims.filter(z => !isFullyConquered(z)));
+  const full = shuffle(victims.filter(z => isFullyConquered(z)));
+  return normal.concat(full);
+}
+
 // 특수 기술 대상 선정 및 피해 적용 (아군/적군 공용)
 // - 완전점령(🛡️)과 메인 지역은 대상에서 제외
 // - 메인 지역이 살아 있으면 대상 후보 전부(최대 3곳)를 공격
@@ -244,48 +256,18 @@ function useSpecialSkill(sourceZone) {
   if (!sourceZone || sourceZone.owner !== OWNER.PLAYER || sourceZone.chargeState !== 'ready') return;
   if (gameElapsedTime < playerSkillGcdUntil) return; // 글로벌 쿨타임 중 (지역 위 시계 방향 쿨타임 표시)
 
-  // [규칙]: 특수 기술은 적의 완전점령지역(🛡️)을 제외하고, 아군 영토와 가장 인접한 적군의 일반 점령지 중 무작위 3곳 공격!
-  const playerZones = rawZones.filter(z => z.owner === OWNER.PLAYER);
-  const enemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY && !isFullyConquered(z) && !isMainZone(z));
+  // [규칙]: 메인 제외, 1순위 점령지역 → 2순위 완전점령지역으로 최대 3곳 공격
+  const enemyZones = buildSkillTargetList(OWNER.ENEMY);
   const enemyMainAlive = !!(enemyMainZone && enemyMainZone.owner === OWNER.ENEMY);
   if (enemyZones.length === 0) {
-    document.getElementById('status-guide').innerText = '공격 가능한 적의 일반 점령지가 없습니다! (완전점령 철벽 기지와 적 메인 지역은 특수 기술 면역)';
+    document.getElementById('status-guide').innerText = '특수 기술로 공격할 적 지역이 없습니다! (적 메인 지역은 특수 기술 면역)';
     return;
   }
 
   sourceZone.chargeState = 'spent';
   playerSkillGcdUntil = gameElapsedTime + SKILL_GCD_SEC;
 
-  // 1. 각 적 점령지마다 가장 가까운 아군 점령지와의 거리(및 직접 인접 여부) 계산
-  enemyZones.forEach(ez => {
-    let minDist = Infinity;
-    let isDirectNeighbor = false;
-    for (let i = 0; i < playerZones.length; i++) {
-      const pz = playerZones[i];
-      if (ez.neighbors && ez.neighbors.includes(pz)) {
-        isDirectNeighbor = true;
-      }
-      const d = Math.hypot(ez.cx - pz.cx, ez.cy - pz.cy);
-      if (d < minDist) minDist = d;
-    }
-    ez._distToPlayer = minDist;
-    ez._isDirectNeighbor = isDirectNeighbor;
-  });
-
-  // 2. 아군과 가장 인접한 순서로 정렬 (직접 맞닿아 있는 전선 우선, 그 다음 최단 거리 순)
-  const sortedEnemyZones = [...enemyZones].sort((a, b) => {
-    if (a._isDirectNeighbor !== b._isDirectNeighbor) {
-      return a._isDirectNeighbor ? -1 : 1;
-    }
-    return a._distToPlayer - b._distToPlayer;
-  });
-
-  // 3. 가장 가까운 상위 전선 후보군(최대 6곳) 중에서 무작위 3곳 선택
-  const candidatePoolSize = Math.min(sortedEnemyZones.length, Math.max(3, Math.min(6, sortedEnemyZones.length)));
-  const nearestCandidates = sortedEnemyZones.slice(0, candidatePoolSize);
-  const shuffledCandidates = [...nearestCandidates].sort(() => Math.random() - 0.5);
-
-  const targetEnemyZones = pickSpecialSkillTargets(shuffledCandidates, enemyMainAlive);
+  const targetEnemyZones = pickSpecialSkillTargets(enemyZones, enemyMainAlive);
 
   targetEnemyZones.forEach(z => {
     // [규칙]: 피 10 감소 및 점령 요건(피 꽉 참) 미달로 점령 해제(중립화)!
@@ -338,17 +320,15 @@ function useEnemySpecialSkill() {
   // 적군은 충전이 있어도 연사하지 않도록 최소 간격 유지
   if (enemySpecialSkillCooldown > 0) return;
 
-  // 적군 AI의 특수 기술도 플레이어의 완전점령지역(🛡️)은 공격하지 못하고 일반 점령지만 공격!
-  const playerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && !isFullyConquered(z) && !isMainZone(z));
+  // 적군 AI도 동일 우선순위: 메인 제외, 1순위 점령지역 → 2순위 완전점령지역
+  const playerZones = buildSkillTargetList(OWNER.PLAYER);
   const playerMainAlive = !!(playerMainZone && playerMainZone.owner === OWNER.PLAYER);
   if (playerZones.length === 0) return;
 
   enemySpecialSkillCooldown = ENEMY_SPECIAL_SKILL_MIN_GAP;
   consumeSkillCharge(OWNER.ENEMY);
 
-  // 무작위 아군 점령지 3곳 선택 (완전점령지 제외)
-  const shuffled = [...playerZones].sort(() => Math.random() - 0.5);
-  const targetPlayerZones = pickSpecialSkillTargets(shuffled, playerMainAlive);
+  const targetPlayerZones = pickSpecialSkillTargets(playerZones, playerMainAlive);
 
   targetPlayerZones.forEach(z => {
     // [규칙]: 아군 점령지 피 10 감소 및 점령 해제(중립화)!
