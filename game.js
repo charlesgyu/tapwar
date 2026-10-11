@@ -160,6 +160,7 @@ let focusSalvoCount = 3;
 // - 사용하면 그 지역의 1발은 소모되어, 완전점령이 풀렸다가 다시 완전점령되어야 재충전
 // - 충전 중이든 충전 완료든 완전점령이 풀리면 리셋
 const SKILL_CHARGE_SEC = 10;
+const SKILL_DENIED_FLASH = '#94a3b8'; // 특수 기술을 지금 쓸 수 없을 때 탭한 지역 테두리 회색 번쩍
 const SKILL_GCD_SEC = 10;       // 특수 기술 글로벌 쿨타임 (게임 시간)
 let playerSkillGcdUntil = 0;    // 아군 글로벌 쿨타임 종료 시각 (gameElapsedTime 기준)
 let enemySkillGcdUntil = 0;     // 적군 글로벌 쿨타임 종료 시각
@@ -264,6 +265,7 @@ function useSpecialSkill(sourceZone) {
   const enemyMainAlive = !!(enemyMainZone && enemyMainZone.owner === OWNER.ENEMY);
   if (enemyZones.length === 0) {
     document.getElementById('status-guide').innerText = '특수 기술로 공격할 적 지역이 없습니다! (적 메인 지역은 특수 기술 면역)';
+    flashZone(sourceZone, SKILL_DENIED_FLASH);
     return;
   }
 
@@ -1462,13 +1464,15 @@ function onPointerUp(e) {
       if (!skillUnlocked[OWNER.PLAYER]) {
         const n = rawZones.filter(z => z.owner === OWNER.PLAYER && isFullyConquered(z)).length;
         guide.innerText = `🔒 특수 기술은 완전점령 지역 ${SKILL_UNLOCK_FULL_COUNT}곳을 처음 확보하면 열립니다 (${n}/${SKILL_UNLOCK_FULL_COUNT})`;
+        flashZone(endZone, SKILL_DENIED_FLASH);
       } else if (endZone.chargeState === 'ready' && gameElapsedTime < playerSkillGcdUntil) {
         guide.innerText = `⏳ 특수 기술 글로벌 쿨타임 (${Math.ceil(playerSkillGcdUntil - gameElapsedTime)}초 남음)`;
-        flashZone(endZone, '#94a3b8');
+        flashZone(endZone, SKILL_DENIED_FLASH);
       } else if (endZone.chargeState === 'ready') {
         useSpecialSkill(endZone);
       } else if (endZone.chargeState === 'charging') {
         guide.innerText = `⏳ [${endZone.name}] 특수 기술 충전 중 (${Math.max(1, Math.ceil(SKILL_CHARGE_SEC - endZone.chargeTime))}초 남음)`;
+        flashZone(endZone, SKILL_DENIED_FLASH);
       } else if (endZone.chargeState === 'spent') {
         guide.innerText = `[${endZone.name}] 특수 기술 사용 완료. 완전점령이 풀렸다 다시 확보되면 재충전됩니다.`;
       }
