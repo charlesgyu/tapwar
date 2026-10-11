@@ -2793,7 +2793,7 @@ const TUTORIAL = [
       hex(150, 102, TC.blue, TC.blueS) + hex(105, 75, TC.grn2, TC.grnS, 3) +
       '<text x="105" y="83" text-anchor="middle" font-size="20">💥</text>') },
   { title: '적 기지를 무너뜨려요',
-    text: '적 지역을 모두 점령하면 승리! 다음 맵이 열려요.',
+    text: '적 지역을 모두 점령하면 승리!',
     art: svgWrap(hex(60, 70, TC.yel, '#fff', 3) + hex(150, 70, TC.wine, '#fff', 3) +
       '<text x="105" y="79" text-anchor="middle" font-size="24">⚔️</text><text x="105" y="135" text-anchor="middle" font-size="22">🏆</text>') }
 ];
