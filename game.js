@@ -164,8 +164,8 @@ const SKILL_DENIED_FLASH = '#94a3b8'; // 특수 기술을 지금 쓸 수 없을 
 const SKILL_GCD_SEC = 10;       // 특수 기술 글로벌 쿨타임 (게임 시간)
 let playerSkillGcdUntil = 0;    // 아군 글로벌 쿨타임 종료 시각 (gameElapsedTime 기준)
 let enemySkillGcdUntil = 0;     // 적군 글로벌 쿨타임 종료 시각
-// 최초 해금: 완전점령 지역을 동시에 3곳 이상 확보한 적이 있어야 특수 기술 충전·사용 가능 (이후에는 조건 없음)
-const SKILL_UNLOCK_FULL_COUNT = 3;
+// 최초 해금: 완전점령 지역을 1곳 이상 확보한 적이 있어야 특수 기술 충전·사용 가능 (이후에는 조건 없음)
+const SKILL_UNLOCK_FULL_COUNT = 1;
 const skillUnlocked = { player: false, enemy: false };
 const gcdWasActive = { player: false, enemy: false };
 let specialSkillCooldown = 0; // (미사용) 이전 글로벌 쿨타임 호환용
@@ -363,7 +363,7 @@ function useEnemySpecialSkill() {
 
 // 지역별 충전 상태 갱신: state = null(완전점령 아님) | 'charging' | 'ready' | 'spent'
 function updateSkillCharges(dt) {
-  // 최초 해금 판정: 완전점령 3곳 이상을 처음 달성하면 그 진영은 이후 계속 해금 상태
+  // 최초 해금 판정: 완전점령 1곳을 처음 달성하면 그 진영은 이후 계속 해금 상태
   [OWNER.PLAYER, OWNER.ENEMY].forEach(owner => {
     if (skillUnlocked[owner]) return;
     let count = 0;
