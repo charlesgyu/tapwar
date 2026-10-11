@@ -250,6 +250,8 @@ def main():
                 ring = poly[0]
                 if c in ('RUS', 'FJI') and max(x for x, _ in ring) < -100:
                     ring = [[x + 360, y] for x, y in ring]
+                if c == 'USA' and min(x for x, _ in ring) > 0:
+                    continue  # 날짜변경선 너머 알류샨 섬: 지도 반대편 끝(캄차카)과 이어져 구슬이 지도를 가로지름
                 parts.append(Polygon(ring).buffer(0))
             return unary_union(parts)
         for f in json.load(open(a.src1, encoding='utf-8'))['features']:
