@@ -1384,7 +1384,8 @@ function onPointerDown(e) {
   // 지역 더블클릭 / 더블탭 판정 (집중 포격 발동!)
   const now = performance.now();
   // 피가 가득 찬 아군 지역은 더블탭(방어 지원)할 일이 없으므로 탭으로 처리 (특수 기술 연속 사용 가능)
-  const isFullFriendly = targetZone && targetZone.owner === OWNER.PLAYER && targetZone.orbs >= targetZone.maxOrbs;
+  const isFullFriendly = targetZone && targetZone.owner === OWNER.PLAYER &&
+    (targetZone.orbs >= targetZone.maxOrbs || isFullyConquered(targetZone));
   if (targetZone && !isFullFriendly && targetZone.id === lastTapZoneId && (now - lastTapTime) < 380) {
     handleZoneDoubleClick(targetZone);
     lastTapTime = 0;
@@ -1427,7 +1428,10 @@ function onPointerUp(e) {
     // [특수 기술]: 드래그 없이 아군 완전점령 지역을 탭하면 그 지역의 충전 1발 사용
     if (endZone === dragSourceZone && isFullyConquered(endZone)) {
       const guide = document.getElementById('status-guide');
-      if (endZone.chargeState === 'ready') {
+      if (endZone.chargeState === 'ready' && gameElapsedTime < playerSkillGcdUntil) {
+        guide.innerText = `⏳ 특수 기술 글로벌 쿨타임 (${Math.ceil(playerSkillGcdUntil - gameElapsedTime)}초 남음)`;
+        flashZone(endZone, '#94a3b8');
+      } else if (endZone.chargeState === 'ready') {
         useSpecialSkill(endZone);
       } else if (endZone.chargeState === 'charging') {
         guide.innerText = `⏳ [${endZone.name}] 특수 기술 충전 중 (${Math.max(1, Math.ceil(SKILL_CHARGE_SEC - endZone.chargeTime))}초 남음)`;
