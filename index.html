@@ -429,6 +429,30 @@
       scrollbar-width: none;
     }
     .start-card .stage-grid::-webkit-scrollbar { display: none; }
+    .stage-wrap { position: relative; }
+    .slide-arrow {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-60%);
+      z-index: 2;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.95);
+      box-shadow: 0 2px 8px rgba(30, 41, 59, 0.18);
+      font: 800 20px/1 -apple-system, sans-serif;
+      color: #1e293b;
+      cursor: pointer;
+      display: none;
+    }
+    .slide-arrow.left { left: -12px; }
+    .slide-arrow.right { right: -12px; }
+    /* 마우스가 있는 기기(PC)에서만 화살표 표시 */
+    @media (hover: hover) and (pointer: fine) {
+      .slide-arrow { display: block; }
+      .start-card .stage-grid, .country-row { cursor: grab; }
+    }
     .start-card .stage-grid .stage-card {
       flex: 0 0 44%;
       scroll-snap-align: center;
@@ -686,7 +710,11 @@
         <div class="country-row" id="country-row"></div>
 
         <!-- 스테이지 카드: 구역이 적은 맵부터, 앞 맵을 클리어하면 다음 맵이 열림 (game.js에서 생성) -->
-        <div class="stage-grid" id="stage-grid"></div>
+        <div class="stage-wrap">
+          <button class="slide-arrow left" aria-label="이전 맵" onclick="slideStages(-1)">‹</button>
+          <div class="stage-grid" id="stage-grid"></div>
+          <button class="slide-arrow right" aria-label="다음 맵" onclick="slideStages(1)">›</button>
+        </div>
 
         <button class="start-btn" id="start-btn" onclick="onStartBtnClick()">시작</button>
         <div class="home-links">

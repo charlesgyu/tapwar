@@ -2571,17 +2571,50 @@ function buildCountryRow() {
   });
 }
 
-// 마우스 휠(세로)로도 스테이지 슬라이드를 가로로 넘길 수 있게
-(function setupStageWheel() {
-  const grid = document.getElementById('stage-grid');
-  if (!grid) return;
-  grid.addEventListener('wheel', e => {
+// 가로 슬라이드 공통: 터치 스와이프(기본) + 마우스 끌기 + 마우스 휠(세로→가로)
+// 스테이지 카드 줄과 나라 버튼 줄에 적용
+function enableHorizontalSlide(el) {
+  if (!el) return;
+  el.addEventListener('wheel', e => {
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
       e.preventDefault();
-      grid.scrollLeft += e.deltaY;
+      el.scrollLeft += e.deltaY;
     }
   }, { passive: false });
-})();
+  let down = false, startX = 0, startLeft = 0, moved = false;
+  el.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    down = true; moved = false;
+    startX = e.clientX; startLeft = el.scrollLeft;
+    el.style.scrollSnapType = 'none';
+    el.style.scrollBehavior = 'auto';
+  });
+  window.addEventListener('pointermove', e => {
+    if (!down) return;
+    const dx = e.clientX - startX;
+    if (Math.abs(dx) > 5) moved = true;
+    el.scrollLeft = startLeft - dx;
+  });
+  window.addEventListener('pointerup', () => {
+    if (!down) return;
+    down = false;
+    el.style.scrollSnapType = '';
+    el.style.scrollBehavior = '';
+  });
+  // 끌어서 넘긴 경우에는 카드 클릭으로 처리하지 않음
+  el.addEventListener('click', e => {
+    if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; }
+  }, true);
+}
+enableHorizontalSlide(document.getElementById('stage-grid'));
+enableHorizontalSlide(document.getElementById('country-row'));
+
+// 스테이지 줄 좌우 화살표 (PC에서 넘길 수 있다는 걸 보여 줌)
+function slideStages(dir) {
+  const grid = document.getElementById('stage-grid');
+  if (grid) grid.scrollBy({ left: dir * grid.clientWidth * 0.8, behavior: 'smooth' });
+}
+window.slideStages = slideStages;
 
 // 시작 화면 스테이지 카드 (캠페인 순서, 잠김·클리어 표시)
 function buildStageCards() {
