@@ -191,6 +191,17 @@ function isMainZone(zone) {
          (zone === enemyMainZone && zone.owner === OWNER.ENEMY);
 }
 
+// 특수 기술을 쓴 완전점령 지역은 공격 제한이 풀려 메인 지역처럼 싸움:
+// 공격력 2, 맞닿은 목표가 없으면 전선 원거리 공격, 지정 공격·집중 포화 참여 (특수 기술 면역은 메인만)
+// 지역을 잃으면(중립이 되면) 해제
+function isUnleashed(zone) {
+  return isMainZone(zone) || (!!zone.unleashed && zone.unleashedOwner === zone.owner);
+}
+function unleashZone(zone) {
+  zone.unleashed = true;
+  zone.unleashedOwner = zone.owner;
+}
+
 // 공격 가능한 자동 목표인지: 내 점령지가 아니고, 적의 완전점령() 철벽 기지가 아님
 function isAutoAttackable(target, owner) {
   if (target.owner === owner || target.isHidden) return false;
@@ -292,6 +303,7 @@ function useSpecialSkill(sourceZone) {
   }
 
   sourceZone.chargeState = 'spent';
+  unleashZone(sourceZone);
   playerSkillGcdUntil = gameElapsedTime + SKILL_GCD_SEC;
 
   const targetEnemyZones = pickSpecialSkillTargets(enemyZones, enemyMainAlive);
@@ -402,6 +414,7 @@ function updateSkillCharges(dt) {
 
   for (let i = 0; i < rawZones.length; i++) {
     const z = rawZones[i];
+    if (z.unleashed && z.owner !== z.unleashedOwner) z.unleashed = false; // 잃은 지역은 해제
     // 해금 전에는 충전이 시작되지 않음 (연한 완전점령 색 유지)
     const full = z.owner !== OWNER.NEUTRAL && isFullyConquered(z) && skillUnlocked[z.owner];
     if (!full || z.chargeOwner !== z.owner) {
@@ -431,6 +444,7 @@ function consumeSkillCharge(owner) {
   const ready = getReadySkillZones(owner);
   if (ready.length === 0) return false;
   ready[0].chargeState = 'spent';
+  unleashZone(ready[0]);
   return true;
 }
 
@@ -809,7 +823,7 @@ function pickAutoTarget(zone) {
   // [자동 공격 규칙]: 모든 점령지역(메인 포함)은 맞닿은 지역만 무작위로 공격.
   // 메인 지역은 공격을 멈추지 않으므로, 자기와 맞닿은 목표가 없으면
   // 내 점령지역 전체와 맞닿아 있는 전선 지역 중 무작위 1곳을 원거리 공격.
-  if (isMainZone(zone)) {
+  if (isUnleashed(zone)) {
     return pickAdjacentTarget(zone) || pickMainZoneFrontierTarget(zone);
   }
   if (isFullyConquered(zone)) return null;
@@ -1447,7 +1461,7 @@ function handleZoneDoubleClick(targetZone) {
   }
 
   // 점령 중인 아군의 전선 거점 탐색 (완전점령지역은 사격 제외! 목표가 아군 거점이면 자기 자신 제외)
-  const allPlayerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && z.id !== targetZone.id && (!isFullyConquered(z) || isMainZone(z)));
+  const allPlayerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && z.id !== targetZone.id && (!isFullyConquered(z) || isUnleashed(z)));
 
   if (allPlayerZones.length === 0) {
     document.getElementById('status-guide').innerText = `출격 가능한 전선 아군 점령지가 없습니다! (완전점령지역은 집중포화 제외)`;
@@ -1542,15 +1556,6 @@ function onPointerDown(e) {
 
   if (currentState !== GAME_STATE.PLAYING) return;
 
-  // [특수 기술 사용 완료 지역]: 완전점령 상태로 특수 기술을 이미 쓴 내 지역은 탭·드래그·더블탭 모두 반응 없음
-  if (targetZone && targetZone.owner === OWNER.PLAYER && isFullyConquered(targetZone) &&
-      !isMainZone(targetZone) && targetZone.chargeState === 'spent') {
-    lastTapTime = 0;
-    lastTapZoneId = null;
-    startPan(coords);
-    return;
-  }
-
   // 지역 더블클릭 / 더블탭 판정 (집중 포격 발동!)
   const now = performance.now();
   // 피가 가득 찬 아군 지역은 더블탭(방어 지원)할 일이 없으므로 탭으로 처리 (특수 기술 연속 사용 가능)
@@ -1622,12 +1627,12 @@ function onPointerUp(e) {
         guide.innerText = `[${endZone.name}] 특수 기술 충전 중 (${Math.max(1, Math.ceil(SKILL_CHARGE_SEC - endZone.chargeTime))}초 남음)`;
         flashZone(endZone, SKILL_DENIED_FLASH);
       } else if (endZone.chargeState === 'spent') {
-        guide.innerText = `[${endZone.name}] 특수 기술 사용 완료. 완전점령이 풀렸다 다시 확보되면 재충전됩니다.`;
+        guide.innerText = `[${endZone.name}] 특수 기술 사용 완료. 이제 메인처럼 공격해요.`;
       }
     }
 
     // [완전점령 지역 공격 불가]: 완전점령 지역(메인 제외)은 특수 기술 외 어떤 공격도 할 수 없음 → 지정 공격 무시
-    const sourceCanAttack = !isFullyConquered(dragSourceZone) || isMainZone(dragSourceZone);
+    const sourceCanAttack = !isFullyConquered(dragSourceZone) || isUnleashed(dragSourceZone);
 
     // [지정 공격 규칙]: 모든 지역(적군·중립·아군, 거리 무관) 지정 가능
     // 아군 지역 지정 = 방어 지원(피 회복). 피가 가득 차면 자동 공격으로 복귀
@@ -1868,7 +1873,7 @@ function triggerEnemyFocusFire() {
   if (enemyFocusFireCooldown > 0) return;
 
   // 완전점령지역이 아닌 전선 교전 중인 적 거점들
-  const activeEnemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY && (!isFullyConquered(z) || isMainZone(z)));
+  const activeEnemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY && (!isFullyConquered(z) || isUnleashed(z)));
   if (activeEnemyZones.length === 0) return;
 
   // 적 거점과 맞닿은 아군 거점 중 완전점령되지 않은 거점 우선 탐색
@@ -1933,7 +1938,7 @@ function updateAI(currentTime) {
   const enemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY);
   enemyZones.forEach(eZone => {
     // Never stop or get stuck if NOT fully conquered!
-    if (isFullyConquered(eZone) && !isMainZone(eZone)) {
+    if (isFullyConquered(eZone) && !isUnleashed(eZone)) {
       eZone.targetZones = [];
       return;
     }
@@ -1949,7 +1954,7 @@ function updateAI(currentTime) {
 function shouldJoinPlayerFocus(zone) {
   const focus = currentFocusZone;
   if (!focus || zone.owner !== OWNER.PLAYER || zone === focus || zone.focusOptOut) return false;
-  if (isFullyConquered(zone) && !isMainZone(zone)) return false;
+  if (isFullyConquered(zone) && !isUnleashed(zone)) return false;
   return true;
 }
 
@@ -1982,7 +1987,7 @@ function updateOrbSpawners(currentTime) {
 
     // '완전 점령' Check: 수동 지정(전국 집중포화 등)이 아닌 경우에만 잉여 생산 중단!
     // [완전점령 지역]: 메인 외에는 지정 공격·집중 포화 여부와 관계없이 구슬을 쏘지 않음
-    if (isFullyConquered(zone) && !isMainZone(zone)) {
+    if (isFullyConquered(zone) && !isUnleashed(zone)) {
       zone.targetZones = [];
       zone.isManualTarget = false;
       return;
@@ -2007,7 +2012,7 @@ function updateOrbSpawners(currentTime) {
       zone.lastShotTime = currentTime;
       
       let power = 1;
-      if (isMainZone(zone)) {
+      if (isUnleashed(zone)) {
         power = MAIN_ZONE_POWER;
       } else if (zone.owner === OWNER.PLAYER) {
         const isPowerZone = (currentPowerZone && currentPowerZone.id === zone.id);
@@ -2419,7 +2424,7 @@ function drawExactDistrictsMap(ctx) {
   // (Network links hidden per user request)
 
   // 3. Drag line from source (Clean Dotted Transit Vector) - 공격할 수 없는 완전점령 지역에서는 표시 안 함
-  if (isDragging && dragSourceZone && (!isFullyConquered(dragSourceZone) || isMainZone(dragSourceZone))) {
+  if (isDragging && dragSourceZone && (!isFullyConquered(dragSourceZone) || isUnleashed(dragSourceZone))) {
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(dragSourceZone.cx, dragSourceZone.cy);
