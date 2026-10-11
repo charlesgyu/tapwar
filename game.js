@@ -684,7 +684,7 @@ const MAP_CONFIGS = {
   WD_ASIA: { country: 'WD', name: '아시아', label: '아시아', count: 250, file: 'assets/w_asia_zones.json', maxScale: 20 },
   WD_OCEANIA: { country: 'WD', name: '오세아니아', label: '오세아니아', count: 250, file: 'assets/w_oceania_zones.json', maxScale: 20 },
   WD_EUROPE: { country: 'WD', name: '유럽', label: '유럽', count: 250, file: 'assets/w_europe_zones.json', maxScale: 20 },
-  WD_WORLD: { country: 'WD', name: '전세계', label: '전세계', count: 1000, file: 'assets/w_world_zones.json', maxScale: 40 },
+  WD_WORLD: { country: 'WD', name: '전세계', label: '전세계', count: 500, file: 'assets/w_world_zones.json', maxScale: 30 },
 };
 MAP_CONFIGS.KOREA.label = '전국'; MAP_CONFIGS.KOREA.count = 164;
 MAP_CONFIGS.SEOUL.label = '서울'; MAP_CONFIGS.SEOUL.count = 25;
