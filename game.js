@@ -184,6 +184,7 @@ let playerMainZone = null;
 let enemyMainZone = null;
 
 const MAIN_ZONE_POWER = 2; // 메인 지역 구슬 공격력
+const MAIN_ZONE_HP = 400;   // 메인 지역 피 (일반 지역 50). 처음부터 메인을 노리기보다 주변을 먼저 공략하도록
 
 function isMainZone(zone) {
   return (zone === playerMainZone && zone.owner === OWNER.PLAYER) ||
@@ -250,6 +251,7 @@ function applySkillDamage(zone, attacker) {
   zone.orbs -= SKILL_DAMAGE;
   if (zone.orbs <= 0) {
     zone.owner = OWNER.NEUTRAL;
+    zone.maxOrbs = ZONE_MAX_HP;
     zone.claimant = -zone.orbs > 0 ? attacker : null;
     zone.orbs = Math.max(0, -zone.orbs);
     zone.targetZones = [];
@@ -1017,6 +1019,7 @@ function applyOrbHit(zone, hitOwner, power, sourceZone) {
     zone.orbs -= power;
     if (zone.orbs <= 0) {
       zone.owner = OWNER.NEUTRAL;
+      zone.maxOrbs = ZONE_MAX_HP; // 메인이었다면 중립이 되면서 일반 지역(피 50)으로
       zone.claimant = hitOwner;
       zone.targetZones = [];
       zone.isManualTarget = false;
@@ -1080,6 +1083,7 @@ let isInstantConquerMode = false;
 
 function conquerZone(conqueredZone, newOwner, conqueredBySource) {
   conqueredZone.owner = newOwner;
+  conqueredZone.maxOrbs = ZONE_MAX_HP; // 함락된 메인은 메인 지위를 잃고 일반 지역(피 50)이 됨
   conqueredZone.orbs = conqueredZone.maxOrbs; // Full garrison upon capture
   conqueredZone.claimant = null;
   conqueredZone.protectedUntil = gameElapsedTime + CAPTURE_PROTECT_SEC;
@@ -1249,7 +1253,7 @@ function reRouteZone(zone) {
 
 function beginGameAtZone(zone) {
   zone.owner = OWNER.PLAYER;
-  zone.orbs = zone.maxOrbs;
+  zone.maxOrbs = MAIN_ZONE_HP; zone.orbs = MAIN_ZONE_HP; // 내 메인 지역 피 400
   lastSelectedPlayerZone = zone;
   playerMainZone = zone;
 
@@ -1269,7 +1273,7 @@ function beginGameAtZone(zone) {
     const eZone = enemyCandidates[idx];
     if (eZone && !chosenEnemies.includes(eZone)) {
       eZone.owner = OWNER.ENEMY;
-      eZone.orbs = eZone.maxOrbs;
+      eZone.maxOrbs = MAIN_ZONE_HP; eZone.orbs = MAIN_ZONE_HP; // 적 메인 지역 피 400
       const aiTarget = pickAutoTarget(eZone);
       if (aiTarget) eZone.zones = [aiTarget];
       chosenEnemies.push(eZone);
