@@ -2576,7 +2576,7 @@ function openItemPick() {
   currentState = GAME_STATE.PAUSED;
   const toast = document.getElementById('center-toast');
   if (toast) toast.classList.remove('show');
-  itemChoices = shuffled(itemPool(OWNER.PLAYER)).slice(0, 3);
+  itemChoices = shuffled(ITEMS.filter(it => !itemsOf.player.includes(it.key))).slice(0, 3);
   const m = document.getElementById('item-modal');
   const list = document.getElementById('item-choices');
   document.getElementById('item-round').textContent = `${itemRound + 1}/${ITEM_ROUNDS}`;
@@ -2591,10 +2591,6 @@ function openItemPick() {
   m.style.display = 'flex';
 }
 
-// 이 판에 나올 수 있는 카드: 이미 고른 카드 제외. 이탈리아는 처음부터 모두 원거리라 장거리 사격 제외
-function itemPool(owner) {
-  return ITEMS.filter(it => !itemsOf[owner].includes(it.key) && !(it.key === 'longrange' && currentCountryKey() === 'IT'));
-}
 function gainItem(owner, key) {
   itemsOf[owner].push(key);
   if (key === 'rebuild') rebuildAt[owner] = gameElapsedTime + REBUILD_EVERY_SEC;
@@ -2603,7 +2599,7 @@ function gainItem(owner, key) {
 function chooseItem(key) {
   if (currentState !== GAME_STATE.PAUSED) return;
   gainItem(OWNER.PLAYER, key);
-  const pool = itemPool(OWNER.ENEMY);
+  const pool = ITEMS.filter(it => !itemsOf.enemy.includes(it.key));
   const ek = pool[Math.floor(Math.random() * pool.length)].key;
   gainItem(OWNER.ENEMY, ek);
   itemRound++;
