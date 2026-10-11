@@ -3153,6 +3153,17 @@ function buildStageCards() {
       `<span class="stage-record" id="modal-${k}-record"></span>`;
     grid.appendChild(btn);
   });
+  // 마지막 맵 다음 카드: 이 나라의 글로벌 순위 (총 시간)
+  const total = getCampaignTotalTime();
+  const allDone = order.every(isStageCleared);
+  const rank = document.createElement('button');
+  rank.id = 'ranking-card';
+  rank.className = 'stage-card ranking-card' + (allDone ? '' : ' locked');
+  rank.onclick = openRanking;
+  rank.innerHTML = `<span class="ranking-title">순위</span>` +
+    `<span class="ranking-time">${allDone ? formatLongTime(total.sum) : `${order.filter(isStageCleared).length}/${order.length}`}</span>` +
+    `<span class="stage-sub">${allDone ? '총 시간' : '모든 맵 클리어 후 참여'}</span>`;
+  grid.appendChild(rank);
   updateRecordDisplays();
   // 가로 슬라이드: 선택된(다음에 할) 스테이지가 보이도록 이동
   const sel = document.getElementById(`modal-map-${selectedModalMapKey.toLowerCase()}`);
