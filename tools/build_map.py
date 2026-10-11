@@ -181,8 +181,9 @@ def process(path):
             eps = json.load(open(spec_path, encoding='utf-8'))['maps'].get(os.path.basename(path), {}).get('waterEps', WATER_EPS)
         wp = unary_union([make_valid(Polygon(r)) for w in water for r in w['polygons']]).buffer(eps)
         zg = {z['id']: g for z, g in zip(zones, geoms)}
-        wl = []
-        for a, b in d['links']:
+        # 이미 강을 깎아낸 맵(carved)은 구역이 더 이상 맞닿지 않으므로 기존 waterLinks 유지
+        wl = [list(l) for l in d.get('waterLinks', [])] if d.get('carved') else []
+        for a, b in ([] if d.get('carved') else d['links']):
             line = zg[a].boundary.intersection(zg[b].buffer(1e-5))
             if line.length <= 0:
                 continue

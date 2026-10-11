@@ -2042,7 +2042,7 @@ function drawBackdropZones(ctx) {
     // 외곽선 없이 면만 칠함 (내부 구 경계선이 보이지 않도록, 미세 틈은 같은 색 선으로 메움)
     ctx.fill(b.path);
     ctx.strokeStyle = '#e2e0d8';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 1.2 / view.scale;
     ctx.stroke(b.path);
   });
   ctx.font = `600 ${ZONE_LABEL_PX / view.scale}px -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif`;
@@ -2183,9 +2183,9 @@ function drawExactDistrictsMap(ctx) {
     styles[i] = st;
     ctx.fillStyle = st.base;
     ctx.fill(zone.path);
-    // 데이터상 이웃 지역 경계 사이 미세 틈 메우기: 면 색과 같은 굵은 선으로 가장자리를 덧칠
+    // 안티앨리어싱으로 생기는 경계의 머리카락 틈만 메우는 얇은 덧칠 (맵 데이터는 build_map.py로 경계가 정확히 맞물림)
     ctx.strokeStyle = st.ratio >= 1 ? st.gauge : st.base;
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 1.2 / view.scale;
     ctx.stroke(zone.path);
     fillZoneFromBottom(ctx, zone, st.ratio, st.gauge);
   }

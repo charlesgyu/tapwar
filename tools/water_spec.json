@@ -123,7 +123,8 @@
           "부산",
           "김해"
         ]
-      ]
+      ],
+      "carveWidth": 0.004
     },
     "gyeonggi_exact_zones.json": {
       "riverWidth": 0.004,
@@ -137,7 +138,8 @@
           "김포",
           "파주"
         ]
-      ]
+      ],
+      "carveWidth": 0.005
     },
     "seoul_exact_zones.json": {
       "riverWidth": 0.009,
@@ -155,7 +157,8 @@
           "용산구",
           "성동구"
         ]
-      ]
+      ],
+      "carveWidth": 0.008
     },
     "suwon_exact_zones.json": {
       "riverWidth": 0.002,

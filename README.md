@@ -165,6 +165,8 @@ Xcode에서:
 - **강**: `tools/korea_rivers_ne10m.json`(Natural Earth 10m 중심선)을 맵별 폭(`riverWidth`)으로 그림
 - **물 건너 연결 보정**: 자동 판정이 틀리면 `maps[파일].waterLinksAdd / waterLinksRemove`에 구역 이름 쌍으로 지정
 ```bash
-python tools/add_water.py assets/*_exact_zones.json
-python tools/build_map.py assets/*_exact_zones.json
+python tools/add_water.py assets/*_exact_zones.json          # 호수·강(근사) 추가
+python tools/build_map.py assets/*_exact_zones.json          # 물 건너 연결 계산
+python tools/add_water.py --carve assets/*_exact_zones.json  # 강을 실제 경계선을 따라 다시 그리고 양쪽 구역을 깎아 틈 제거
 ```
+- 강은 최종적으로 **강을 사이에 둔 두 구역의 공유 경계선**을 따라 맵별 폭(`carveWidth`)으로 그려지고, 그만큼 구역이 깎여서 강과 구역 사이에 틈이 생기지 않습니다.

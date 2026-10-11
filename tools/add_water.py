@@ -80,6 +80,62 @@ def process(path):
     print(f'{path}: 물 {len(water)}개 {[w["name"] for w in water]}')
 
 
-if __name__ == '__main__':
+if __name__ == '__main__' and (len(sys.argv) < 2 or sys.argv[1] != '--carve'):
     for p in sys.argv[1:]:
         process(p)
+
+
+# ---------------------------------------------------------------------------
+# 강 다듬기(carve): build_map.py 로 물 건너 연결(waterLinks)을 계산한 뒤 실행
+#   - 강을 사이에 둔 두 구역의 실제 공유 경계선을 따라 일정 폭의 강을 만들고
+#   - 양쪽 구역을 그만큼 깎아냄 → 강과 구역 사이에 틈이 생기지 않음
+#   - 근사 강 중심선(Natural Earth)으로 그렸던 강은 이 강으로 대체
+# 사용법: python tools/add_water.py --carve assets/seoul_exact_zones.json
+# ---------------------------------------------------------------------------
+def carve(path):
+    d = json.load(open(path, encoding='utf-8'))
+    cfg = SPEC['maps'].get(os.path.basename(path), {})
+    width = cfg.get('carveWidth')
+    if not width or not d.get('waterLinks'):
+        print(f'{path}: carve 생략')
+        return
+    zones = {z['id']: z for z in d['zones']}
+    geo = {i: unary_union([make_valid(Polygon(r)) for r in z['polygons']]) for i, z in zones.items()}
+    bands = []
+    for a, b in d['waterLinks']:
+        line = geo[a].boundary.intersection(geo[b].buffer(1e-6))
+        if line.length > 0:
+            bands.append(line.buffer(width / 2, cap_style='round', join_style='round'))
+    if not bands:
+        print(f'{path}: 공유 경계가 있는 물 건너 연결 없음')
+        return
+    river = unary_union(bands)
+    land = unary_union(list(geo.values()))
+    river = river.intersection(land)  # 맵 바깥으로 삐져나가지 않게
+    # 깎고 남은 작은 조각(강 교차점의 삼각형 등)은 강에 흡수
+    SLIVER = 4e-6
+    leftovers = []
+    for i, z in zones.items():
+        g = make_valid(geo[i].difference(river))
+        parts = polys(g)
+        big = [p for p in parts if p.area >= SLIVER]
+        leftovers += [p for p in parts if p.area < SLIVER]
+        if big:
+            z['polygons'] = rings(unary_union(big), min_area=SLIVER)
+    if leftovers:
+        river = unary_union([river] + leftovers)
+    # 기존: 근사 중심선으로 그린 강(generated 강)은 제거, 호수는 유지
+    river_names = {rv['name'] for rv in SPEC['rivers']}
+    kept = [w for w in d.get('water', []) if not (w.get('generated') and w['name'] in river_names)]
+    if cfg.get('keepExisting'):
+        kept = [w for w in kept if w.get('generated')]  # 원래 있던 대략적인 강 폴리곤도 대체
+    kept.append({'name': '강', 'polygons': rings(river, min_area=1e-7), 'generated': True, 'carved': True})
+    d['water'] = kept
+    d['carved'] = True
+    json.dump(d, open(path, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
+    print(f'{path}: 경계선 기반 강 {len(bands)}구간, 물 {len(kept)}개')
+
+
+if __name__ == '__main__' and len(sys.argv) > 1 and sys.argv[1] == '--carve':
+    for p in sys.argv[2:]:
+        carve(p)
