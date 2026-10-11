@@ -38,7 +38,8 @@ let currentState = GAME_STATE.SELECT_START;
 const OWNER = {
   NEUTRAL: 'neutral',
   PLAYER: 'player',
-  ENEMY: 'enemy'
+  ENEMY: 'enemy',
+  ENEMY2: 'enemy2' // 대륙 3파전의 두 번째 적
 };
 
 const playerBuffs = {
@@ -207,13 +208,17 @@ let enemyFocusReticleTimer = 0;
 // 일반 구슬 전투로 함락되면 메인 지역 지위를 잃음.
 let playerMainZone = null;
 let enemyMainZone = null;
+let enemy2MainZone = null;
+// 대륙 맵은 3파전: 나 vs 적(빨강) vs 적2(보라). 두 적은 서로도 싸움
+function isThreeWay() { return currentCountryKey() === 'WD'; }
 
 const MAIN_ZONE_POWER = 2; // 메인 지역 구슬 공격력
 const MAIN_ZONE_HP = 400;   // 메인 지역 피 (일반 지역 50). 처음부터 메인을 노리기보다 주변을 먼저 공략하도록
 
 function isMainZone(zone) {
   return (zone === playerMainZone && zone.owner === OWNER.PLAYER) ||
-         (zone === enemyMainZone && zone.owner === OWNER.ENEMY);
+         (zone === enemyMainZone && zone.owner === OWNER.ENEMY) ||
+         (zone === enemy2MainZone && zone.owner === OWNER.ENEMY2);
 }
 
 // 특수 기술을 쓴 완전점령 지역은 공격 제한이 풀려 메인 지역처럼 싸움:
@@ -674,12 +679,12 @@ const MAP_CONFIGS = {
   GB_WALESNI: { country: 'GB', name: '웨일스·북아일랜드', label: '웨일스·북아일랜드', count: 14, file: 'assets/gb_walesni_zones.json', maxScale: 8 },
   GB_UK: { country: 'GB', name: '영국 전국', label: '영국 전국', count: 70, file: 'assets/gb_uk_zones.json', maxScale: 20 },
   // WD — tools/build_*_maps.sh 로 생성
-  WD_AMERICA: { country: 'WD', name: '아메리카', label: '아메리카', count: 29, file: 'assets/w_america_zones.json', maxScale: 14 },
-  WD_AFRICA: { country: 'WD', name: '아프리카', label: '아프리카', count: 49, file: 'assets/w_africa_zones.json', maxScale: 14 },
-  WD_ASIA: { country: 'WD', name: '아시아', label: '아시아', count: 45, file: 'assets/w_asia_zones.json', maxScale: 14 },
-  WD_OCEANIA: { country: 'WD', name: '오세아니아', label: '오세아니아', count: 22, file: 'assets/w_oceania_zones.json', maxScale: 14 },
-  WD_EUROPE: { country: 'WD', name: '유럽', label: '유럽', count: 37, file: 'assets/eu_europe_zones.json', maxScale: 14 },
-  WD_WORLD: { country: 'WD', name: '전세계', label: '전세계', count: 155, file: 'assets/w_world_zones.json', maxScale: 20 },
+  WD_AMERICA: { country: 'WD', name: '아메리카', label: '아메리카', count: 250, file: 'assets/w_america_zones.json', maxScale: 20 },
+  WD_AFRICA: { country: 'WD', name: '아프리카', label: '아프리카', count: 250, file: 'assets/w_africa_zones.json', maxScale: 20 },
+  WD_ASIA: { country: 'WD', name: '아시아', label: '아시아', count: 250, file: 'assets/w_asia_zones.json', maxScale: 20 },
+  WD_OCEANIA: { country: 'WD', name: '오세아니아', label: '오세아니아', count: 250, file: 'assets/w_oceania_zones.json', maxScale: 20 },
+  WD_EUROPE: { country: 'WD', name: '유럽', label: '유럽', count: 250, file: 'assets/w_europe_zones.json', maxScale: 20 },
+  WD_WORLD: { country: 'WD', name: '전세계', label: '전세계', count: 1000, file: 'assets/w_world_zones.json', maxScale: 40 },
 };
 MAP_CONFIGS.KOREA.label = '전국'; MAP_CONFIGS.KOREA.count = 164;
 MAP_CONFIGS.SEOUL.label = '서울'; MAP_CONFIGS.SEOUL.count = 25;
@@ -747,6 +752,8 @@ function loadSelectedMap(mapKey) {
   currentEnemyFocusZone = null;
   playerMainZone = null;
   enemyMainZone = null;
+  enemy2MainZone = null;
+  resetAi2();
   playerSkillGcdUntil = 0;
   enemySkillGcdUntil = 0;
   skillUnlocked.player = false;
@@ -994,24 +1001,26 @@ function pickAutoTarget(zone) {
 // 1순위: 내(적) 완전점령 지역을 가장 빨리 만든다 → 완전점령까지 남은 이웃이 적은 적 지역의 빈 이웃일수록 높음
 // 2순위: 상대(플레이어)의 완전점령 지역을 풀어 버린다 → 플레이어 완전점령 지역과 맞닿은 플레이어 지역
 // 그 밖: 피가 적게 남은 곳, 중립 지역 소폭 가점
+// 지금 생각 중인 AI 진영 (3파전에서는 적·적2가 번갈아 같은 AI 코드를 씀)
+let AI = OWNER.ENEMY;
 function aiTargetScore(t) {
-  if (!t || t.owner === OWNER.ENEMY || t.isHidden) return -1;
+  if (!t || t.owner === AI || t.isHidden) return -1;
   let score = 0;
   for (let i = 0; i < t.neighbors.length; i++) {
     const n = t.neighbors[i];
-    if (n.owner === OWNER.ENEMY && !isFullyConquered(n)) {
+    if (n.owner === AI && !isFullyConquered(n)) {
       let missing = 0;
       for (let j = 0; j < n.neighbors.length; j++) {
         const m = n.neighbors[j];
         if (n.waterNeighbors && n.waterNeighbors.has(m)) continue;
-        if (m.owner !== OWNER.ENEMY) missing++;
+        if (m.owner !== AI) missing++;
       }
       if (missing > 0) score += 4 / missing; // 1곳만 더 먹으면 완전점령 → 4점
     }
-    if (t.owner === OWNER.PLAYER && n.owner === OWNER.PLAYER && isFullyConquered(n) && !isMainZone(n)) score += 3;
+    if (t.owner !== OWNER.NEUTRAL && n.owner === t.owner && isFullyConquered(n) && !isMainZone(n)) score += 3;
   }
   // 빈 땅(중립) 확장이 기본: 방어 중인 플레이어 땅보다 우선. 플레이어 땅은 피가 많이 깎였을 때만 가점
-  if (t.owner === OWNER.NEUTRAL) score += 1.2 + (t.claimant === OWNER.ENEMY ? 0.6 : 0);
+  if (t.owner === OWNER.NEUTRAL) score += 1.2 + (t.claimant === AI ? 0.6 : 0);
   else score += (1 - t.orbs / Math.max(1, t.maxOrbs)) * 1.2;
   return score;
 }
@@ -1021,7 +1030,7 @@ function aiTargetScore(t) {
 function pickBestAiTarget(list) {
   if (list.length === 0) return null;
   const crowd = new Map();
-  rawZones.forEach(z => { if (z.owner === OWNER.ENEMY) z.targetZones.forEach(t => crowd.set(t, (crowd.get(t) || 0) + 1)); });
+  rawZones.forEach(z => { if (z.owner === AI) z.targetZones.forEach(t => crowd.set(t, (crowd.get(t) || 0) + 1)); });
   const w = list.map(t => {
     const sc = Math.max(0.05, aiTargetScore(t) - 0.6 * (crowd.get(t) || 0));
     return sc * sc;
@@ -1119,6 +1128,7 @@ function drawFlyingOrbs(ctx) {
   const passes = [
     [OWNER.PLAYER, false, '#2563eb'], [OWNER.PLAYER, true, '#1e3a8a'],
     [OWNER.ENEMY, false, '#dc2626'], [OWNER.ENEMY, true, '#7f1d1d'],
+    [OWNER.ENEMY2, false, '#8b5cf6'], [OWNER.ENEMY2, true, '#4c1d95'],
     [REBEL, false, '#7c3aed']
   ];
   const fog = currentCountryKey() === 'GB'; // [영국 안개] 적 구슬은 막 출발할 때 방향만 살짝 보임
@@ -1330,7 +1340,7 @@ function conquerZone(conqueredZone, newOwner, conqueredBySource) {
   conqueredZone.orbs = conqueredZone.maxOrbs; // Full garrison upon capture
   conqueredZone.claimant = null;
   conqueredZone.protectedUntil = gameElapsedTime + CAPTURE_PROTECT_SEC;
-  flashZone(conqueredZone, newOwner === OWNER.PLAYER ? ZONE_COLORS.playerStroke : ZONE_COLORS.enemyStroke);
+  flashZone(conqueredZone, newOwner === OWNER.PLAYER ? ZONE_COLORS.playerStroke : newOwner === OWNER.ENEMY2 ? ZONE_COLORS.enemy2Stroke : ZONE_COLORS.enemyStroke);
 
   // 1. Conquered Zone immediately starts advancing towards an adjacent front!
   const newTarget = pickAutoTarget(conqueredZone);
@@ -1524,6 +1534,19 @@ function beginGameAtZone(zone) {
       if (aiTarget) eZone.zones = [aiTarget];
       chosenEnemies.push(eZone);
       if (!enemyMainZone) enemyMainZone = eZone;
+    }
+  }
+
+  // [3파전] 두 번째 적 본진: 나·첫 적 본진 양쪽에서 가장 먼 곳
+  if (isThreeWay() && enemyMainZone) {
+    const d = z => Math.min(Math.hypot(z.cx - zone.cx, z.cy - zone.cy), Math.hypot(z.cx - enemyMainZone.cx, z.cy - enemyMainZone.cy));
+    const e2 = enemyCandidates.filter(z => z.owner === OWNER.NEUTRAL).sort((a, b) => d(b) - d(a))[0];
+    if (e2) {
+      e2.owner = OWNER.ENEMY2;
+      e2.maxOrbs = MAIN_ZONE_HP; e2.orbs = MAIN_ZONE_HP;
+      const t2 = pickAutoTarget(e2);
+      if (t2) e2.zones = [t2];
+      enemy2MainZone = e2;
     }
   }
 
@@ -2099,13 +2122,13 @@ function issueEnemyCommand() {
   if (currentState !== GAME_STATE.PLAYING) return;
   let bestZone = null, bestTarget = null, bestScore = 1;
   rawZones.forEach(z => {
-    if (z.owner !== OWNER.ENEMY || z.isManualTarget) return;
+    if (z.owner !== AI || z.isManualTarget) return;
     if (isFullyConquered(z) && !isUnleashed(z)) return;
     const opts = canRangeAttack(z)
-      ? rawZones.filter(t => t.owner !== OWNER.ENEMY && rawZones.some(e => e.owner === OWNER.ENEMY && e.neighbors.includes(t)))
+      ? rawZones.filter(t => t.owner !== AI && rawZones.some(e => e.owner === AI && e.neighbors.includes(t)))
       : z.neighbors;
     opts.forEach(t => {
-      if (t.owner === OWNER.ENEMY || !canAttackTarget(z, t)) return;
+      if (t.owner === AI || !canAttackTarget(z, t)) return;
       const sc = aiTargetScore(t) + Math.random() * 0.2;
       const cur = z.targetZones[0] ? aiTargetScore(z.targetZones[0]) : 0;
       if (sc - cur > bestScore) { bestScore = sc - cur; bestZone = z; bestTarget = t; }
@@ -2121,18 +2144,18 @@ function triggerEnemyFocusFire() {
   if (enemyFocusFireCooldown > 0) return;
 
   // 완전점령지역이 아닌 전선 교전 중인 적 거점들
-  const activeEnemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY && (!isFullyConquered(z) || isUnleashed(z)));
+  const activeEnemyZones = rawZones.filter(z => z.owner === AI && (!isFullyConquered(z) || isUnleashed(z)));
   if (activeEnemyZones.length === 0) return;
 
   // 공격 가능한 후보: 적 지역과 맞닿은 곳 + 원거리 완충 지역이 닿는 곳. 전략 점수가 가장 높은 곳을 집중 포화
   const rangers = activeEnemyZones.filter(e => canRangeAttack(e));
   const candSet = new Set();
   activeEnemyZones.forEach(eZone => eZone.neighbors.forEach(n => {
-    if (n.owner !== OWNER.ENEMY && canAttackTarget(eZone, n)) candSet.add(n);
+    if (n.owner !== AI && canAttackTarget(eZone, n)) candSet.add(n);
   }));
   rangers.forEach(r => rawZones.forEach(n => {
-    if (n.owner !== OWNER.ENEMY && !n.isHidden && canAttackTarget(r, n) &&
-        rawZones.some(e => e.owner === OWNER.ENEMY && e.neighbors.includes(n))) candSet.add(n);
+    if (n.owner !== AI && !n.isHidden && canAttackTarget(r, n) &&
+        rawZones.some(e => e.owner === AI && e.neighbors.includes(n))) candSet.add(n);
   }));
   const candidates = [...candSet];
   if (candidates.length === 0) return;
@@ -2142,7 +2165,7 @@ function triggerEnemyFocusFire() {
   // 이전 집중 포화 목표를 쏘던 기지는 풀어 새 목표에 합류
   if (currentEnemyFocusZone && currentEnemyFocusZone !== target) {
     rawZones.forEach(z => {
-      if (z.owner === OWNER.ENEMY && z.isManualTarget && z.targetZones.includes(currentEnemyFocusZone)) z.isManualTarget = false;
+      if (z.owner === AI && z.isManualTarget && z.targetZones.includes(currentEnemyFocusZone)) z.isManualTarget = false;
     });
   }
   enemyFocusFireCooldown = ENEMY_CONFIG.enemyFocusCooldown;
@@ -2164,20 +2187,40 @@ function triggerEnemyFocusFire() {
     eZone.isManualTarget = true;
     eZone.targetZones = [target];
   });
-  flashZone(target, ZONE_COLORS.enemyStroke); // 적 집중 포화 목표 번쩍
+  flashZone(target, AI === OWNER.ENEMY2 ? ZONE_COLORS.enemy2Stroke : ZONE_COLORS.enemyStroke); // 적 집중 포화 목표 번쩍
 
-  document.getElementById('status-guide').innerText = `[적군 집중포화 경보!]: 적 기지 ${firingBases.length}곳에서 [${target.name}]에 일제 사격을 개시했습니다!`;
+  document.getElementById('status-guide').innerText = `[${AI === OWNER.ENEMY2 ? '보라 적군' : '적군'} 집중포화 경보!]: 적 기지 ${firingBases.length}곳에서 [${target.name}]에 일제 사격을 개시했습니다!`;
 }
 
 // AI Expansion Engine
 let lastAiDecisionTime = 0;
+// 적2 AI 상태 (적1 은 전역 변수 그대로, 적2 차례에만 바꿔 끼움)
+let ai2 = null;
+function resetAi2() { ai2 = { focus: null, cd: 0, reticle: 0, cmd: ENEMY_COMMAND_SEC, lastCheck: 0, lastRun: 0 }; }
+resetAi2();
 function updateAI(currentTime) {
   const decisionInterval = ENEMY_CONFIG.enemyDecisionInterval / gameSpeed;
   if (currentTime - lastAiDecisionTime < decisionInterval) return;
   lastAiDecisionTime = currentTime;
+  AI = OWNER.ENEMY;
+  updateAIFor(currentTime);
+  if (!isThreeWay() || !rawZones.some(z => z.owner === OWNER.ENEMY2)) return;
+  const dt = ai2.lastRun ? (currentTime - ai2.lastRun) / 1000 * gameSpeed : 0;
+  ai2.lastRun = currentTime;
+  ai2.cd = Math.max(0, ai2.cd - dt);
+  const saved = [currentEnemyFocusZone, enemyFocusFireCooldown, enemyFocusReticleTimer, enemyCommandTimer, lastEnemyCommandCheck];
+  [currentEnemyFocusZone, enemyFocusFireCooldown, enemyFocusReticleTimer, enemyCommandTimer, lastEnemyCommandCheck] = [ai2.focus, ai2.cd, 0, ai2.cmd, ai2.lastCheck];
+  AI = OWNER.ENEMY2;
+  try { updateAIFor(currentTime); } finally {
+    [ai2.focus, ai2.cd, ai2.cmd, ai2.lastCheck] = [currentEnemyFocusZone, enemyFocusFireCooldown, enemyCommandTimer, lastEnemyCommandCheck];
+    [currentEnemyFocusZone, enemyFocusFireCooldown, enemyFocusReticleTimer, enemyCommandTimer, lastEnemyCommandCheck] = saved;
+    AI = OWNER.ENEMY;
+  }
+}
+function updateAIFor(currentTime) {
 
   // 1. 적군 특수 기술 사용 검토 (충전된 완전점령 지역이 있을 때)
-  useEnemySpecialSkill();
+  if (AI === OWNER.ENEMY) useEnemySpecialSkill();
 
   // 2. 적군 집중포화 사용 검토 (쿨타임 완료 시 아군 거점에 일제 사격)
   triggerEnemyFocusFire();
@@ -2191,7 +2234,7 @@ function updateAI(currentTime) {
   }
 
   // 3. 일반 전선 전진 및 재배치
-  const enemyZones = rawZones.filter(z => z.owner === OWNER.ENEMY);
+  const enemyZones = rawZones.filter(z => z.owner === AI);
   enemyZones.forEach(eZone => {
     // Never stop or get stuck if NOT fully conquered!
     if (isFullyConquered(eZone) && !isUnleashed(eZone)) {
@@ -2199,7 +2242,7 @@ function updateAI(currentTime) {
       return;
     }
 
-    if (eZone.targetZones.length === 0 || eZone.targetZones.every(t => t.owner === OWNER.ENEMY)) {
+    if (eZone.targetZones.length === 0 || eZone.targetZones.every(t => t.owner === AI)) {
       const tgt = pickAutoTarget(eZone);
       if (tgt) eZone.targetZones = [tgt];
     }
@@ -2462,11 +2505,11 @@ function checkWinConditions(isTimeUp = false) {
   if (currentState !== GAME_STATE.PLAYING) return;
 
   const pCount = rawZones.filter(z => z.owner === OWNER.PLAYER).length;
-  const eCount = rawZones.filter(z => z.owner === OWNER.ENEMY).length;
+  const eCount = rawZones.filter(z => z.owner === OWNER.ENEMY || z.owner === OWNER.ENEMY2).length;
   const neutralCount = rawZones.filter(z => z.owner === OWNER.NEUTRAL && !z.isHidden).length;
 
   const pFull = rawZones.filter(z => z.owner === OWNER.PLAYER && isFullyConquered(z)).length;
-  const eFull = rawZones.filter(z => z.owner === OWNER.ENEMY && isFullyConquered(z)).length;
+  const eFull = rawZones.filter(z => (z.owner === OWNER.ENEMY || z.owner === OWNER.ENEMY2) && isFullyConquered(z)).length;
 
   const pEl = document.getElementById('player-count');
   const eEl = document.getElementById('enemy-count');
@@ -2694,7 +2737,14 @@ const ZONE_COLORS = {
   mainCharged: '#eab308',
   mainStroke: '#ffffff',
   enemyMain: '#be123c',        // 적 메인: 진한 와인 레드 + 흰 테두리
-  enemyMainCharged: '#881337'
+  enemyMainCharged: '#881337',
+  enemy2: '#a78bfa',           // 3파전 두 번째 적: 보라
+  enemy2Stroke: '#6d28d9',
+  enemy2Full: '#ddd6fe',
+  enemy2FullCharged: '#7c3aed',
+  enemy2FullStroke: '#5b21b6',
+  enemy2Main: '#6d28d9',
+  enemy2MainCharged: '#4c1d95'
 };
 const ZONE_FLASH_MS = 700;
 
@@ -2724,8 +2774,18 @@ function getZoneStyle(zone) {
   const chargeRatio = zone.chargeState === 'ready' ? 1 : (zone.chargeState === 'charging' ? zone.chargeTime / SKILL_CHARGE_SEC : 0);
 
   if (zone.owner === OWNER.NEUTRAL) {
-    const gauge = zone.claimant === OWNER.PLAYER ? ZONE_COLORS.player : ZONE_COLORS.enemy;
+    const gauge = zone.claimant === OWNER.PLAYER ? ZONE_COLORS.player : zone.claimant === OWNER.ENEMY2 ? ZONE_COLORS.enemy2 : ZONE_COLORS.enemy;
     return { base: ZONE_COLORS.base, gauge, ratio: zone.claimant ? hpRatio : 0, stroke: ZONE_COLORS.baseStroke, width: 1.0 };
+  }
+  if (zone.owner === OWNER.ENEMY2) {
+    if (zone === enemy2MainZone) {
+      return isFull && hpRatio >= 1
+        ? { base: ZONE_COLORS.enemy2Main, gauge: ZONE_COLORS.enemy2MainCharged, ratio: chargeRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 }
+        : { base: ZONE_COLORS.base, gauge: ZONE_COLORS.enemy2Main, ratio: hpRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
+    }
+    return isFull && hpRatio >= 1
+      ? { base: ZONE_COLORS.enemy2Full, gauge: ZONE_COLORS.enemy2FullCharged, ratio: chargeRatio, stroke: ZONE_COLORS.enemy2FullStroke, width: 2.0 }
+      : { base: ZONE_COLORS.base, gauge: ZONE_COLORS.enemy2, ratio: hpRatio, stroke: ZONE_COLORS.enemy2Stroke, width: 2.0 };
   }
   const isEnemyMain = zone.owner === OWNER.ENEMY && zone === enemyMainZone;
   if (isEnemyMain) {
@@ -2897,7 +2957,7 @@ function drawExactDistrictsMap(ctx) {
     }
   };
   strokePass(z => z.owner === OWNER.NEUTRAL);
-  const isAnyMain = z => (z === playerMainZone && z.owner === OWNER.PLAYER) || (z === enemyMainZone && z.owner === OWNER.ENEMY);
+  const isAnyMain = z => isMainZone(z);
   strokePass(z => z.owner !== OWNER.NEUTRAL && !isAnyMain(z));
   strokePass(isAnyMain);
 
