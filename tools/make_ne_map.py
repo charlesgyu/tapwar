@@ -87,7 +87,7 @@ def merge_enclaves(groups):
     return groups
 
 
-def merge_until(groups, target):
+def merge_until(groups, target, same_country=False):
     """가장 작은 구역을 맞닿은 이웃 중 가장 작은 곳과 합치기를 target 개가 될 때까지 반복.
     합친 구역 이름은 가장 넓은 원래 구역의 이름"""
     from shapely.geometry import Polygon
@@ -99,7 +99,10 @@ def merge_until(groups, target):
                  'parts': [(geom.area, g['name'])]}
     while len(zs) > target:
         small = min(zs.values(), key=lambda z: z['geom'].area)
-        nb = [z for z in zs.values() if z is not small and z['geom'].buffer(0.01).intersects(small['geom'])]
+        sb = small['geom'].buffer(0.01)
+        nb = [z for z in tree_near(zs, small) if z['geom'].intersects(sb)]
+        if same_country:  # 같은 나라 이웃 우선 (나라 경계 유지)
+            nb = [z for z in nb if z['id'].split('|')[0] == small['id'].split('|')[0]] or nb
         if not nb:  # 섬처럼 이웃이 없으면 가장 가까운 곳
             nb = [min((z for z in zs.values() if z is not small), key=lambda z: z['geom'].distance(small['geom']))]
         t = min(nb, key=lambda z: z['geom'].area)
@@ -112,6 +115,19 @@ def merge_until(groups, target):
     return zs
 
 
+def tree_near(zs, small):
+    # 경계 상자가 겹치는 구역만 (빠른 후보 거르기)
+    x0, y0, x1, y1 = small['geom'].bounds
+    out = []
+    for z in zs.values():
+        if z is small:
+            continue
+        a0, b0, a1, b1 = z['geom'].bounds
+        if a0 <= x1 + 0.02 and a1 >= x0 - 0.02 and b0 <= y1 + 0.02 and b1 >= y0 - 0.02:
+            out.append(z)
+    return out
+
+
 def polys_of(geom):
     return [geom['coordinates']] if geom['type'] == 'Polygon' else geom['coordinates']
 
@@ -121,7 +137,7 @@ def main():
     from shapely.ops import unary_union
 
     ap = argparse.ArgumentParser()
-    ap.add_argument('mode', choices=['us', 'europe', 'world', 'country', 'regions'])
+    ap.add_argument('mode', choices=['us', 'europe', 'world', 'country', 'regions', 'admin1'])
     ap.add_argument('src1'); ap.add_argument('src2')
     ap.add_argument('title'); ap.add_argument('out')
     ap.add_argument('--units', default='')
@@ -129,6 +145,7 @@ def main():
     ap.add_argument('--exclude', default='', help='뺄 나라 A3')
     ap.add_argument('--extra', default='', help='대륙과 상관없이 넣을 나라 A3')
     ap.add_argument('--target', type=int, default=0)
+    ap.add_argument('--fine', default='', help='admin1 모드: 더 잘게 나눌 나라 A3=geojson(geoBoundaries) , 구분')
     ap.add_argument('--groups', default='', help='regions 모드: 묶음 값 목록(| 구분)')
     ap.add_argument('--group-field', default='region', help='regions 모드: region(큰 지방) 또는 name(1급 행정구역)')
     ap.add_argument('--by-region', action='store_true', help='country 모드: 1급 행정구역을 region(큰 지방) 단위로 묶음')
@@ -215,6 +232,37 @@ def main():
             if units and c not in units:
                 continue
             subs.append((c, ko.get(c, p.get('admin')), p.get('iso_3166_2') or p['name'], clean(shape(f['geometry']))))
+    elif a.mode == 'admin1':
+        # 대륙 맵: 나라 안의 1급 행정구역이 구역. --target 까지 작은 것부터 같은 나라 이웃과 합침
+        a0 = {f['properties']['ADM0_A3']: f['properties'] for f in json.load(open(a.src2, encoding='utf-8'))['features']}
+        def want(c):
+            if c in a.exclude.split(',') or c == 'ATA' or c not in a0 and c not in a.extra.split(','):
+                return False
+            if units:
+                return c in units
+            return not a.continent or a0.get(c, {}).get('CONTINENT') in a.continent.split('|') or c in a.extra.split(',')
+        fine = dict(x.split('=') for x in a.fine.split(',') if x)
+        def shifted(geom, c):
+            if c not in ('RUS', 'FJI', 'USA', 'NZL'):
+                return shape(geom)
+            parts = []
+            for poly in polys_of(geom):
+                ring = poly[0]
+                if c in ('RUS', 'FJI') and max(x for x, _ in ring) < -100:
+                    ring = [[x + 360, y] for x, y in ring]
+                parts.append(Polygon(ring).buffer(0))
+            return unary_union(parts)
+        for f in json.load(open(a.src1, encoding='utf-8'))['features']:
+            p = f['properties']; c = adm0_of(p)
+            if not want(c) or c in fine:
+                continue
+            nm = p.get('name_ko') or p['name']
+            sid = p.get('iso_3166_2') or p['name']
+            subs.append((c + '|' + sid, KO_FIX.get(nm, nm), sid, clean(shifted(f['geometry'], c))))
+        for c, path in fine.items():
+            for i, f in enumerate(json.load(open(path, encoding='utf-8'))['features']):
+                p = f['properties']
+                subs.append((c + '|' + str(p.get('shapeID') or i), p.get('shapeName') or c, str(i), clean(shape(f['geometry']))))
     else:
         for f in json.load(open(a.src1, encoding='utf-8'))['features']:
             p = f['properties']; c = p['ADM0_A3']
@@ -285,8 +333,8 @@ def main():
 
     if a.mode in ('country', 'regions'):
         groups = merge_enclaves(groups)
-    if a.mode == 'country' and a.target and len(groups) > a.target:
-        groups = merge_until(groups, a.target)
+    if a.mode in ('country', 'admin1') and a.target and len(groups) > a.target:
+        groups = merge_until(groups, a.target, same_country=a.mode == 'admin1')
     elif a.target and len(groups) < a.target:
         groups = split_until(groups, a.target)
         # 하위 단위 하나만 남은 구역은 그 단위의 실제 이름 (예: 바르셀로나)
@@ -299,7 +347,7 @@ def main():
     zones = []
     for g in groups.values():
         xs = [x for r in g['polygons'] for x, _ in r]; ys = [y for r in g['polygons'] for _, y in r]
-        zones.append({'id': str(g['id']), 'name': g['name'], 'lng': (min(xs) + max(xs)) / 2,
+        zones.append({'id': str(g['id']).split('|')[-1] if a.mode != 'admin1' else str(g['id']).replace('|', '-'), 'name': g['name'], 'lng': (min(xs) + max(xs)) / 2,
                       'lat': (min(ys) + max(ys)) / 2, 'maxOrbs': 50, 'polygons': g['polygons']})
     xs = [x for z in zones for r in z['polygons'] for x, _ in r]; ys = [y for z in zones for r in z['polygons'] for _, y in r]
     bounds = {'minLng': round(min(xs) - a.margin, 3), 'maxLng': round(max(xs) + a.margin, 3),
