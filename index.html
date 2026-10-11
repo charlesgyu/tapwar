@@ -794,8 +794,10 @@
     .end-best { font-size: 13px; font-weight: 700; color: #94a3b8; margin-top: 4px; }
     .end-best.new { color: #16a34a; }
     #end-next-btn[hidden] { display: none; }
+    .end-actions { display: flex; gap: 10px; align-items: stretch; margin-top: 18px; }
+    .end-actions .start-btn { flex: 1; width: auto; margin: 0; }
     .end-home-btn {
-      display: block; width: 100%; margin-top: 10px;
+      flex: 1;
       font: inherit; font-size: 16px; font-weight: 800; color: #57534e;
       background: #f7f6f2; border: none; border-radius: 999px; padding: 14px; cursor: pointer;
     }
@@ -933,8 +935,10 @@
       <div class="modal-card end-card" style="max-width: 440px;">
         <h2 id="end-title" style="font-size: 26px; font-weight: 900; margin-bottom: 6px;">게임 종료</h2>
         <div id="end-message" style="margin-bottom: 20px;"></div>
-        <button class="start-btn" id="end-next-btn" onclick="goNextStage()" hidden>다음 맵으로</button>
-        <button class="end-home-btn" onclick="location.reload()">홈으로</button>
+        <div class="end-actions">
+          <button class="end-home-btn" onclick="location.reload()">홈으로</button>
+          <button class="start-btn" id="end-next-btn" onclick="goNextStage()" hidden>다음 맵으로</button>
+        </div>
       </div>
     </div>
   </div>
