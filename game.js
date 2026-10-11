@@ -902,6 +902,9 @@ function pickAutoTarget(zone) {
   // [자동 공격 규칙]: 모든 점령지역(메인 포함)은 맞닿은 지역만 무작위로 공격.
   // 메인 지역은 공격을 멈추지 않으므로, 자기와 맞닿은 목표가 없으면
   // 내 점령지역 전체와 맞닿아 있는 전선 지역 중 무작위 1곳을 원거리 공격.
+  // [실험] 지시(지정 공격·집중 포화)가 없으면 원거리 가능 지역도 맞닿은 곳만 자동 공격 (힘겨루기).
+  // 맞닿은 공격 대상이 없는 완전점령 지역은 지시가 있을 때만 원거리로 쏨
+  if (EXPERIMENT_NO_SKILL) return pickAdjacentTarget(zone);
   if (canRangeAttack(zone)) {
     return pickAdjacentTarget(zone) || pickMainZoneFrontierTarget(zone);
   }
@@ -3057,7 +3060,7 @@ const TUTORIAL = [
     art: svgWrap(hex(45, 45, TC.blue, TC.blueS) + hex(45, 105, TC.blue, TC.blueS) + hex(160, 75, TC.red, TC.blueS, 4) +
       orb(88, 57) + orb(114, 65) + orb(88, 93) + orb(114, 85)) },
   { title: EXPERIMENT_NO_SKILL ? '완전 점령' : '완전 점령과 특수 기술',
-    text: (EXPERIMENT_NO_SKILL ? '이웃을 모두 차지하면 초록색이 돼요. 피가 100이 되고, 떨어진 곳까지 공격할 수 있어요. 상대의 초록 지역은 내 초록 지역만 공격할 수 있어요.' : '이웃을 모두 차지하면 초록색이 돼요. 진한 초록일 때 탭하면 적 3곳의 피를 깎고, 그 지역은 기지처럼 멀리까지 강하게 공격해요.'),
+    text: (EXPERIMENT_NO_SKILL ? '이웃을 모두 차지하면 초록색이 돼요. 피가 100이 되고, 지정 공격·집중 포화로 떨어진 곳도 공격할 수 있어요. 상대의 초록 지역은 내 초록 지역만 공격할 수 있어요.' : '이웃을 모두 차지하면 초록색이 돼요. 진한 초록일 때 탭하면 적 3곳의 피를 깎고, 그 지역은 기지처럼 멀리까지 강하게 공격해요.'),
     art: svgWrap(hex(60, 48, TC.blue, TC.blueS) + hex(150, 48, TC.blue, TC.blueS) + hex(60, 102, TC.blue, TC.blueS) +
       hex(150, 102, TC.blue, TC.blueS) + hex(105, 75, TC.grn2, TC.grnS, 3) ) },
   { title: '적 기지를 무너뜨려요',
