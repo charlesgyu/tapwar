@@ -2152,10 +2152,10 @@ function updateOrbSpawners(currentTime) {
     }
   }
 
-  // 완전점령 1개당 100ms(0.1초) 단축, 최소 500ms(0.5초) 한계
-  const playerBaseInterval = Math.max(500, playerBuffs.interval - playerFullCount * 100);
+  // 생산 간격은 완전점령 수와 관계없이 고정 (완전점령 보너스 없음)
+  const playerBaseInterval = playerBuffs.interval;
   const mapCfg = MAP_CONFIGS[currentMapKey] || {};
-  const enemyBaseInterval = Math.max(500, enemyBuffs.interval - enemyFullCount * 100) / (ENEMY_PRODUCTION * (mapCfg.enemyStrength || 1));
+  const enemyBaseInterval = enemyBuffs.interval / (ENEMY_PRODUCTION * (mapCfg.enemyStrength || 1));
 
   rawZones.forEach(zone => {
     if (zone.owner === OWNER.NEUTRAL) return;
