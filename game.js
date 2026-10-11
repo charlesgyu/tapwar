@@ -1053,26 +1053,11 @@ function conquerZone(conqueredZone, newOwner, conqueredBySource) {
   const wasPlayerFocus = currentFocusZone && currentFocusZone.id === conqueredZone.id;
   const wasEnemyFocus = currentEnemyFocusZone && currentEnemyFocusZone.id === conqueredZone.id;
   if (wasPlayerFocus || wasEnemyFocus) {
-    // [집중 포화 점령]: 점령되는 순간 그 지역으로 날아가던 모든 구슬은 공중분해
-    let effectCount = 0;
+    // [집중 포화 점령]: 점령되는 순간 그 지역으로 날아가던 모든 구슬은 소멸 (별도 그래픽 효과 없음)
     for (let j = 0; j < flyingOrbs.length; j++) {
       const orb = flyingOrbs[j];
-      if (orb.targetZone && orb.targetZone.id === conqueredZone.id && !orb.isDead) {
-        orb.isDead = true;
-        // 그래픽 리소스 부담을 극소화하기 위해 소수(최대 8개) 지점에서만 경량 파티클 연출
-        if (effectCount < 8 && j % 3 === 0) {
-          createDisintegrateParticle(orb.x, orb.y, (orb.owner === OWNER.PLAYER) ? '#38bdf8' : '#f87171');
-          effectCount++;
-        }
-      }
+      if (orb.targetZone && orb.targetZone.id === conqueredZone.id) orb.isDead = true;
     }
-    focusRings.push({
-      x: conqueredZone.cx,
-      y: conqueredZone.cy,
-      radius: 12,
-      alpha: 1.0,
-      color: (newOwner === OWNER.PLAYER) ? '#38bdf8' : '#ef4444'
-    });
     if (wasPlayerFocus) currentFocusZone = null;
   }
 
@@ -2018,64 +2003,7 @@ function drawExactDistrictsMap(ctx) {
   // 4. Zone Labels & Badges
   drawZoneBadges(ctx);
 
-  // 5. Active Focus Fire Reticle
-  drawActiveFocusReticle(ctx);
-}
-
-function drawActiveFocusReticle(ctx) {
-  // 1. 아군 집중포화 목표 조준선 (미니멀 레드 서클)
-  if (currentFocusZone && currentFocusZone.owner !== OWNER.PLAYER) {
-    const { cx, cy } = currentFocusZone;
-    const t = Date.now() / 250;
-    const r = 18 + Math.sin(t * 3) * 3;
-
-    ctx.save();
-    ctx.strokeStyle = '#dc2626';
-    ctx.lineWidth = 2.0;
-    ctx.setLineDash([5, 4]);
-
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Crosshair ticks
-    ctx.setLineDash([]);
-    ctx.lineWidth = 2.0;
-    ctx.beginPath();
-    ctx.moveTo(cx - r - 5, cy); ctx.lineTo(cx - r + 3, cy);
-    ctx.moveTo(cx + r - 3, cy); ctx.lineTo(cx + r + 5, cy);
-    ctx.moveTo(cx, cy - r - 5); ctx.lineTo(cx, cy - r + 3);
-    ctx.moveTo(cx, cy + r - 3); ctx.lineTo(cx, cy + r + 5);
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  // 2. 적군 집중포화 피격 경보 조준선
-  if (currentEnemyFocusZone && enemyFocusReticleTimer > 0) {
-    const { cx, cy } = currentEnemyFocusZone;
-    const t = Date.now() / 150;
-    const r = 21 + Math.sin(t * 4) * 3;
-
-    ctx.save();
-    ctx.strokeStyle = '#b91c1c';
-    ctx.lineWidth = 2.2;
-    ctx.setLineDash([4, 4]);
-
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Inner danger pulse ring
-    ctx.beginPath();
-    ctx.arc(cx, cy, r - 6, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(185, 28, 28, 0.6)';
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([]);
-    ctx.stroke();
-
-    ctx.restore();
-  }
+  // 집중 포화 조준선 그래픽은 표시하지 않음
 }
 
 function drawZoneBadges(ctx) {
@@ -2201,7 +2129,6 @@ function gameLoop(timestamp) {
       }
       if (enemyFocusReticleTimer > 0) {
         enemyFocusReticleTimer = Math.max(0, enemyFocusReticleTimer - dt * gameSpeed);
-        if (enemyFocusReticleTimer <= 0) currentEnemyFocusZone = null;
       }
 
       // 승리/패배 조건 주기적 체크 (250ms 주기)
