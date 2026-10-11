@@ -575,21 +575,14 @@ function loadSelectedMap(mapKey) {
   hanRiverData = null;
   hanRiverPath = null;
 
-  if (currentMapKey === 'SEOUL') {
-    fetch('assets/seoul_han_river.json')
-      .then(r => r.json())
-      .then(river => {
-        hanRiverData = river;
-        updateZoneScreenPositions();
-      })
-      .catch(e => console.warn('Han river load skipped:', e));
-  }
 
   fetch(cfg.file)
     .then(res => res.json())
     .then(data => {
       rawLinks = data.links;
       backdropZones = (data.backdrop || []).map(b => ({ ...b, path: null }));
+      // 큰 물(강·호수): 지도에 물로 표시. 점령 불가
+      hanRiverData = (data.water && data.water.length) ? data.water : null;
       rawZones = data.zones.map(z => ({
         ...z,
         maxOrbs: ZONE_MAX_HP, // 모든 지역 피 50 고정 (주요 도시 가중치 없음)
@@ -620,6 +613,16 @@ function loadSelectedMap(mapKey) {
           if (!z1.neighbors.includes(z2)) z1.neighbors.push(z2);
           if (!z2.neighbors.includes(z1)) z2.neighbors.push(z1);
           cachedLinks.push({ z1, z2 });
+        }
+      });
+      // 물(강·호수)을 사이에 둔 연결: 공격은 가능하지만 완전점령 판정에서는 제외
+      rawZones.forEach(z => { z.waterNeighbors = new Set(); });
+      (data.waterLinks || []).forEach(([id1, id2]) => {
+        const z1 = zoneMap.get(id1);
+        const z2 = zoneMap.get(id2);
+        if (z1 && z2) {
+          z1.waterNeighbors.add(z2);
+          z2.waterNeighbors.add(z1);
         }
       });
 
@@ -688,19 +691,17 @@ function updateZoneScreenPositions() {
     b.cy = c.y;
   });
 
-  // Project Han River Path2D if present
-  if (hanRiverData && hanRiverData.polygon) {
+  // 큰 물(강·호수) Path2D
+  if (hanRiverData) {
     const rPath = new Path2D();
-    const poly = hanRiverData.polygon;
-    if (poly.length >= 3) {
-      const p0 = projectGeo(poly[0][0], poly[0][1], mapArea);
-      rPath.moveTo(p0.x, p0.y);
-      for (let i = 1; i < poly.length; i++) {
-        const pt = projectGeo(poly[i][0], poly[i][1], mapArea);
-        rPath.lineTo(pt.x, pt.y);
-      }
+    hanRiverData.forEach(w => w.polygons.forEach(poly => {
+      if (poly.length < 3) return;
+      poly.forEach(([lng, lat], i) => {
+        const pt = projectGeo(lng, lat, mapArea);
+        if (i === 0) rPath.moveTo(pt.x, pt.y); else rPath.lineTo(pt.x, pt.y);
+      });
       rPath.closePath();
-    }
+    }));
     hanRiverPath = rPath;
   }
 }
@@ -754,12 +755,17 @@ function getNeighbors(zone) {
 }
 
 // Exact Territory Status:
+// 완전점령: 맞닿은 모든 이웃이 같은 진영. 단, 큰 물(강·호수) 건너 이웃은 세지 않음
+// → 강가 지역은 강이 아군 지역처럼 방어선이 되어 완전점령이 쉬운 전략적 요충지
 function isFullyConquered(zone) {
   if (zone.owner === OWNER.NEUTRAL) return false;
   const neighbors = zone.neighbors;
   if (!neighbors || neighbors.length === 0) return true;
+  const water = zone.waterNeighbors;
   for (let i = 0; i < neighbors.length; i++) {
-    if (neighbors[i].owner !== zone.owner) return false;
+    const n = neighbors[i];
+    if (water && water.has(n)) continue;
+    if (n.owner !== zone.owner) return false;
   }
   return true;
 }
@@ -2251,12 +2257,12 @@ function drawExactDistrictsMap(ctx) {
     ctx.restore();
   }
 
-  // 1.5 Draw Han River (한강 자연 수로 - 사용자 레퍼런스 스타일)
-  if (currentMapKey === 'SEOUL' && hanRiverPath) {
+  // 1.5 큰 물(강·호수)
+  if (hanRiverPath) {
     ctx.save();
     ctx.fillStyle = '#bfe5fa'; // 산뜻한 한강 라이트 블루
     ctx.strokeStyle = '#93cbf0';
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 1.6 / view.scale;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.fill(hanRiverPath);
@@ -2385,7 +2391,7 @@ function drawMinimap(timestamp) {
     m.lineWidth = 1.6 / L.scale;
     m.stroke(playerMainZone.path);
   }
-  if (currentMapKey === 'SEOUL' && hanRiverPath) {
+  if (hanRiverPath) {
     m.fillStyle = '#bfe5fa';
     m.fill(hanRiverPath);
   }

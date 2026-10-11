@@ -16,8 +16,12 @@ TAPWAR 맵 데이터 정리 도구 (모든 맵 공통, 새 맵 추가 시에도 
 5. 인접 관계(links)를 실제로 맞닿은 경계 기준으로 다시 계산
    (기존 links 중 섬 연결처럼 맞닿지 않은 연결은 유지)
 
+6. "water"(강·호수 폴리곤)가 있으면 물을 사이에 둔 연결을 waterLinks로 표시
+   (게임에서 물 건너 이웃은 완전점령 판정에서 제외 → 물가 지역이 전략적 요충지)
+
 입력 JSON 형식: { "zones": [{ "id", "name", "lng", "lat", "polygons": [[[lng, lat], ...], ...] }],
-                  "links": [[id1, id2], ...], "backdrop"(선택): [{ "name", "polygons", ... }] }
+                  "links": [[id1, id2], ...], "backdrop"(선택): [{ "name", "polygons", ... }],
+                  "water"(선택): [{ "name", "polygons": [[[lng, lat], ...]] }] }
 """
 import json
 import sys
@@ -31,6 +35,8 @@ MERGE_EPS = 0.0008     # 같은 지역 조각 사이 틈 메우기 폭 (도 단�
 GAP_EPS = 0.0015       # 지역 사이 틈 판정용 폭 (약 150m)
 SIMPLIFY_TOL = 0.0002  # 공유 경계 단순화 허용 오차 (약 20m)
 MIN_AREA = 1e-8
+WATER_EPS = 0.002        # 물 경계 판정 여유 (약 200m)
+WATER_LINK_RATIO = 0.45  # 공유 경계 중 물 위 비율이 이 이상이면 물 건너 연결
 
 
 def polygons_only(g):
@@ -163,6 +169,22 @@ def process(path):
             keep.add((a, b))  # 섬 연결 등 맞닿지 않은 기존 연결
     # 게임 인접 관계 안정성을 위해 기존 연결은 모두 유지하고, 새로 맞닿은 연결만 추가
     d['links'] = sorted([list(l) for l in touching | old])
+
+    # 물(강·호수)로 갈라진 연결 판정: 두 구역의 공유 경계 중 물 위에 있는 비율이 높으면 '물 건너 연결'
+    # → 게임에서 완전점령 판정 시 물 건너 이웃은 세지 않음 (강이 아군 지역처럼 방어선 역할)
+    water = d.get('water', [])
+    if water:
+        wp = unary_union([make_valid(Polygon(r)) for w in water for r in w['polygons']]).buffer(WATER_EPS)
+        zg = {z['id']: g for z, g in zip(zones, geoms)}
+        wl = []
+        for a, b in d['links']:
+            line = zg[a].boundary.intersection(zg[b].buffer(1e-5))
+            if line.length <= 0:
+                continue
+            if line.intersection(wp).length / line.length >= WATER_LINK_RATIO:
+                wl.append([a, b])
+        d['waterLinks'] = sorted(wl)
+        print(f'  물 건너 연결 {len(wl)}개')
 
     json.dump(d, open(path, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
     print(f'{path}: zones={len(zones)} links {len(old)}→{len(d["links"])} '
