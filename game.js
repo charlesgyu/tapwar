@@ -619,7 +619,7 @@ const MAP_CONFIGS = {
   JP_KYUSHU: { country: 'JP', name: '규슈·오키나와', label: '규슈·오키나와', count: 25, file: 'assets/jp_kyushu_zones.json', maxScale: 8 },
   JP_CHUBU: { country: 'JP', name: '주부', label: '주부', count: 27, file: 'assets/jp_chubu_zones.json', maxScale: 8 },
   JP_TOKYO: { country: 'JP', name: '도쿄', label: '도쿄', count: 29, file: 'assets/jp_tokyo_zones.json', maxScale: 10 },
-  JP_JAPAN: { country: 'JP', name: '일본 전국', label: '일본 전국', count: 47, file: 'assets/jp_japan_zones.json', maxScale: 14 },
+  JP_JAPAN: { country: 'JP', name: '일본 전국', label: '일본 전국', count: 177, file: 'assets/jp_japan_zones.json', maxScale: 20 },
   // CN — tools/build_*_maps.sh 로 생성
   CN_DONGBEI: { country: 'CN', name: '둥베이', label: '둥베이', count: 20, file: 'assets/cn_dongbei_zones.json', maxScale: 8 },
   CN_HUAZHONG: { country: 'CN', name: '화중', label: '화중', count: 22, file: 'assets/cn_huazhong_zones.json', maxScale: 8 },
@@ -628,7 +628,7 @@ const MAP_CONFIGS = {
   CN_HUADONG: { country: 'CN', name: '화둥', label: '화둥', count: 27, file: 'assets/cn_huadong_zones.json', maxScale: 8 },
   CN_XINAN: { country: 'CN', name: '시난', label: '시난', count: 25, file: 'assets/cn_xinan_zones.json', maxScale: 8 },
   CN_XIBEI: { country: 'CN', name: '시베이', label: '시베이', count: 25, file: 'assets/cn_xibei_zones.json', maxScale: 8 },
-  CN_CHINA: { country: 'CN', name: '중국 전국', label: '중국 전국', count: 160, file: 'assets/cn_china_zones.json', maxScale: 20 },
+  CN_CHINA: { country: 'CN', name: '중국 전국', label: '중국 전국', count: 166, file: 'assets/cn_china_zones.json', maxScale: 20 },
   // US — tools/build_*_maps.sh 로 생성
   US_NEWENGLAND: { country: 'US', name: '뉴잉글랜드', label: '뉴잉글랜드', count: 16, file: 'assets/us_newengland_zones.json', maxScale: 8 },
   US_MIDATLANTIC: { country: 'US', name: '중부 대서양', label: '중부 대서양', count: 18, file: 'assets/us_midatlantic_zones.json', maxScale: 8 },
@@ -639,7 +639,7 @@ const MAP_CONFIGS = {
   US_SOUTHWEST: { country: 'US', name: '남서부', label: '남서부', count: 24, file: 'assets/us_southwest_zones.json', maxScale: 8 },
   US_SOUTHATLANTIC: { country: 'US', name: '남동부 해안', label: '남동부 해안', count: 25, file: 'assets/us_southatlantic_zones.json', maxScale: 8 },
   US_MOUNTAIN: { country: 'US', name: '로키 산맥', label: '로키 산맥', count: 25, file: 'assets/us_mountain_zones.json', maxScale: 8 },
-  US_USA: { country: 'US', name: '미국 본토', label: '미국 본토', count: 48, file: 'assets/us_usa_zones.json', maxScale: 14 },
+  US_USA: { country: 'US', name: '미국 본토', label: '미국 본토', count: 194, file: 'assets/us_usa_zones.json', maxScale: 20 },
   // EU — tools/build_*_maps.sh 로 생성
   EU_BRITAIN: { country: 'EU', name: '영국·아일랜드', label: '영국·아일랜드', count: 18, file: 'assets/eu_britain_zones.json', maxScale: 8 },
   EU_BALKAN: { country: 'EU', name: '발칸', label: '발칸', count: 20, file: 'assets/eu_balkan_zones.json', maxScale: 8 },

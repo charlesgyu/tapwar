@@ -10,5 +10,5 @@ mk split "화북" assets/cn_huabei_zones.json --provs 北京,天津,河北,山�
 mk split "화둥" assets/cn_huadong_zones.json --provs 上海,江苏,浙江,安徽,福建,江西,山东 --target 27
 mk split "시난" assets/cn_xinan_zones.json --provs 重庆,四川,贵州,云南,西藏 --target 25
 mk split "시베이" assets/cn_xibei_zones.json --provs 陕西,甘肃,青海,宁夏,新疆 --target 25
-mk split "중국 전국" assets/cn_china_zones.json --target 160
+$PY tools/merge_maps.py "중국 전국" assets/cn_china_zones.json assets/cn_{dongbei,huazhong,huanan,huabei,huadong,xinan,xibei}_zones.json
 for f in dongbei huazhong huanan huabei huadong xinan xibei china; do $PY tools/build_map.py assets/cn_${f}_zones.json; done
