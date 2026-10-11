@@ -244,14 +244,22 @@ function buildSkillTargetList(victimOwner) {
   return normal.concat(full);
 }
 
-// 특수 기술 대상 선정 및 피해 적용 (아군/적군 공용)
-// - 완전점령(🛡️)과 메인 지역은 대상에서 제외
-// - 메인 지역이 살아 있으면 대상 후보 전부(최대 3곳)를 공격
-// - 메인 지역을 잃은 상태라면 최후 1곳은 남겨둠(피만 깎고 중립화하지 않음)
-function pickSpecialSkillTargets(candidates, mainAlive) {
-  if (mainAlive) return candidates.slice(0, Math.min(3, candidates.length));
-  const count = candidates.length <= 1 ? 1 : Math.min(3, candidates.length - 1);
-  return candidates.slice(0, count);
+const SKILL_DAMAGE = 10;
+// 특수 기술 피해: 소유는 유지한 채 피만 깎음. 0 이하가 되면 중립(공격한 쪽 우세 게이지 0)
+function applySkillDamage(zone, attacker) {
+  zone.orbs -= SKILL_DAMAGE;
+  if (zone.orbs <= 0) {
+    zone.owner = OWNER.NEUTRAL;
+    zone.claimant = -zone.orbs > 0 ? attacker : null;
+    zone.orbs = Math.max(0, -zone.orbs);
+    zone.targetZones = [];
+    zone.isManualTarget = false;
+  }
+}
+
+// 특수 기술 대상: 우선순위대로 정렬된 후보 중 최대 3곳 (중립화하지 않으므로 최후 거점 보호 불필요)
+function pickSpecialSkillTargets(candidates) {
+  return candidates.slice(0, Math.min(3, candidates.length));
 }
 
 // 특수 기술 발동: 충전 완료(💥)된 아군 완전점령 지역을 탭하면 그 지역의 1발을 사용
@@ -275,23 +283,9 @@ function useSpecialSkill(sourceZone) {
   const targetEnemyZones = pickSpecialSkillTargets(enemyZones, enemyMainAlive);
 
   targetEnemyZones.forEach(z => {
-    // [규칙]: 피 10 감소 및 점령 요건(피 꽉 참) 미달로 점령 해제(중립화)!
-    z.orbs = Math.max(0, z.orbs - 10);
-    // 메인 지역을 잃은 상태에서 최후 1곳만 남았다면 피만 깎이고 구슬 전투로만 전멸되도록 보호
-    if (enemyMainAlive || enemyZones.length > 1) {
-      z.owner = OWNER.NEUTRAL;
-      z.claimant = OWNER.ENEMY; // 남은 피는 원래 주인의 줄다리기 게이지로 유지
-    }
-    z.targetZones = [];
-    z.isManualTarget = false;
-
-    // 해당 지역과 연결된 비행 중인 구슬들 즉시 소멸
-    for (let j = 0; j < flyingOrbs.length; j++) {
-      const orb = flyingOrbs[j];
-      if (orb.sourceZone.id === z.id || orb.targetZone.id === z.id) {
-        orb.isDead = true;
-      }
-    }
+    // [규칙]: 피 10 감소. 지역은 계속 소유 진영의 것이며 공격도 계속함 (중립화하지 않음)
+    // 피가 0이 되면 일반 전투와 같이 중립으로 전환
+    applySkillDamage(z, OWNER.PLAYER);
 
     createDisintegrateParticle(z.cx, z.cy, '#ef4444');
     focusRings.push({
@@ -314,7 +308,7 @@ function useSpecialSkill(sourceZone) {
   updateEnemyPowerZone();
 
   const names = targetEnemyZones.map(tz => tz.name).join(', ');
-  document.getElementById('status-guide').innerText = `💥 [특수 기술 발동!]: 최인접 적지 [${names}] ${targetEnemyZones.length}곳 피 10 감소 및 점령 해제! ([${sourceZone.name}] 충전 사용, 남은 충전: ${getReadySkillZones(OWNER.PLAYER).length}발)`;
+  document.getElementById('status-guide').innerText = `💥 [특수 기술 발동!]: 적지 [${names}] ${targetEnemyZones.length}곳 피 10 감소! ([${sourceZone.name}] 충전 사용, 남은 충전: ${getReadySkillZones(OWNER.PLAYER).length}발)`;
 }
 
 // 적군 AI 전용 특수 기술 (아군과 동일한 충전 규칙)
@@ -337,22 +331,9 @@ function useEnemySpecialSkill() {
   const targetPlayerZones = pickSpecialSkillTargets(playerZones, playerMainAlive);
 
   targetPlayerZones.forEach(z => {
-    // [규칙]: 아군 점령지 피 10 감소 및 점령 해제(중립화)!
-    z.orbs = Math.max(0, z.orbs - 10);
-    if (playerMainAlive || playerZones.length > 1) {
-      z.owner = OWNER.NEUTRAL;
-      z.claimant = OWNER.PLAYER; // 남은 피는 원래 주인의 줄다리기 게이지로 유지
-    }
-    z.targetZones = [];
-    z.isManualTarget = false;
-
-    // 해당 지역과 연결된 비행 중인 구슬들 즉시 소멸
-    for (let j = 0; j < flyingOrbs.length; j++) {
-      const orb = flyingOrbs[j];
-      if (orb.sourceZone.id === z.id || orb.targetZone.id === z.id) {
-        orb.isDead = true;
-      }
-    }
+    // [규칙]: 피 10 감소. 지역은 계속 소유 진영의 것이며 공격도 계속함 (중립화하지 않음)
+    // 피가 0이 되면 일반 전투와 같이 중립으로 전환
+    applySkillDamage(z, OWNER.ENEMY);
 
     createDisintegrateParticle(z.cx, z.cy, '#38bdf8');
     focusRings.push({
@@ -375,7 +356,7 @@ function useEnemySpecialSkill() {
   updateEnemyPowerZone();
 
   const names = targetPlayerZones.map(tz => tz.name).join(', ');
-  document.getElementById('status-guide').innerText = `🚨 [적군 특수 기술 발동!]: 아군 점령지 [${names}] ${targetPlayerZones.length}곳 피 10 감소 및 점령 해제!`;
+  document.getElementById('status-guide').innerText = `🚨 [적군 특수 기술 발동!]: 아군 점령지 [${names}] ${targetPlayerZones.length}곳 피 10 감소!`;
 }
 
 // 지역별 충전 상태 갱신: state = null(완전점령 아님) | 'charging' | 'ready' | 'spent'
