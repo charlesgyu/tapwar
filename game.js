@@ -2020,7 +2020,7 @@ function triggerEnemyItemSelection() {
 // [적 지정 공격] 사람이 손으로 하듯 한 번에 한 지역만, 정해진 간격으로
 const ENEMY_COMMAND_SEC = 1.5;
 // [난이도] 적 생산 속도 배율 (1 = 플레이어와 같음). 방치하면 적이 아슬아슬하게 이기도록 맞춘 값
-const ENEMY_PRODUCTION = 1.1;
+const ENEMY_PRODUCTION = 1.0;
 let enemyCommandTimer = ENEMY_COMMAND_SEC;
 let lastEnemyCommandCheck = 0;
 function issueEnemyCommand() {
