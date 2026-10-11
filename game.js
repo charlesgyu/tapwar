@@ -2670,6 +2670,17 @@ function updateItems() {
   if (itemRound < ITEM_ROUNDS && gameElapsedTime >= nextItemAt) openItemPick();
 }
 
+// 맵 화면에서 나라 이름 아래에 보여 줄 컨셉 [이름, 설명]
+const COUNTRY_CONCEPT = {
+  JP: ['지진', '45초마다 무작위 점령 지역들의 피가 절반으로 깎이고 화면이 흔들려요'],
+  CN: ['모래폭풍', '1분마다 무작위 점령 지역들의 공격 속도가 10초 동안 절반이 돼요'],
+  US: ['자본주의 호황', '1분마다 무작위 점령 지역들의 구슬 공격력이 10초 동안 5가 돼요'],
+  FR: ['혁명', '1분마다 10초 동안 점령 지역과 맞닿은 중립 지역이 주변을 공격해요'],
+  DE: ['전차 돌파', '1분마다 전차가 지나가고, 지나간 지역은 중립이 돼요 (본진 제외)'],
+  IT: ['모든 길은 로마로', '처음부터 모든 점령 지역이 원거리 공격을 할 수 있어요'],
+  ES: ['대항해시대', '1분마다 양쪽의 완전점령 지역 한 곳이 대포를 쏴요 (공격력 20)'],
+  GB: ['안개', '적의 구슬은 처음 방향만 보이고 어디로 가는지는 보이지 않아요']
+};
 function resetCountryEvent() {
   const c = COUNTRY_EVENT_CFG[(MAP_CONFIGS[currentMapKey] || {}).country];
   countryEventNext = c ? c.every : 0;
@@ -3599,6 +3610,13 @@ function showStageView() {
   const links = document.getElementById('home-links');
   if (links) links.hidden = true;
   document.getElementById('country-title').textContent = c.name;
+  // 나라 컨셉 설명 (이름 아래)
+  const concept = COUNTRY_CONCEPT[c.key];
+  const conceptEl = document.getElementById('country-concept');
+  if (conceptEl) {
+    conceptEl.hidden = !concept;
+    conceptEl.innerHTML = concept ? `<b>${concept[0]}</b> · ${concept[1]}` : '';
+  }
   // 나라가 바뀌면 그 나라 캠페인의 다음 맵을 고름
   if ((MAP_CONFIGS[selectedModalMapKey].country || 'KR') !== c.key) selectedModalMapKey = getNextStageKey();
   updateStageProgress();
