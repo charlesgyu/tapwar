@@ -236,14 +236,10 @@ function pickSpecialSkillTargets(candidates, mainAlive) {
   return candidates.slice(0, count);
 }
 
-function useSpecialSkill() {
+// 특수 기술 발동: 충전 완료(💥)된 아군 완전점령 지역을 탭하면 그 지역의 1발을 사용
+function useSpecialSkill(sourceZone) {
   if (currentState !== GAME_STATE.PLAYING) return;
-
-  // 충전 완료된 완전점령 지역이 있어야 사용 가능 (1곳당 1발)
-  if (getReadySkillZones(OWNER.PLAYER).length === 0) {
-    document.getElementById('status-guide').innerText = `⚠️ 충전된 특수 기술이 없습니다! (완전점령 지역을 10초 유지하면 1발 충전)`;
-    return;
-  }
+  if (!sourceZone || sourceZone.owner !== OWNER.PLAYER || sourceZone.chargeState !== 'ready') return;
 
   // [규칙]: 특수 기술은 적의 완전점령지역(🛡️)을 제외하고, 아군 영토와 가장 인접한 적군의 일반 점령지 중 무작위 3곳 공격!
   const playerZones = rawZones.filter(z => z.owner === OWNER.PLAYER);
@@ -254,7 +250,7 @@ function useSpecialSkill() {
     return;
   }
 
-  consumeSkillCharge(OWNER.PLAYER);
+  sourceZone.chargeState = 'spent';
 
   // 1. 각 적 점령지마다 가장 가까운 아군 점령지와의 거리(및 직접 인접 여부) 계산
   enemyZones.forEach(ez => {
@@ -327,7 +323,7 @@ function useSpecialSkill() {
   updateEnemyPowerZone();
 
   const names = targetEnemyZones.map(tz => tz.name).join(', ');
-  document.getElementById('status-guide').innerText = `💥 [특수 기술 발동!]: 최인접 적지 [${names}] ${targetEnemyZones.length}곳 피 10 감소 및 점령 해제! (남은 충전: ${getReadySkillZones(OWNER.PLAYER).length}발)`;
+  document.getElementById('status-guide').innerText = `💥 [특수 기술 발동!]: 최인접 적지 [${names}] ${targetEnemyZones.length}곳 피 10 감소 및 점령 해제! ([${sourceZone.name}] 충전 사용, 남은 충전: ${getReadySkillZones(OWNER.PLAYER).length}발)`;
 }
 
 // 적군 AI 전용 특수 기술 (아군과 동일한 충전 규칙)
@@ -1376,7 +1372,9 @@ function onPointerDown(e) {
 
   // 지역 더블클릭 / 더블탭 판정 (집중 포격 발동!)
   const now = performance.now();
-  if (targetZone && targetZone.id === lastTapZoneId && (now - lastTapTime) < 380) {
+  // 피가 가득 찬 아군 지역은 더블탭(방어 지원)할 일이 없으므로 탭으로 처리 (특수 기술 연속 사용 가능)
+  const isFullFriendly = targetZone && targetZone.owner === OWNER.PLAYER && targetZone.orbs >= targetZone.maxOrbs;
+  if (targetZone && !isFullFriendly && targetZone.id === lastTapZoneId && (now - lastTapTime) < 380) {
     handleZoneDoubleClick(targetZone);
     lastTapTime = 0;
     lastTapZoneId = null;
@@ -1414,6 +1412,19 @@ function onPointerUp(e) {
 
   if (isDragging && dragSourceZone) {
     const endZone = findZoneAtWorld(worldMousePos.x, worldMousePos.y);
+
+    // [특수 기술]: 드래그 없이 아군 완전점령 지역을 탭하면 그 지역의 충전 1발 사용
+    if (endZone === dragSourceZone && isFullyConquered(endZone)) {
+      const guide = document.getElementById('status-guide');
+      if (endZone.chargeState === 'ready') {
+        useSpecialSkill(endZone);
+      } else if (endZone.chargeState === 'charging') {
+        guide.innerText = `⏳ [${endZone.name}] 특수 기술 충전 중 (${Math.max(1, Math.ceil(SKILL_CHARGE_SEC - endZone.chargeTime))}초 남음)`;
+      } else if (endZone.chargeState === 'spent') {
+        guide.innerText = `[${endZone.name}] 특수 기술 사용 완료. 완전점령이 풀렸다 다시 확보되면 재충전됩니다.`;
+      }
+    }
+
     // [지정 공격 규칙]: 모든 지역(적군·중립·아군, 거리 무관) 지정 가능
     // 아군 지역 지정 = 방어 지원(피 회복). 피가 가득 차면 자동 공격으로 복귀
     if (endZone && endZone.id !== dragSourceZone.id) {

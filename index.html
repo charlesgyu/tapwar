@@ -148,49 +148,6 @@
     }
 
     /* Special Skill Button (Mini Metro FAB Style) */
-    .special-skill-btn {
-      background: #ffffff;
-      border: 2px solid #ef4444;
-      border-radius: 14px;
-      padding: 7px 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.15);
-      transition: all 0.15s ease;
-      pointer-events: auto;
-    }
-    .special-skill-btn:active {
-      transform: scale(0.96);
-    }
-    .special-skill-btn.disabled {
-      opacity: 0.55;
-      border-color: #cbd5e1;
-      box-shadow: none;
-      filter: grayscale(0.8);
-      cursor: not-allowed;
-    }
-    .special-skill-icon {
-      font-size: 20px;
-    }
-    .special-skill-text {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      line-height: 1.2;
-    }
-    .special-skill-title {
-      font-size: 12px;
-      font-weight: 700;
-      color: #0f172a;
-    }
-    .special-skill-status {
-      font-size: 10px;
-      font-weight: 700;
-      color: #ef4444;
-    }
-
     /* Surrender Button (2단계 확인: 첫 탭 ➔ 확인 상태, 3초 안에 다시 탭 ➔ 항복) */
     .bottom-actions {
       display: flex;
@@ -433,21 +390,13 @@
       <div class="bottom-bar">
         <div class="guide-tip">
           🎯 <b>조작법:</b> 지역 더블탭 ➔ <b>전국 일제 집중 포격!</b><br>
+          💥 <b>특수 기술:</b> 충전된 완전점령 지역(💥) 탭<br>
           📱 <b>화면 조작:</b> 두 손가락 핀치 ➔ <b>줌 인/아웃</b> | 드래그 ➔ <b>이동</b>
         </div>
 
         <div class="bottom-actions">
         <!-- Surrender -->
         <button id="surrender-btn" class="surrender-btn" onclick="onSurrenderClick()" hidden>🏳️ 항복</button>
-
-        <!-- Special Skill FAB -->
-        <div id="special-skill-btn" class="special-skill-btn disabled" onclick="useSpecialSkill()">
-          <div class="special-skill-icon">💥</div>
-          <div class="special-skill-text">
-            <span class="special-skill-title">특수 기술</span>
-            <span class="special-skill-status" id="special-skill-timer">완전점령 지역 필요</span>
-          </div>
-        </div>
         </div>
       </div>
     </div>
