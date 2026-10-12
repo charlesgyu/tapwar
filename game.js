@@ -3737,8 +3737,7 @@ function drawExactDistrictsMap(ctx) {
     ctx.restore();
   }
 
-  // 4. Zone Labels & Badges
-  drawZoneBadges(ctx);
+  // 4. 지역 이름은 점·효과 위에 보이도록 게임 루프에서 drawFx 뒤에 그림
 
   // 집중 포화 조준선 그래픽은 표시하지 않음
 }
@@ -3751,14 +3750,15 @@ function drawZoneBadges(ctx) {
   const fontSize = ZONE_LABEL_PX / view.scale;
   ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif`;
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  ctx.textBaseline = 'bottom';
   ctx.fillStyle = 'rgba(30, 41, 59, 0.55)';
+  const lift = (ZONE_DOT_PX + 3) / view.scale; // 중심 점 바로 위에 이름을 올림
   for (let i = 0; i < rawZones.length; i++) {
     const zone = rawZones[i];
     if (!zone.bbox) continue;
     const w = ctx.measureText(zone.name).width;
     if (zone.bbox.maxX - zone.bbox.minX < w * 0.9) continue;
-    ctx.fillText(zone.name, zone.cx, zone.cy);
+    ctx.fillText(zone.name, zone.cx, zone.cy - lift);
   }
 }
 
@@ -4847,6 +4847,7 @@ function gameLoop(timestamp) {
     drawFocusRings(ctx);
     drawZoneDots(ctx);
     drawFx(ctx);
+    drawZoneBadges(ctx);
     drawFlyingOrbs(ctx);
     drawParticles(ctx);
 
