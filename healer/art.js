@@ -117,11 +117,11 @@ function drawChibi(a) {
   if (cls === 'monk') { oval(-10, 5, 3.5, 3.5, '#ffe0c4', 1.3); oval(10, 5, 3.5, 3.5, '#ffe0c4', 1.3); }
   ctx.restore();
   // 상태
-  hpBar(a.x - 14, y - 32, 28, a.hp / a.maxHp, a.hp / a.maxHp < 0.35 ? '#ff4d5e' : '#5be36b');
+  if (!a.noHud) hpBar(a.x - 14, y - 32, 28, a.hp / a.maxHp, a.hp / a.maxHp < 0.35 ? '#ff4d5e' : '#5be36b');
   const cs = Object.keys(a.curses);
   if (cs.length) { ctx.font = `9px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText(cs.map(c => CURSES[c].icon).join(''), a.x, y - 36); }
   if (a.kind === 'healer' && B.cast) { hpBar(a.x - 15, a.y + 18, 30, B.cast.t / B.cast.total, '#ffd23f'); }
-  if (a.role === 'tank') { ctx.font = `8px ${FONT}`; ctx.fillText('🛡', a.x - 17, y - 19); }
+  if (a.role === 'tank' && !a.noHud) { ctx.font = `8px ${FONT}`; ctx.fillText('🛡', a.x - 17, y - 19); }
 }
 
 // ================= 몬스터 =================

@@ -170,8 +170,10 @@ body { background:radial-gradient(circle at 50% 0%,#2f4380,#141d38 70%); }
 .th-xp { position:relative; height:9px; margin-top:6px; background:#0b1430; border:2px solid var(--ink); border-radius:6px; overflow:hidden; }
 .th-xp i { display:block; height:100%; background:linear-gradient(#7fe0ff,#2f9be8); } .th-xp small { position:absolute; right:4px; top:-3px; font-size:8px; color:#c9d6e8; }
 #town-stage { position:relative; flex:1; overflow:hidden; }
-#tscroll { position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; } #tscroll::-webkit-scrollbar { display:none; }
-#tcv { display:block; touch-action:pan-y; }
+#tscroll { position:absolute; inset:0; overflow:hidden; }
+#tcv { display:block; touch-action:none; }
+.enter { pointer-events:auto; display:none; align-self:center; margin-bottom:10px; padding:10px 16px; border-radius:16px; border:3px solid var(--ink); background:linear-gradient(#ffe066,#ffb020); color:var(--ink); font-family:inherit; font-size:15px; box-shadow:0 4px 0 var(--ink); animation:bob 1.2s ease-in-out infinite; }
+.enter b { font-weight:400; color:#b0301f; }
 #town-info { position:absolute; inset:0; pointer-events:none; padding:0; text-align:left; color:var(--text); font-size:13px; }
 #town-info > * { pointer-events:auto; }
 .t-left { position:absolute; left:8px; top:10px; display:flex; flex-direction:column; gap:7px; }
