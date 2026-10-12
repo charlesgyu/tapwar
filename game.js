@@ -2737,7 +2737,7 @@ const ITEMS = [
   { key: 'piercing', name: '관통샷', desc: '10% 확률로 상대의 모든 방어 효과 무시' },
   { key: 'paralyze', name: '마비', desc: '10% 확률로 맞은 상대 지역의 다음 5발 공격 속도 50% 감소' },
   { key: 'rapid', name: '속사', desc: '10% 확률로 다음 5공격이 2배 빠르게 날아감' },
-  { key: 'curse', name: '저주샷', desc: '5% 확률로 상대의 다음 5공격에 상대 아이템 효과 없음' },
+  { key: 'curse', name: '저주샷', desc: '5% 확률로 맞은 상대 지역의 다음 5공격에 아이템 효과 없음' },
   { key: 'buff', name: '버프샷', desc: '5% 확률로 내 다음 5공격의 모든 아이템 효과 2배' },
   { key: 'fortress', name: '철벽', desc: '10% 확률로 상대 공격을 30%만 받음' },
   { key: 'reflect', name: '반사 방패', desc: '10% 확률로 상대 구슬을 쏜 곳으로 되돌림' },
@@ -4032,6 +4032,30 @@ function restorePurchases() {
   }).catch(() => openSheet('', '구매 복원', '복원에 실패했어요. 잠시 후 다시 시도해 주세요.'));
 }
 window.restorePurchases = restorePurchases;
+
+// 홈 '아이템' 링크: 모든 아이템 카드 아이콘·설명 (공격 / 연쇄 / 방어 / 항상 켜짐으로 묶어서)
+const ITEM_GUIDE_GROUPS = [
+  ['공격할 때', ['power', 'crit', 'pierce', 'explode', 'piercing', 'paralyze']],
+  ['다음 5공격 동안 (터진 지역에서만)', ['rapid', 'supply', 'buff', 'curse']],
+  ['막을 때 · 회복', ['fortress', 'reflect', 'absorb', 'rebuild']],
+  ['항상 켜짐', ['longrange']]
+];
+function openItemGuide() {
+  const list = document.getElementById('item-guide-list');
+  if (!list) return;
+  list.innerHTML = ITEM_GUIDE_GROUPS.map(([title, keys]) =>
+    `<div class="guide-group">${title}</div>` + keys.map(k => {
+      const it = ITEMS.find(x => x.key === k);
+      if (!it) return '';
+      return `<div class="guide-row"><span class="guide-icon">${itemIconSvg(k, 24)}</span>` +
+        `<span><div class="guide-name">${it.name}</div><div class="guide-desc">${it.desc}</div></span></div>`;
+    }).join('')).join('');
+  list.scrollTop = 0;
+  document.getElementById('item-guide').style.display = 'flex';
+}
+function closeItemGuide() { document.getElementById('item-guide').style.display = 'none'; }
+window.openItemGuide = openItemGuide;
+window.closeItemGuide = closeItemGuide;
 
 // 홈 1단계: 국가 카드 (맵 카드처럼 가로 슬라이드). 선택한 국가를 가운데로
 let selectedCountryKey = 'KR';

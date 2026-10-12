@@ -605,10 +605,12 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      gap: 8px;
+      flex-wrap: wrap;
+      gap: 0 8px;
       margin-top: 12px;
       color: #c4c0b8;
     }
+    .links-break { flex-basis: 100%; height: 0; } /* 소리 켜기/끄기는 둘째 줄 */
     .link-btn {
       font: inherit;
       font-size: 13px;
@@ -618,8 +620,19 @@
       border: none;
       padding: 6px 4px;
       cursor: pointer;
+      white-space: nowrap;
     }
     .sheet-overlay { z-index: 300; }
+    .guide-card { max-width: 420px; width: calc(100vw - 32px); max-height: calc(100dvh - 48px); display: flex; flex-direction: column; text-align: left; }
+    .guide-card .sheet-title { text-align: center; }
+    .guide-sub { font-size: 13px; color: #78716c; line-height: 1.5; text-align: center; margin-bottom: 12px; }
+    .guide-list { overflow-y: auto; -webkit-overflow-scrolling: touch; margin: 0 -6px 14px; padding: 0 6px; }
+    .guide-group { font-size: 12px; font-weight: 800; color: #94a3b8; margin: 12px 0 6px; }
+    .guide-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+    .guide-row:last-child { border-bottom: none; }
+    .guide-icon { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 11px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; }
+    .guide-name { font-size: 15px; font-weight: 800; color: #1e293b; }
+    .guide-desc { font-size: 13px; color: #57534e; line-height: 1.45; margin-top: 2px; }
     .top-timer {
       font: 800 15px/1 ui-monospace, "SF Mono", Menlo, monospace;
       color: #1e293b;
@@ -1043,8 +1056,10 @@
         <div class="home-links" id="home-links">
           <button class="link-btn" onclick="openTutorial()">튜토리얼</button>
           <span aria-hidden="true">·</span>
-          <button class="link-btn" onclick="restorePurchases()">구매 복원</button>
+          <button class="link-btn" onclick="openItemGuide()">아이템</button>
           <span aria-hidden="true">·</span>
+          <button class="link-btn" onclick="restorePurchases()">구매 복원</button>
+          <span class="links-break" aria-hidden="true"></span>
           <button class="link-btn" id="music-btn" onclick="Sound.toggleMusic()">음악 켜짐</button>
           <span aria-hidden="true">·</span>
           <button class="link-btn" id="sfx-btn" onclick="Sound.toggleSfx()">효과음 켜짐</button>
@@ -1063,6 +1078,16 @@
         <h2 class="sheet-title" id="sheet-title"></h2>
         <p class="sheet-text" id="sheet-text"></p>
         <button class="start-btn" onclick="closeSheet()">확인</button>
+      </div>
+    </div>
+
+    <!-- 아이템 소개 -->
+    <div class="modal-overlay sheet-overlay" id="item-guide" style="display: none;" onclick="if (event.target === this) closeItemGuide()">
+      <div class="modal-card sheet-card guide-card">
+        <h2 class="sheet-title">아이템 소개</h2>
+        <p class="guide-sub">30초마다 한 장씩 골라요. 고른 카드는 내 모든 지역에 적용되고, 확률은 지역·구슬마다 따로 굴려요.</p>
+        <div class="guide-list" id="item-guide-list"></div>
+        <button class="start-btn" onclick="closeItemGuide()">확인</button>
       </div>
     </div>
 
@@ -1118,7 +1143,7 @@
     </div>
   </div>
 
-  <script src="audio.js?v=20261012_items_v53"></script>
-  <script src="game.js?v=20261012_items_v53"></script>
+  <script src="audio.js?v=20261012_items_v54"></script>
+  <script src="game.js?v=20261012_items_v54"></script>
 </body>
 </html>
