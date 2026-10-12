@@ -2571,8 +2571,8 @@ function updateOrbSpawners(currentTime) {
 
       // [미국 자본주의] 호황 지역은 구슬 공격력 5
       if (zone.boostUntil && gameElapsedTime < zone.boostUntil) power = Math.max(power, COUNTRY_EVENT_CFG.US.power);
-      // [대한민국 필사즉생] 발동 후 10초 동안 피가 깎인 지역은 공격력 2배
-      if (gameElapsedTime < resolveUntil && zone.orbs < zone.maxOrbs) power *= 2;
+      // [대한민국 필사즉생] 발동 후 10초 동안 피가 깎인 지역은 공격력 4배
+      if (gameElapsedTime < resolveUntil && zone.orbs < zone.maxOrbs) power *= 4;
       zone.targetZones.forEach(target => {
         flyingOrbs.push(new FlyingOrb(zone, target, zone.owner, power));
       });
@@ -3040,7 +3040,7 @@ function updateItems() {
 
 // 맵 화면에서 나라 이름 아래에 보여 줄 컨셉 [이름, 설명]
 const COUNTRY_CONCEPT = {
-  KR: ['필사즉생', '50초마다 10초 동안 피가 깎인 지역의 공격력이 2배가 돼요'],
+  KR: ['필사즉생', '50초마다 10초 동안 피가 깎인 지역의 공격력이 4배가 돼요'],
   JP: ['지진', '50초마다 모든 완전점령 지역이 10초 동안 공격을 멈추고 화면이 흔들려요'],
   CN: ['모래폭풍', '50초마다 모든 완전점령 지역의 공격 속도가 10초 동안 절반이 돼요'],
   US: ['자본주의 호황', '50초마다 무작위 점령 지역들의 공격력이 10초 동안 강해져요'],
