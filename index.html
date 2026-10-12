@@ -796,6 +796,36 @@
       #speed2-btn { right: 24px; }
       #item-tip .item-card { width: 220px; }
     }
+    /* 폰 가로 화면(높이가 낮음): 홈·맵 고르기·카드 고르기를 한 화면에 들어가게 작게 */
+    @media (orientation: landscape) and (max-height: 500px) {
+      .start-card { padding-top: max(10px, env(safe-area-inset-top)); padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+      .start-logo { font-size: 30px; margin-bottom: 8px; }
+      .start-card .stage-grid { --stage-card-w: 180px; }
+      .start-card .stage-grid .stage-card { padding: 10px 8px 10px; }
+      .stage-thumb { width: 100px; height: 100px; }
+      .country-flag { font-size: 64px; margin-bottom: 0; }
+      .start-card .stage-name { font-size: 18px; }
+      .start-card .stage-title .stage-sub { font-size: 13px; }
+      .start-card .stage-record, .stage-recrow .stage-record { font-size: 15px; }
+      .start-card .start-btn { font-size: 17px; padding-block: 11px; margin-top: 6px; }
+      .home-links { margin-top: 6px; font-size: 13px; }
+      .stage-progress { margin: -6px 0 2px; font-size: 14px; }
+      .stage-total-time { font-size: 12px; }
+      .country-concept { margin: 0 auto 8px; font-size: 13px; max-width: 560px; }
+      .country-concept b { font-size: 15px; display: inline; margin-right: 6px; }
+      .slide-arrow { width: 28px; height: 28px; }
+      /* 카드 고르기: 한 줄로, 넘치면 창 안에서 스크롤 */
+      #item-modal .item-pick { max-width: 760px; max-height: calc(100vh - 16px); overflow-y: auto; padding: 12px 14px; }
+      #item-modal .item-pick-title { font-size: 18px; }
+      #item-modal .item-pick-sub { margin: 2px 0 8px; font-size: 12px; }
+      #item-modal .item-choices { flex-wrap: nowrap; }
+      #item-modal .item-choices .item-card, #item-modal .item-choices[data-count="4"] .item-card { flex: 1 1 0; min-height: 0; padding: 10px 6px; gap: 4px; }
+      #item-modal .item-icon svg { width: 34px; height: 34px; }
+      #item-modal .item-name { font-size: 15px; }
+      #item-modal .item-desc { font-size: 11px; }
+      #item-tip .item-card { width: 180px; }
+      #item-tip .item-icon svg { width: 44px; height: 44px; }
+    }
     #enter-btn.locked { opacity: 0.45; }
     #enter-btn[hidden] { display: none; }
     .home-links[hidden] { display: none; }
@@ -817,7 +847,7 @@
     @keyframes caret { 50% { opacity: 0; } }
     /* 화면 가운데 글자만 2초 떴다 사라지는 안내 */
     #item-bar {
-      position: fixed; right: 16px;
+      position: fixed; right: max(16px, env(safe-area-inset-right));
       bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
       display: flex; flex-direction: column; align-items: flex-end; gap: 6px; z-index: 40;
       max-width: calc(100vw - 32px);
@@ -826,8 +856,8 @@
     #surrender-btn, #speed2-btn {
       position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); z-index: 41;
     }
-    #surrender-btn { left: 16px; }
-    #speed2-btn { right: 16px; }
+    #surrender-btn { left: max(16px, env(safe-area-inset-left)); }
+    #speed2-btn { right: max(16px, env(safe-area-inset-right)); }
     #item-bar[hidden] { display: none; }
     .item-side { display: flex; gap: 6px; }
     .item-slot { width: 38px; height: 38px; border-radius: 9px; border: 2px dashed #93c5fd; box-sizing: border-box; display: inline-block; }
@@ -1049,6 +1079,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=20261012_items_v25"></script>
+  <script src="game.js?v=20261012_items_v26"></script>
 </body>
 </html>
