@@ -1036,6 +1036,10 @@
           <button class="link-btn" onclick="openTutorial()">튜토리얼</button>
           <span aria-hidden="true">·</span>
           <button class="link-btn" onclick="restorePurchases()">구매 복원</button>
+          <span aria-hidden="true">·</span>
+          <button class="link-btn" id="music-btn" onclick="Sound.toggleMusic()">음악 켜짐</button>
+          <span aria-hidden="true">·</span>
+          <button class="link-btn" id="sfx-btn" onclick="Sound.toggleSfx()">효과음 켜짐</button>
 
         </div>
         <!-- 지도 데이터 출처(라이선스상 표시 필수): 첫 화면에는 ⓘ 버튼만, 누르면 표시 -->
@@ -1106,6 +1110,7 @@
     </div>
   </div>
 
-  <script src="game.js?v=20261012_items_v42"></script>
+  <script src="audio.js?v=20261012_items_v43"></script>
+  <script src="game.js?v=20261012_items_v43"></script>
 </body>
 </html>
