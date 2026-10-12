@@ -28,8 +28,9 @@ js/core/economy.js  js/core/facilities.js  js/core/party.js  js/core/quests.js
 js/core/combat/entities.js  js/core/combat/combat.js  js/core/combat/ai_party.js
 js/core/combat/ai_healer.js  js/core/combat/ai_monster.js  js/core/combat/loot.js
 js/core/dungeon/gen.js  js/core/dungeon/floor.js
-js/sprites_monsters.js  js/tiles_dungeon.js  js/fx.js            (그래픽: 몬스터·던전 타일·이펙트)
-js/ui/ui.js  js/ui/ui_*.js
+js/sprites_monsters.js  js/sprites_monsters_forest.js  js/sprites_monsters_cave.js   (그래픽: 몬스터)
+js/tiles_dungeon.js  js/tiles_forest.js  js/tiles_cave.js  js/fx.js                   (그래픽: 던전 타일·이펙트)
+js/ui/ui.js  js/ui/ui_*.js    (css/ui.css 는 <link>)
 js/scenes/scene.js  js/scenes/town_scene.js  js/scenes/dungeon_scene.js
 js/main.js
 ```
@@ -417,19 +418,39 @@ Floor.leave(fs, G, reason: 'cleared'|'escape'|'wipe') -> summary   // 마을 복
 
 ## 10. 그래픽 모듈 계약 (DOM/canvas)
 ```js
-Sprites.get(kind) -> 시트 (기존)                                    // 플레이어·NPC·파티원(직업별 kind: warrior, mage, hunter, rogue, spellblade, monk)
-MonsterSprites.get(spriteId) -> { down, up, right, left: [4 frames], attack?: [...], anchor, w, h }  // 일반 32×32, 엘리트/중간보스 48×48, 보스 80×80
-DungeonTiles.chunk(map, ci, cj) -> canvas 512×512 (16×16 타일 청크, 바이옴별 바닥/벽/물/장식/덤불)   // 청크 캐시 LRU 는 scene 이 담당
-DungeonTiles.chestSprite(open) ; DungeonTiles.exitSprite() ; DungeonTiles.minimapColor(tile)
-FX.draw(ctx, fx, camera) ; FX.spawn(type, x, y, opts)   // heal_sparkle, aoe_ring(fill), puddle_circle(fill), hit, projectile, levelup, cast_glow, summon_puff, revive
+Sprites.get(kind)   // 플레이어·NPC·파티원. 파티원 kind = 직업 id(warrior, mage, hunter, rogue, spellblade, monk) — 시트 규격은 player 와 동일(32×40, anchor 발)
+MonsterSprites.register(id, builderFn)   // js/sprites_monsters.js 레지스트리(이미 구현). builder() -> { down, up?, right, left?: [4 canvases], attack?: [...], anchor:{x,y}, w, h }
+MonsterSprites.get(id) / list() / has(id) / forDef(mDef) (중간보스는 ×2 확대+붉은 색조 자동) / scaled(sheet, k) / tinted(sheet, color, a)
+  // 바이옴별 파일이 등록: js/sprites_monsters_forest.js (goblin, goblin_archer, goblin_shaman, wolf, spider, sheepie, zombie, skeleton, sprite, werewolf, siren, orc, orc_berserker, troll, treant + boss_goblin_king, boss_spider_queen, boss_werewolf_chief, boss_siren_queen, boss_troll_chief)
+  //                   js/sprites_monsters_cave.js (bat, cave_spider, golem_stone, golem_crystal, naga, naga_priest, orc_warlord, troll_shaman, wraith, skeleton_knight, drake + boss_golem_lord, boss_naga_priestess, boss_orc_warchief, boss_wraith_king, boss_dragon)
+  // 크기: size1 일반 32×32(몸 ~24), size2 일반(troll, treant, golem, orc_warlord, troll_shaman, skeleton_knight, drake) 48×48, 보스 80×80(드래곤 96×96 허용). 프레임 4개(0 idle, 1 걷기A, 2 idle, 3 걷기B), attack 2프레임 권장.
+DungeonTiles.registerBiome('forest'|'cave', { chunk(ctx, map, ci, cj, {TILE, CHUNK}), minimapColor(tile), chestSprite?(open, type), exitSprite?() })  // js/tiles_dungeon.js 레지스트리(이미 구현)
+DungeonTiles.chunk(map, ci, cj) -> canvas 512×512 (16×16 타일) ; chestSprite(open, type) ; exitSprite() ; minimapColor(tile, biome)
+  // 바이옴 구현 파일: js/tiles_forest.js, js/tiles_cave.js. 타일: 0 벽/나무(숲: 빽빽한 나무·바위, 동굴: 암벽), 1 바닥, 2 물, 3 바닥 장식(풀/꽃/버섯/수정/뼈), 4 덤불/바위(통행 불가, 숨김 상자 가림)
+  // 벽 타일은 이웃(상하좌우)에 따라 가장자리/모서리 모양이 달라져야 한다(오토타일). 청크 렌더 1개 ≤ 8ms 목표.
+FX.spawn(type, x, y, opts) -> fx ; FX.update(dt) ; FX.draw(ctx, cam) (월드 좌표계, 카메라 변환은 씬이 적용) ; FX.drawOne(ctx, fx, cam) ; FX.types() ; FX.clear()
+  // type: heal_sparkle(대상 위 초록 반짝임), aoe_ring(opts.r, opts.fill 0~1: 붉은 원 테두리 + fill 만큼 채움), puddle_circle(opts.r, fill: 빨간 마법진, 지속 중 맥동), ground_heal(opts.r: 초록 성역 마법진), hit(피격 번쩍), projectile(opts.from/to, color), levelup, cast_glow(시전 중 발 밑 빛), summon_puff, revive, damage_number(opts.text, color), curse_icon
+  // 텔레그래프/장판/성역은 battle.telegraphs / groundHeals 를 씬이 매 프레임 FX.drawOne 로 그린다(spawn 없이 { type, x, y, r, fill } 객체 그대로).
 ```
 
-## 11. 씬·UI (DOM)
-- `Scenes.go(name, params)`: 'title', 'town', 'dungeon'. 각 씬은 `{ enter(params), exit(), update(dt), draw(), onPointer... }`.
-- 마을 씬: 기존 main.js 로직. 시설 문 앞 `들어가기` → `UI.open('shop'|'auction'|'bank'|'smithy'|'inn'|'engraver'|'temple'|'adventurer'|'guild')`. 성문 → 층 선택(`UI.open('tower')`: 해금 층 = highestCleared+1 까지, 파티 1명 이상 필요 없음(혼자도 가능), 피로 100 이면 불가).
-- 던전 씬: 청크 렌더, 깊이 정렬, 텔레그래프(원형 채움 애니메이션)·장판·성역, 상자, 출구, HUD(파티 프레임 HP/MP/저주 아이콘, 보스 HP 바, 시전 바, 스킬 바: 단일힐 선택·광역힐 선택·해제·버프 메뉴·필살기·부활·일격·자동힐 토글, 가방·퀘스트·귀환 버튼, 걸음/킬 카운터, 미니맵), 조이스틱/탭 이동(기존), 자동 따라가기.
-- 공통 UI(`UI`): 모달·탭·목록·툴팁·확인창·토스트·대화창(NPC 초상=스프라이트 frame), 아이템 카드(등급색: 흰/초록/파랑/주황).
-- 화면: 세로(390×844 기준), safe-area, 터치 44px 이상.
+## 11. 씬·UI (DOM) — 공통 프레임워크 `UI` (js/ui/ui.js, css/ui.css, 이미 구현)
+```js
+UI.register(name, { title | title(params), full?: bool, modal?: bool, render(root, params, api), onClose?(params) })
+  // api = { close, refresh, toast, confirm, prompt, open, params, setTitle }
+UI.open(name, params) / UI.close(all?) / UI.refresh() / UI.isOpen() / UI.current()
+UI.toast(msg, ms) ; UI.confirm(msg, {ok, cancel}) -> Promise<bool> ; UI.prompt(msg, def) -> Promise<string|null>
+UI.dialog({ name, portrait: canvas|null, lines: [...], choices?: [{ label, value, primary? }] }) -> Promise<value|null>   // NPC 대화창
+UI.story(lines, title) -> Promise   // 스토리 연출(검은 화면)
+UI.tabs(container, [{ id, label, render(pane) }], activeId) ; UI.itemCard(instOrDef, { price?, buttons?: [{label, onClick, cls, disabled}], onClick?, compact?, desc? })
+UI.el(tag, attrs, children) ; UI.gold(n) ; UI.bar(value, max, 'hp'|'mp'|'xp'|'fatigue') ; UI.empty(text) ; UI.row(children, cls) ; UI.section(title, children)
+UI.STAT_NAMES / SLOT_NAMES / ARMOR_NAMES / ROLE_NAMES
+```
+화면 이름(각 ui_*.js 가 register): `shop`(상인), `auction`, `bank`, `smithy`, `inn`, `engraver`, `temple`, `adventurer`(모험가 사무소: 고용/파티/의뢰 게시판), `guild`, `tower`(층 선택·입장), `inventory`(가방+장비+벨트), `status`(스탯 분배·스킬 선택·설정), `quests`(진행/완료, 힌트), `party`(파티원 상세), `title`(새 게임/이어하기), `result`(층 결과).
+- 모든 시설 화면은 `Facilities.*` 의 { ok, reason } 를 토스트로 보여주고 `api.refresh()` 로 다시 그린다. 골드 표시는 `UI.gold`.
+- 씬: `Scenes.register(name, scene)`, `Scenes.go(name, params)`, `Scenes.current()`, `Scenes.update(dt)`, `Scenes.draw()`. scene = `{ enter(params), exit(), update(dt), draw(ctx), onTap(x,y)?, onJoy(dx,dy)? }`. 캔버스·DPR·zoom·조이스틱·탭 판정은 `js/scenes/scene.js` 가 공통으로 관리하고 현재 씬에 콜백.
+- 마을 씬(`town_scene.js`): 기존 main.js 의 마을 로직을 씬으로 옮긴 것. NPC 터치 → `UI.dialog`(Dialogue.greet + 수주 가능 퀘스트 선택지) ; 시설 문 → `UI.open(시설)` ; 성문 → `UI.open('tower')` ; 하단 고정 버튼: 가방·상태·퀘스트·파티.
+- 던전 씬(`dungeon_scene.js`): `Floor.start` 로 fs 생성, 청크 캐시(LRU 24개), 깊이 정렬(몬스터·파티·상자·출구), FX, 텔레그래프, HUD(파티 프레임 HP/MP/저주, 보스 HP 바, 시전 바, 스킬 바: 단일힐 선택/광역힐 선택/해제/버프/필살기/부활/일격/자동힐·자동회피 토글, 가방·퀘스트·귀환, 걸음·킬 카운터, 미니맵 토글), 조이스틱/탭 이동 + 자동 따라가기(파티가 앞장서고 힐러는 뒤따름: `settings.autoFollow` 면 플레이어가 파티 무게중심 뒤 2타일을 따라감, 조작 중엔 해제), 전멸/클리어 → `UI.open('result')` → 마을.
+- 부트(`main.js`): DOM 준비 → `UI.init()` → 저장 있으면 `title` 화면(이어하기/새 게임), 없으면 새 게임 → 프롤로그 `UI.story` → 마을 씬. 60초마다·씬 전환마다 `State.save()`.
 
 ## 12. 완성 기준 (수용 테스트)
 1. 새 게임 → 프롤로그 → 마을 → 모험가 사무소에서 4명 고용 → 성문 → 1층 → 몬스터 무리 전투(자동 힐 동작, 수동 스킬 가능) → 상자 → 중간보스 3 → 층 보스(소환 패턴 포함) → 출구 → 마을 복귀(보상·기록·챕터 진행).

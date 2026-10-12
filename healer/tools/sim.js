@@ -196,6 +196,7 @@ function run(o = {}) {
   for (let t = 0; t < maxSeconds && !fs.result; t += DT) {
     Floor.update(fs, G, DT);
     bot.step(DT);
+    if (o.onTick) o.onTick(fs, G, bot, ctx);   // 진단·테스트용 훅(매 스텝)
     if (fs.boss && fs.boss.aggro) st.bossEngaged = true;
     if (fs.time >= nextSample) { nextSample += 1; st.mpSamples++; st.mpSum += fs.battle.player.maxMp ? fs.battle.player.mp / fs.battle.player.maxMp : 0; }
   }
