@@ -2610,6 +2610,11 @@ let quakeUntilMs = 0;
 // -------------------------------------------------------------
 // 고르는 카드 수: 일반 맵 4장, 나라 전국 맵 5장, 전세계 6장
 const NATIONAL_MAPS = new Set(['KOREA', 'JP_JAPAN', 'CN_CHINA', 'US_USA', 'FR_FRANCE', 'DE_GERMANY', 'IT_ITALY', 'ES_SPAIN', 'GB_UK']);
+// 한 번에 보여 주는 카드 수: 일반 맵 3장, 나라 전국 맵 4장, 전세계 5장
+function itemChoiceCount() {
+  if (currentCountryKey() === 'WD') return 5;
+  return NATIONAL_MAPS.has(currentMapKey) ? 4 : 3;
+}
 function itemRounds() {
   if (currentCountryKey() === 'WD') return 6;
   return NATIONAL_MAPS.has(currentMapKey) ? 5 : 4;
@@ -2765,11 +2770,12 @@ function openItemPick() {
   currentState = GAME_STATE.PAUSED;
   const toast = document.getElementById('center-toast');
   if (toast) toast.classList.remove('show');
-  itemChoices = shuffled(ITEMS.filter(it => !itemsOf.player.includes(it.key))).slice(0, 3);
+  itemChoices = shuffled(ITEMS.filter(it => !itemsOf.player.includes(it.key))).slice(0, itemChoiceCount());
   const m = document.getElementById('item-modal');
   const list = document.getElementById('item-choices');
   document.getElementById('item-round').textContent = `${itemRound + 1}/${itemRounds()}`;
   list.innerHTML = '';
+  list.dataset.count = itemChoices.length; // 4장은 2×2, 5장은 3+2
   itemChoices.forEach(it => {
     const b = document.createElement('button');
     b.className = 'item-card';
