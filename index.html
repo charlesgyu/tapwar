@@ -629,6 +629,10 @@
     .top-timer[hidden], .status-banner[hidden] { display: none; }
     .speed2-btn { font-size: 15px; font-weight: 900; color: #1e293b; min-width: 54px; }
     .speed2-btn.on { background: #1e293b; color: #fde047; border-color: #1e293b; }
+    /* 구매 전 ×2: 어둡게 (누르면 결제 화면) */
+    .speed2-btn.locked { background: #94a3b8; color: #e2e8f0; border-color: #94a3b8; }
+    #speed-group { display: flex; gap: 6px; }
+    #speed-group[hidden] { display: none; }
     .purchase-price { font-size: 22px; font-weight: 900; color: #1e293b; margin: -6px 0 16px; font-variant-numeric: tabular-nums; }
     .purchase-close { display: block; margin: 10px auto 0; }
     #confirm-base .tut-nav { margin-top: 4px; }
@@ -791,9 +795,10 @@
       .item-desc { font-size: 15px; }
       .item-chip, .item-slot { width: 48px; height: 48px; }
       #item-bar { right: 24px; bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); }
-      #surrender-btn, #speed2-btn { font-size: 15px; padding: 11px 16px; top: calc(env(safe-area-inset-top, 0px) + 20px); }
+      #surrender-btn, .speed2-btn { font-size: 15px; padding: 11px 16px; }
+      #surrender-btn, #speed-group { top: calc(env(safe-area-inset-top, 0px) + 20px); }
       #surrender-btn { left: 24px; }
-      #speed2-btn { right: 24px; }
+      #speed-group { right: 24px; }
       #item-tip .item-card { width: 220px; }
     }
     /* 넓은 가로 화면인데 높이가 800px 이하(아이패드 가로·듀오 펼친 가로): 카드·제목을 중간 크기로 */
@@ -880,11 +885,11 @@
       max-width: calc(100vw - 32px);
     }
     /* 게임 중 항복은 화면 위 왼쪽, 배속은 위 오른쪽 */
-    #surrender-btn, #speed2-btn {
+    #surrender-btn, #speed-group {
       position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); z-index: 41;
     }
     #surrender-btn { left: max(16px, env(safe-area-inset-left)); }
-    #speed2-btn { right: max(16px, env(safe-area-inset-right)); }
+    #speed-group { right: max(16px, env(safe-area-inset-right)); }
     #item-bar[hidden] { display: none; }
     .item-side { display: flex; gap: 6px; }
     .item-slot { width: 38px; height: 38px; border-radius: 9px; border: 2px dashed #93c5fd; box-sizing: border-box; display: inline-block; }
@@ -983,7 +988,10 @@
         <button id="home-btn" class="surrender-btn" onclick="goHome()" hidden>← 홈</button>
         <button id="surrender-btn" class="surrender-btn" onclick="onSurrenderClick()" hidden>항복</button>
         <!-- 게임 중 ×2 배속 (유료: 구매 전에는 결제 화면으로) -->
-        <button id="speed2-btn" class="surrender-btn speed2-btn" onclick="onSpeed2Click()" hidden>×2</button>
+        <div id="speed-group" hidden>
+          <button id="speed1-btn" class="surrender-btn speed2-btn on" onclick="onSpeedClick(1)">×1</button>
+          <button id="speed2-btn" class="surrender-btn speed2-btn" onclick="onSpeedClick(2)">×2</button>
+        </div>
         </div>
       </div>
     </div>
@@ -1110,7 +1118,7 @@
     </div>
   </div>
 
-  <script src="audio.js?v=20261012_items_v49"></script>
-  <script src="game.js?v=20261012_items_v49"></script>
+  <script src="audio.js?v=20261012_items_v50"></script>
+  <script src="game.js?v=20261012_items_v50"></script>
 </body>
 </html>
