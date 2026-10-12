@@ -67,6 +67,7 @@ function drawChibi(a) {
   if (a._px !== undefined && Math.abs(a.x - a._px) > 0.05) a._face = a.x < a._px ? -1 : 1;
   a._px = a.x; a._py = a.y;
   const face = a._face || 1, cls = a.kind === 'healer' ? 'priest' : a.cls;
+  if (SPR[cls] && SPR[cls].complete && SPR[cls].naturalWidth) return drawSprite(a, SPR[cls], moving, face);
   const bob = dead ? 0 : moving ? Math.abs(Math.sin(t * 14 + a.x)) * -2.5 : Math.sin(t * 3 + a.x) * 0.8;
   const x = a.x, y = a.y + bob;
   shadow(a.x, a.y + 18, 14);
@@ -122,6 +123,52 @@ function drawChibi(a) {
   if (cs.length) { ctx.font = `9px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText(cs.map(c => CURSES[c].icon).join(''), a.x, y - 36); }
   if (a.kind === 'healer' && B.cast) { hpBar(a.x - 15, a.y + 18, 30, B.cast.t / B.cast.total, '#ffd23f'); }
   if (a.role === 'tank' && !a.noHud) { ctx.font = `8px ${FONT}`; ctx.fillText('🛡', a.x - 17, y - 19); }
+}
+
+// ================= 도트 스프라이트 (assets/chars/*.png, 7x4 칸) =================
+// 행0: 대기3 · 옆걷기2 · 뒷모습2 / 행1: 정면·달리기2·지친달리기2·뒷모습2 / 행2: 공격5 · 뒷모습2 / 행3: 무릎2 · 쓰러짐2 · 누움2
+const SPR = {};
+for (const c of ['warrior', 'hunter', 'spellblade', 'rogue', 'priest']) { const im = new Image(); im.src = `assets/chars/${c}.png`; SPR[c] = im; }
+const SP_CW = 64, SP_CH = 100, SP_H = 62; // 칸 크기, 화면에 그릴 높이
+function spriteFrame(a, moving) {
+  const t = B.t, ph = (a.x * 7) % 1;
+  if (a.dead) return [3, 5];
+  if (a._atkT > 0) return [2, Math.min(4, Math.floor((1 - a._atkT / 0.45) * 5))];
+  if (a.kind === 'healer' && B.cast) return [2, Math.floor(t * 6) % 3];
+  if (moving) {
+    if (a._dy < -0.6) return [0, 5 + Math.floor(t * 6) % 2];
+    const low = a.hp / a.maxHp < 0.3;
+    const cyc = low ? [[1, 3], [1, 4]] : [[0, 3], [1, 1], [0, 4], [1, 2]];
+    return cyc[Math.floor(t * 8 + ph * 4) % cyc.length];
+  }
+  if (a.hp / a.maxHp < 0.25) return [3, Math.floor(t * 2) % 2];
+  return [0, Math.floor(t * 3 + ph * 3) % 3];
+}
+function drawSprite(a, img, moving, face) {
+  const t = B.t;
+  if (a._atkT > 0) a._atkT -= 0.016;
+  if (moving) a._dy = (a.y - (a._lastY ?? a.y)) / Math.max(0.01, Math.hypot(a.x - (a._lastX ?? a.x), a.y - (a._lastY ?? a.y)));
+  a._lastX = a.x; a._lastY = a.y;
+  shadow(a.x, a.y + 17, 13);
+  if (B.target === a) {
+    ctx.strokeStyle = '#3ff0ff'; ctx.lineWidth = 2.5; ctx.setLineDash([5, 3]); ctx.lineDashOffset = -t * 20;
+    ctx.beginPath(); ctx.ellipse(a.x, a.y + 17, 17, 6, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+  }
+  if (a.kind === 'healer' && !a.dead) { const g = ctx.createRadialGradient(a.x, a.y, 4, a.x, a.y, 28); g.addColorStop(0, 'rgba(255,245,170,.45)'); g.addColorStop(1, 'rgba(255,245,170,0)'); ctx.fillStyle = g; circle(a.x, a.y, 28, true); }
+  const [r, c] = spriteFrame(a, moving);
+  const h = SP_H, w = h * SP_CW / SP_CH, foot = a.y + 19;
+  ctx.save(); ctx.imageSmoothingEnabled = false;
+  ctx.translate(a.x, foot); ctx.scale(face, 1);
+  if (a._hit > 0) { a._hit -= 0.05; ctx.filter = 'brightness(2.2)'; }
+  ctx.drawImage(img, c * SP_CW, r * SP_CH, SP_CW, SP_CH, -w / 2, -h, w, h);
+  ctx.restore();
+  if (a.dead) { ctx.globalAlpha = 0.6 + Math.sin(t * 3) * 0.2; outlinedText('👻', a.x + 10, a.y - 14 + Math.sin(t * 2) * 2, 12, '#fff', 0); ctx.globalAlpha = 1; return; }
+  const top = foot - h + 8;
+  if (!a.noHud) hpBar(a.x - 14, top - 8, 28, a.hp / a.maxHp, a.hp / a.maxHp < 0.35 ? '#ff4d5e' : '#5be36b');
+  const cs = Object.keys(a.curses);
+  if (cs.length) { ctx.font = `9px ${FONT}`; ctx.textAlign = 'center'; ctx.fillText(cs.map(c => CURSES[c].icon).join(''), a.x, top - 12); }
+  if (a.kind === 'healer' && B.cast) hpBar(a.x - 15, a.y + 22, 30, B.cast.t / B.cast.total, '#ffd23f');
+  if (a.role === 'tank' && !a.noHud) { ctx.font = `8px ${FONT}`; ctx.fillText('🛡', a.x - 18, top - 3); }
 }
 
 // ================= 몬스터 =================
@@ -204,6 +251,7 @@ enemyDied = function (e) {
 const _damage = damage;
 damage = function (u, amt, src, dot) {
   if (!dot && !u.dead) u._hit = 0.25;
+  if (!dot && src && src.kind !== 'enemy') src._atkT = 0.45;
   _damage.apply(null, arguments);
 };
 const _healUnit = healUnit;
@@ -380,3 +428,7 @@ update = function (dt) {
   }
   B.fx = B.fx.filter(f => f.t < f.life);
 };
+
+// 힐러가 주문을 마치면 시전 모션
+const _finishCast = finishCast;
+finishCast = function () { if (B && B.me) B.me._atkT = 0.45; return _finishCast.apply(null, arguments); };
