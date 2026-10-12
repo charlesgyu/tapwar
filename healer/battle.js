@@ -68,6 +68,7 @@ function startFloor() {
   }
   B.me = healer;
   renderBattleUI(true);
+  if (window.onresize) window.onresize();
   floatText(180, 250, `${R.floor}층`, '#fff', 28, 1.6);
 }
 
@@ -133,7 +134,7 @@ function update(dt) {
     if (hasSp('swift') && inDanger(me)) mv *= 1.3;
     if (B.joy && B.joy.mag > 0 && !me.curses.root) {
       me.x = clamp(me.x + B.joy.dx * mv * dt, 12, AW - 12);
-      me.y = clamp(me.y + B.joy.dy * mv * dt, 20, AH - 12);
+      me.y = clamp(me.y + B.joy.dy * mv * dt, 70, AH - 12);
       if (B.cast) { cancelCast('이동하여 시전이 취소되었습니다'); }
     }
   }
@@ -193,7 +194,7 @@ function allyAI(a, dt) {
     if (danger.aware[a.id] === undefined) danger.aware[a.id] = Math.random() < a.dodgeSkill;
     if (danger.aware[a.id]) {
       let dx = a.x - danger.x, dy = a.y - danger.y, l = Math.hypot(dx, dy) || 1;
-      a.x = clamp(a.x + dx / l * spd * 1.2 * dt, 12, AW - 12); a.y = clamp(a.y + dy / l * spd * 1.2 * dt, 20, AH - 12);
+      a.x = clamp(a.x + dx / l * spd * 1.2 * dt, 12, AW - 12); a.y = clamp(a.y + dy / l * spd * 1.2 * dt, 70, AH - 12);
       return;
     }
   }
@@ -226,7 +227,7 @@ function allyAI(a, dt) {
   if (!rooted && dd > want) {
     a.x += (tgt.x - a.x) / dd * spd * dt; a.y += (tgt.y - a.y) / dd * spd * dt;
   } else if (!rooted && (a.role === 'ranged') && dd < want * 0.6) {
-    a.y = clamp(a.y + spd * 0.6 * dt, 20, AH - 12);
+    a.y = clamp(a.y + spd * 0.6 * dt, 70, AH - 12);
   }
   a.atkT -= dt * (B.buffs.aspd ? 1.2 : 1) * (a.curses.aspdDown ? 0.6 : 1);
   if (dd <= a.range + tgt.r && a.atkT <= 0) {
@@ -600,90 +601,7 @@ function setupCanvas() {
   cvs.addEventListener('pointercancel', up);
 }
 
-function draw() {
-  ctx.clearRect(0, 0, AW, AH);
-  // 바닥 (탑 내부 석판)
-  const hue = (R ? R.floor * 23 : 0) % 360;
-  ctx.fillStyle = `hsl(${hue},18%,22%)`; ctx.fillRect(0, 0, AW, AH);
-  ctx.strokeStyle = `hsla(${hue},20%,35%,.5)`; ctx.lineWidth = 1;
-  for (let y = 0; y < AH; y += 40) for (let x = (y / 40 % 2) * 20; x < AW; x += 40) ctx.strokeRect(x, y, 40, 40);
-  // 바닥힐
-  for (const g of B.grounds) {
-    ctx.fillStyle = `rgba(255,230,120,${0.18 + 0.08 * Math.sin(B.t * 6)})`;
-    circle(g.x, g.y, g.r, true);
-    ctx.strokeStyle = '#ffe680'; ctx.lineWidth = 2; ctx.setLineDash([6, 4]); circle(g.x, g.y, g.r); ctx.setLineDash([]);
-    ctx.font = '16px serif'; ctx.textAlign = 'center'; ctx.fillText('✚', g.x, g.y + 6);
-  }
-  // 광역기 경고
-  for (const t of B.tele) {
-    const p = Math.min(1, t.t / t.fill);
-    if (!t.fired) {
-      ctx.fillStyle = t.type === 'puddle' ? 'rgba(160,30,90,.18)' : 'rgba(255,60,40,.15)'; circle(t.x, t.y, t.r, true);
-      ctx.fillStyle = t.type === 'puddle' ? 'rgba(200,30,110,.45)' : 'rgba(255,60,40,.45)'; circle(t.x, t.y, t.r * p, true);
-      ctx.strokeStyle = t.type === 'puddle' ? '#e3489a' : '#ff4a3a'; ctx.lineWidth = 2; circle(t.x, t.y, t.r);
-      if (t.type === 'puddle') { ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(B.t); ctx.strokeStyle = '#ff7ac0'; ctx.lineWidth = 1; for (let i = 0; i < 6; i++) { ctx.rotate(Math.PI / 3); ctx.beginPath(); ctx.moveTo(t.r * 0.3, 0); ctx.lineTo(t.r * 0.85, 0); ctx.stroke(); } ctx.restore(); }
-    } else {
-      ctx.fillStyle = `rgba(190,20,80,${0.4 + 0.15 * Math.sin(B.t * 10)})`; circle(t.x, t.y, t.r, true);
-      ctx.strokeStyle = '#ff2a6a'; ctx.lineWidth = 2; circle(t.x, t.y, t.r);
-    }
-  }
-  // 투사체/빔
-  for (const s of B.shots) {
-    ctx.strokeStyle = s.c; ctx.globalAlpha = 1 - s.t / s.life; ctx.lineWidth = s.w || 2;
-    ctx.beginPath(); ctx.moveTo(s.x1, s.y1); ctx.lineTo(s.x2, s.y2); ctx.stroke(); ctx.globalAlpha = 1;
-  }
-  // 적
-  for (const e of B.enemies) {
-    ctx.font = `${e.r * 2}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    if (e.undead) { ctx.fillStyle = 'rgba(150,255,200,.15)'; circle(e.x, e.y, e.r + 4, true); }
-    ctx.fillText(e.emoji, e.x, e.y + Math.sin(B.t * 6 + e.x) * 1.5);
-    bar(e.x - e.r, e.y - e.r - 8, e.r * 2, 4, e.hp / e.maxHp, '#e44');
-    if (e.boss) { ctx.font = 'bold 10px sans-serif'; ctx.fillStyle = '#fc6'; ctx.fillText(e.name, e.x, e.y - e.r - 15); }
-  }
-  ctx.textBaseline = 'alphabetic';
-  // 아군
-  for (const a of B.allies) drawChibi(a);
-  // 조이스틱
-  if (B.joy && B.joy.moved) {
-    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 2; circle(B.joy.sx, B.joy.sy, 30);
-    ctx.fillStyle = 'rgba(255,255,255,.35)'; circle(B.joy.sx + B.joy.dx * 22, B.joy.sy + B.joy.dy * 22, 12, true);
-  }
-  // 텍스트
-  ctx.textAlign = 'center';
-  for (const f of B.floats) {
-    ctx.globalAlpha = 1 - f.t / f.life; ctx.font = `bold ${f.size}px sans-serif`;
-    ctx.strokeStyle = '#000a'; ctx.lineWidth = 3; ctx.strokeText(f.text, f.x, f.y); ctx.fillStyle = f.color; ctx.fillText(f.text, f.x, f.y);
-  }
-  ctx.globalAlpha = 1;
-  if (B.flash > 0) { B.flash -= 0.016; ctx.fillStyle = `rgba(255,250,200,${B.flash})`; ctx.fillRect(0, 0, AW, AH); }
-  // 웨이브 대기
-  if (!B.enemies.length && !B.over && B.wave < B.waves) {
-    ctx.font = 'bold 14px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(`웨이브 ${B.wave + 1}/${B.waves} 접근 중...`, AW / 2, 60);
-  }
-}
-function circle(x, y, r, fill) { ctx.beginPath(); ctx.arc(x, y, Math.max(0, r), 0, Math.PI * 2); fill ? ctx.fill() : ctx.stroke(); }
-function bar(x, y, w, h, p, c) { ctx.fillStyle = '#0008'; ctx.fillRect(x, y, w, h); ctx.fillStyle = c; ctx.fillRect(x, y, w * clamp(p, 0, 1), h); }
-function drawChibi(a) {
-  const { x } = a, bob = a.dead ? 0 : Math.sin(B.t * 5 + x) * 1.2, y = a.y + bob;
-  ctx.globalAlpha = a.dead ? 0.4 : 1;
-  ctx.fillStyle = '#0004'; ctx.beginPath(); ctx.ellipse(x, a.y + 13, 10, 3, 0, 0, Math.PI * 2); ctx.fill();
-  if (B.target === a) { ctx.strokeStyle = '#7cf'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, a.y + 13, 15, 5, 0, 0, Math.PI * 2); ctx.stroke(); }
-  if (a.kind === 'healer') { ctx.fillStyle = `rgba(255,240,150,${0.25 + 0.1 * Math.sin(B.t * 4)})`; circle(x, y, 20, true); }
-  // 몸
-  ctx.fillStyle = a.color; ctx.beginPath(); ctx.roundRect(x - 8, y + 1, 16, 12, 6); ctx.fill();
-  // 머리
-  ctx.fillStyle = '#ffe0c4'; circle(x, y - 5, 9, true);
-  ctx.fillStyle = a.color; ctx.beginPath(); ctx.arc(x, y - 7, 9.5, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
-  if (a.dead) { ctx.font = '10px sans-serif'; ctx.fillStyle = '#333'; ctx.fillText('x  x', x, y - 2); }
-  else { ctx.fillStyle = '#333'; circle(x - 3.5, y - 4, 1.4, true); circle(x + 3.5, y - 4, 1.4, true); ctx.fillStyle = '#ff9aa2aa'; circle(x - 6, y - 1, 1.6, true); circle(x + 6, y - 1, 1.6, true); }
-  ctx.font = '9px serif'; ctx.textAlign = 'center'; ctx.fillText(a.icon, x + 9, y + 12);
-  if (a.dead) { ctx.globalAlpha = 1; ctx.font = '12px serif'; ctx.fillText('👻', x, y - 18); return; }
-  bar(x - 12, y - 20, 24, 3, a.hp / a.maxHp, a.hp / a.maxHp < 0.35 ? '#f44' : '#4d4');
-  const cs = Object.keys(a.curses);
-  if (cs.length) { ctx.font = '8px serif'; ctx.fillText(cs.map(c => CURSES[c].icon).join(''), x, y - 23); }
-  if (a.kind === 'healer' && B.cast) bar(x - 14, y + 17, 28, 3, B.cast.t / B.cast.total, '#ffd23f');
-  ctx.globalAlpha = 1;
-}
+// 그리기 함수(draw, drawChibi 등)는 art.js 에 있습니다.
 
 // ================= 전투 UI =================
 let lastUI = 0;
@@ -692,9 +610,15 @@ function renderBattleUI(force) {
   if (!force && now - lastUI < 90) return;
   lastUI = now;
   const me = B.me;
-  $('#b-top').innerHTML = `<span>🗼 <b>${R.floor}층</b> ${R.floor % 5 === 0 ? '👑BOSS' : ''} · 웨이브 ${Math.max(1, B.wave)}/${B.waves}</span><span>💰${fmt(R.gold)}</span>
-    <span class="buffs">${Object.keys(B.buffs).map(k => `<i title="${BUFF_NAMES[k]}">${BUFF_NAMES[k]} ${Math.ceil(B.buffs[k])}</i>`).join('')}</span>
-    <button class="btn sm red" onclick="retreat()">귀환</button>`;
+  const wp = B.waveSize ? (B.wave - 1 + (1 - B.enemies.length / B.waveSize)) / B.waves : 0;
+  const segs = 10, fillN = Math.round(clamp(wp, 0, 1) * segs);
+  $('#b-top').innerHTML = `<div class="hud">
+      <button class="hud-pause" onclick="retreat()">⏸</button>
+      <div class="hud-floor"><b>${R.floor}F</b>${R.floor % 5 === 0 ? '<i>BOSS</i>' : ''}</div>
+      <div class="hud-res"><span>🪙 ${fmt(R.gold)}</span><span>💀 ${R.kills}</span></div>
+    </div>
+    <div class="hud-prog"><div class="segs">${Array.from({ length: segs }, (_, i) => `<i class="${i < fillN ? 'on' : ''}"></i>`).join('')}</div><b>${B.wave}/${B.waves}</b></div>
+    <div class="buffs">${Object.keys(B.buffs).map(k => `<i>${BUFF_NAMES[k]} ${Math.ceil(B.buffs[k])}</i>`).join('')}</div>`;
   // 파티 프레임
   let html = '';
   for (const a of B.allies) {
