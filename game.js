@@ -3973,7 +3973,7 @@ const COUNTRIES = [
   { key: 'IT', flag: '🇮🇹', name: '이탈리아', open: false, paid: true },
   { key: 'ES', flag: '🇪🇸', name: '스페인', open: false, paid: true },
   { key: 'GB', flag: '🇬🇧', name: '영국', open: false, paid: true },
-  { key: 'WD', flag: '🌏', name: '전세계', open: false, paid: true }
+  { key: 'WD', flag: '🌏', img: 'assets/earth.png', name: 'Earth', open: false, paid: true }
 ];
 // [테스트용] 유료 나라(일본·중국·미국·유럽 5개국·전세계)를 구매 없이 열기. 출시는 false (인앱 구매 'all_countries' 하나로 모두 열림)
 const DEV_TEST_COUNTRIES = false;
@@ -4067,21 +4067,9 @@ function buildCountryCards() {
     const b = document.createElement('button');
     b.id = `country-${c.key.toLowerCase()}`;
     b.className = 'stage-card country-card' + (c.key === selectedCountryKey ? ' active' : '') + (isCountryOpen(c) ? '' : ' locked');
-    const maps = getCampaignOrder(c.key);
-    if (maps.length === 1) {
-      // 맵이 하나뿐인 나라(전세계): 국기 대신 맵 카드 모양 (썸네일·구역 수·최고 기록)
-      const key = maps[0], cfg = MAP_CONFIGS[key];
-      const r = getBattleRecords()[key];
-      const cleared = !!(r && r.cleared && r.bestTime !== null && r.bestTime !== undefined);
-      if (cleared) b.classList.add('cleared');
-      b.innerHTML = `<span class="stage-no">1</span>` +
-        `<canvas class="stage-thumb" id="cthumb-${key.toLowerCase()}"></canvas>` +
-        `<span class="stage-title"><span class="stage-name">${cfg.label || c.name}</span><span class="stage-sub">${cfg.count || ''}</span></span>` +
-        `<span class="stage-recrow"><span class="stage-record">${cleared ? formatTimeString(r.bestTime) : ''}</span></span>`;
-      requestAnimationFrame(() => drawMapThumb(document.getElementById(`cthumb-${key.toLowerCase()}`), key));
-    } else {
-      b.innerHTML = `<span class="country-flag" aria-hidden="true">${c.flag}</span><span class="stage-name">${c.name}</span>`;
-    }
+    // 국기 대신 그림이 있는 나라(Earth: 지구본)
+    const flag = c.img ? `<img class="country-img" src="${c.img}" alt="">` : c.flag;
+    b.innerHTML = `<span class="country-flag" aria-hidden="true">${flag}</span><span class="stage-name">${c.name}</span>`;
     b.onclick = () => selectCountry(c.key);
     grid.appendChild(b);
   });
@@ -4118,14 +4106,12 @@ function enterCountry() {
     if (only.length === 1) [50, 200, 500].forEach(ms => setTimeout(() => centerStageCard(only[0], false), ms));
     return;
   }
-  // 맵이 하나뿐인 나라(전세계): 맵 고르기 없이 바로 본진 선택으로
+  // 맵이 하나뿐인 나라(Earth)도 맵 카드 화면으로: 전세계 맵 카드 옆에 순위 카드
   const only = getCampaignOrder(c.key);
   if (only.length === 1) {
     selectedModalMapKey = only[0];
     showStageView();
-    // 거쳐 가는 화면에서도 맵 카드가 맨 앞(가운데)에 보이도록: 레이아웃이 잡힌 뒤 몇 번 더 맞춤
     [50, 200, 500].forEach(ms => setTimeout(() => centerStageCard(only[0], false), ms));
-    startWhenMapLoaded(only[0]);
     return;
   }
   showStageView();
@@ -4377,7 +4363,7 @@ function buildStageCards() {
     const btn = document.createElement('button');
     btn.id = `modal-map-${k}`;
     btn.className = 'stage-card' + (key === selectedModalMapKey ? ' active' : '') +
-      (unlocked || isBrowsingCountry() ? '' : ' locked') + (cleared ? ' cleared' : ''); // 둘러보기 중에는 맵을 밝게
+      (unlocked && !isBrowsingCountry() ? '' : ' locked') + (cleared ? ' cleared' : ''); // 둘러보기 중에는 잠긴 모습(어둡게)
     btn.onclick = (e) => {
       if (!unlocked && !isBrowsingCountry()) { // 둘러보기 중에는 모든 맵 구경 가능
         const prev = MAP_CONFIGS[order[i - 1]];
@@ -4969,12 +4955,8 @@ function maybeOpenTutorial() {
       startWhenMapLoaded(auto);
       return;
     }
-    // 맵이 하나뿐인 나라는 맵 화면 없이 나라 고르기로
-    if (getCampaignOrder(returning).length === 1) {
-      requestAnimationFrame(() => selectCountry(returning));
-      maybeOpenTutorial();
-      return;
-    }
+    // 맵이 하나뿐인 나라(Earth)도 맵 카드 화면으로
+    if (getCampaignOrder(returning).length === 1) selectedModalMapKey = getCampaignOrder(returning)[0];
     showStageView();
     maybeOpenTutorial();
     return;
