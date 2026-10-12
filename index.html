@@ -828,7 +828,9 @@
     .item-pick-title { font-size: 22px; font-weight: 900; color: #1e293b; }
     .item-pick-title span { color: #94a3b8; font-size: 16px; margin-left: 4px; }
     .item-pick-sub { font-size: 13px; color: #64748b; margin: 6px 0 14px; }
-    .item-choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .item-choices { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+    .item-choices .item-card { flex: 0 0 calc((100% - 16px) / 3); box-sizing: border-box; }
+    .item-choices[data-count="4"] .item-card { flex-basis: calc((100% - 8px) / 2); min-height: 160px; }
     .item-card {
       display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px 8px; min-height: 190px;
       border: 2px solid #1e293b; border-radius: 16px; background: #fff; cursor: pointer; font-family: inherit;
@@ -1024,6 +1026,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=20261012_items_v23"></script>
+  <script src="game.js?v=20261012_items_v24"></script>
 </body>
 </html>
