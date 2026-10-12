@@ -1674,7 +1674,7 @@ function beginGameAtZone(zone) {
 
   // [이탈리아 '최고의 지휘관'] 나·적 모두 무작위 빈 땅에 본진 1개씩 더 → 총 2개 (전세계는 2개씩 더 → 총 3개)
   // 이미 점령된 땅과 맞닿지 않은 곳. 추가 본진의 피는 원래 본진의 절반
-  const extraCount = currentCountryKey() === 'IT' ? 1 : currentCountryKey() === 'WD' ? 2 : 0;
+  const extraCount = currentCountryKey() === 'IT' ? 1 : 0; // 전세계는 본진 1개
   for (let e = 0; e < extraCount; e++) {
     [OWNER.PLAYER, OWNER.ENEMY].forEach(owner => {
       const free = rawZones.filter(z => z.owner === OWNER.NEUTRAL && !z.isHidden && z.neighbors.length >= 2 &&
@@ -2564,7 +2564,7 @@ function neutralizeZone(z) {
 // 혁명 중: 점령 지역과 맞닿은 중립 지역이 주기마다 주변 점령 지역 하나를 공격
 function updateRevolt() {
   if (gameElapsedTime >= revoltUntil || gameElapsedTime < revoltNextShot) return;
-  revoltNextShot = gameElapsedTime + COUNTRY_EVENT_CFG.FR.fireEvery;
+  revoltNextShot = gameElapsedTime + COUNTRY_EVENT_CFG.FR.fireEvery / worldEffect();
   rawZones.forEach(z => {
     if (z.owner !== OWNER.NEUTRAL || z.isHidden) return;
     const tg = z.neighbors.filter(n => n.owner !== OWNER.NEUTRAL);
@@ -2581,7 +2581,7 @@ function startTank() {
   const off = (Math.random() - 0.5) * 0.6;
   const ox = -Math.sin(ang) * off * L, oy = Math.cos(ang) * off * L;
   tankAnim = { x0: cx - Math.cos(ang) * L + ox, y0: cy - Math.sin(ang) * L + oy, x1: cx + Math.cos(ang) * L + ox, y1: cy + Math.sin(ang) * L + oy,
-               t0: gameElapsedTime, dur: COUNTRY_EVENT_CFG.DE.tankSec, hit: new Set(), w: Math.min(area.w, area.h) * COUNTRY_EVENT_CFG.DE.width };
+               t0: gameElapsedTime, dur: COUNTRY_EVENT_CFG.DE.tankSec, hit: new Set(), w: Math.min(area.w, area.h) * COUNTRY_EVENT_CFG.DE.width * worldEffect() };
 }
 function updateTank() {
   if (!tankAnim) return;
@@ -2734,7 +2734,6 @@ function itemAttackState(own) {
       if (k === 'supply') st.supplyNew = n;
       if (k === 'buff') st.buffNew = n;
       if (k === 'curse') { itemState[itemRival(own)].cursed = n; }
-      if (own === OWNER.PLAYER) flashCenterText(ITEMS.find(x => x.key === k).name + '!');
     },
     // 이번 공격이 끝나면 '다음 N 공격' 카운트를 하나 줄이고, 이번에 새로 터진 것은 다음 공격부터
     done() {
@@ -2889,18 +2888,22 @@ const COUNTRY_CONCEPT = {
   FR: ['혁명', '1분마다 10초 동안 점령 지역과 맞닿은 중립 지역이 주변을 공격해요'],
   DE: ['전차 돌파', '1분마다 전차가 지나가고, 지나간 지역은 중립이 돼요 (본진 제외)'],
   IT: ['최고의 지휘관', '본진 2개로 시작해요. 하나는 무작위 위치에 생겨요'],
-  WD: ['세계 대전', '본진 3개로 시작하고, 30초마다 나라 컨셉 하나가 무작위로 일어나요. 카드는 6장 골라요'],
+  WD: ['세계 대전', '30초마다 나라 컨셉 2개가 무작위로 3배 효과로 일어나요. 카드는 6장 골라요'],
   ES: ['대항해시대', '1분마다 양쪽의 완전점령 지역 한 곳이 대포를 쏴요 (공격력 20)'],
   GB: ['안개', '적의 구슬은 처음 방향만 보이고 어디로 가는지는 보이지 않아요']
 };
 // [전세계 '세계 대전'] 30초마다 나라 컨셉 하나가 무작위로 (구역이 많은 만큼 더 많은 지역에)
 const WORLD_EVENT_EVERY = 30;
+const WORLD_EVENTS_AT_ONCE = 2; // 30초마다 동시에 일어나는 컨셉 수
+const WORLD_EFFECT_MULT = 3;    // 전세계 컨셉 효과 배수
 const WORLD_EVENT_KEYS = ['JP', 'CN', 'US', 'FR', 'DE', 'ES', 'GB'];
 const WORLD_FOG_SEC = 30;
 let fogUntil = 0;
 function isFogActive() { return currentCountryKey() === 'GB' || gameElapsedTime < fogUntil; }
 // 맵이 클수록 이벤트가 걸리는 지역 수를 늘림 (전세계 300구역 → 3배)
-function eventScale() { return currentCountryKey() === 'WD' ? Math.max(1, Math.round(rawZones.length / 100)) : 1; }
+function eventScale() { return currentCountryKey() === 'WD' ? Math.max(1, Math.round(rawZones.length / 100)) * WORLD_EFFECT_MULT : 1; }
+// [전세계] 컨셉 효과 배수: 걸리는 지역 수·대포 수 ×3, 전차 폭 ×3, 혁명 사격 ×3 빠르게
+function worldEffect() { return currentCountryKey() === 'WD' ? WORLD_EFFECT_MULT : 1; }
 function resetCountryEvent() {
   const country = (MAP_CONFIGS[currentMapKey] || {}).country;
   const c = COUNTRY_EVENT_CFG[country];
@@ -2927,7 +2930,7 @@ function fireCannons(c) {
 }
 function pickEventZones(c) {
   const owned = rawZones.filter(z => z.owner !== OWNER.NEUTRAL && !isMainZone(z) && !z.isHidden);
-  const n = Math.min(owned.length, Math.max(c.min * eventScale(), Math.round(owned.length * c.share)));
+  const n = Math.min(owned.length, Math.max(c.min * eventScale(), Math.round(owned.length * c.share * worldEffect())));
   for (let i = owned.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [owned[i], owned[j]] = [owned[j], owned[i]]; }
   return owned.slice(0, n);
 }
@@ -2938,7 +2941,8 @@ function updateCountryEvent() {
   if (!countryEventNext || gameElapsedTime < countryEventNext) return;
   if (country === 'WD') {
     countryEventNext = gameElapsedTime + WORLD_EVENT_EVERY;
-    triggerCountryEvent(WORLD_EVENT_KEYS[Math.floor(Math.random() * WORLD_EVENT_KEYS.length)]);
+    // 서로 다른 나라 컨셉 2개가 동시에
+    shuffled(WORLD_EVENT_KEYS).slice(0, WORLD_EVENTS_AT_ONCE).forEach(k => triggerCountryEvent(k));
     return;
   }
   const c = COUNTRY_EVENT_CFG[country];
