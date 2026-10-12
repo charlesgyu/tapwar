@@ -156,27 +156,53 @@ body { background:radial-gradient(circle at 50% 0%,#2f4380,#141d38 70%); }
 .sk.ult { background:radial-gradient(circle at 50% 30%,#ffe066,#ff8a1f); }
 .sk em { border-radius:50%; } .sk.off em:not(:empty) { background:#0009; }
 #b-skills { row-gap:20px; padding-bottom:22px; }
+
+/* ===== 마을 지도 ===== */
+#top { display:flex; align-items:center; gap:8px; padding:8px 10px 8px 6px; background:linear-gradient(100deg,#1e3a78,#16295a 60%,#1e3a78); border-bottom:3px solid var(--ink); position:relative; z-index:3; }
+.th-lv { width:52px; height:56px; flex:none; display:flex; align-items:center; justify-content:center; background:linear-gradient(#7fe0ff,#2f9be8); border:3px solid #fff; outline:2.5px solid var(--ink); clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); }
+.th-lv b { font-size:22px; color:#fff; text-shadow:0 2px 0 var(--ink),1px 0 0 var(--ink),-1px 0 0 var(--ink); }
+.th-mid { flex:1; min-width:0; }
+.th-row { display:flex; align-items:center; gap:6px; }
+.th-power { font-size:15px; color:#fff; text-shadow:0 2px 0 var(--ink); white-space:nowrap; } .th-power b { font-size:19px; }
+.th-pill { flex:1; display:flex; align-items:center; gap:3px; background:#0b1430; border:2px solid var(--ink); border-radius:12px; padding:1px 3px 1px 4px; font-size:15px; min-width:0; }
+.th-pill b { flex:1; text-align:right; color:#fff; font-weight:400; overflow:hidden; }
+.th-pill i { font-style:normal; color:#5be36b; font-size:20px; line-height:1; text-shadow:0 1px 0 var(--ink); }
+.th-xp { position:relative; height:9px; margin-top:6px; background:#0b1430; border:2px solid var(--ink); border-radius:6px; overflow:hidden; }
+.th-xp i { display:block; height:100%; background:linear-gradient(#7fe0ff,#2f9be8); } .th-xp small { position:absolute; right:4px; top:-3px; font-size:8px; color:#c9d6e8; }
+#town-stage { position:relative; flex:1; overflow:hidden; }
+#tscroll { position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; } #tscroll::-webkit-scrollbar { display:none; }
+#tcv { display:block; touch-action:pan-y; }
+#town-info { position:absolute; inset:0; pointer-events:none; padding:0; text-align:left; color:var(--text); font-size:13px; }
+#town-info > * { pointer-events:auto; }
+.t-left { position:absolute; left:8px; top:10px; display:flex; flex-direction:column; gap:7px; }
+.chip { display:flex; align-items:center; gap:4px; background:#0b1430dd; border:2.5px solid var(--ink); border-radius:12px; padding:2px 8px 2px 4px; min-width:84px; }
+.chip span { font-size:20px; filter:drop-shadow(0 2px 0 var(--ink)); } .chip b { margin-left:auto; color:#fff; font-weight:400; font-size:15px; text-shadow:0 1px 0 var(--ink); }
+.chip .cbar { width:36px; height:8px; background:#2a2f45; border-radius:4px; overflow:hidden; } .chip .cbar i { display:block; height:100%; }
+.chip.warn { animation:pulse 1s infinite; } @keyframes pulse { 50% { border-color:#ff4d5e; } }
+.t-quest { position:absolute; left:50%; transform:translateX(-50%); top:10px; width:150px; display:flex; gap:6px; align-items:center; background:#f4f1ea; color:var(--ink); border:3px solid var(--ink); border-radius:12px; padding:5px; box-shadow:0 4px 0 var(--ink); }
+.tq-ic { width:36px; height:36px; flex:none; background:#5cc0ff; border:2px solid var(--ink); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; }
+.tq-body { flex:1; min-width:0; }
+.tq-bar { position:relative; height:16px; background:#0b1430; border:2px solid var(--ink); border-radius:8px; overflow:hidden; }
+.tq-bar i { display:block; height:100%; background:linear-gradient(#7fe0ff,#2f9be8); } .tq-bar b { position:absolute; inset:0; text-align:center; font-weight:400; font-size:11px; line-height:13px; color:#fff; text-shadow:0 1px 0 var(--ink); }
+.tq-txt { font-size:12px; margin-top:2px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.t-right { position:absolute; right:8px; top:10px; display:flex; flex-direction:column; gap:9px; }
+.rb { position:relative; width:46px; height:46px; border-radius:14px; border:2.5px solid var(--ink); background:linear-gradient(#f4f1ea,#d9d3c6); font-size:24px; box-shadow:0 4px 0 var(--ink); padding:0; }
+.rb:active, .big:active { transform:translateY(3px); box-shadow:0 1px 0 var(--ink); }
+.dot { position:absolute; top:-5px; left:-5px; width:14px; height:14px; border-radius:50%; background:#ff3b30; border:2px solid var(--ink); }
+.t-bottom { position:absolute; left:10px; right:10px; bottom:12px; display:flex; justify-content:space-between; align-items:flex-end; pointer-events:none; }
+.big { pointer-events:auto; position:relative; width:72px; height:72px; border-radius:50%; border:3px solid var(--ink); background:radial-gradient(circle at 50% 35%,#4f7fd8,#1e3a78); box-shadow:0 5px 0 var(--ink); color:#fff; padding:0; }
+.big span { font-size:32px; display:block; filter:drop-shadow(0 2px 0 var(--ink)); }
+.big b { position:absolute; left:50%; bottom:-10px; transform:translateX(-50%); white-space:nowrap; font-weight:400; font-size:14px; background:#1b1530; border:2px solid var(--ink); border-radius:10px; padding:0 8px; }
+.big.tower { width:92px; height:92px; background:radial-gradient(circle at 50% 35%,#ffe066,#ff8a1f); animation:bob 1.6s ease-in-out infinite; }
+.big.tower span { font-size:42px; } .big.tower b { font-size:15px; background:#e03a52; }
+@keyframes bob { 50% { transform:translateY(-4px); } }
 </style>
 </head>
 <body>
 <div id="app">
   <div id="town">
     <div id="top"></div>
-    <div class="title"><h1>모두의 힐러</h1><p>끝없는 탑을 오르는 귀여운 힐러의 모험</p></div>
-    <div id="town-info"></div>
-    <div class="tower-btn" onclick="G.open('tower')">🗼 탑 오르기</div>
-    <div class="grid">
-      <div class="bld" onclick="G.open('char')"><span class="e">🧝</span><b>캐릭터</b><small>스탯·장비</small></div>
-      <div class="bld" onclick="G.open('office')"><span class="e">🏢</span><b>모험가 사무소</b><small>파티·퀘스트</small></div>
-      <div class="bld" onclick="G.open('guild')"><span class="e">🏰</span><b>길드</b><small>고정 파티</small></div>
-      <div class="bld" onclick="G.open('temple')"><span class="e">⛪</span><b>신전</b><small>스킬</small></div>
-      <div class="bld" onclick="G.open('smith')"><span class="e">⚒️</span><b>대장간</b><small>수리·강화·조합</small></div>
-      <div class="bld" onclick="G.open('inn')"><span class="e">🏨</span><b>여관</b><small>피로 회복</small></div>
-      <div class="bld" onclick="G.open('shop')"><span class="e">🛒</span><b>상인</b><small>포션·판매</small></div>
-      <div class="bld" onclick="G.open('auction')"><span class="e">🔨</span><b>경매장</b><small>1시간 갱신</small></div>
-      <div class="bld" onclick="G.open('bank')"><span class="e">🏦</span><b>은행</b><small>보관</small></div>
-      <div class="bld" onclick="G.open('engrave')"><span class="e">🖋️</span><b>각인사</b><small>영구 강화</small></div>
-    </div>
+    <div id="town-stage"><div id="tscroll"><canvas id="tcv"></canvas></div><div id="town-info"></div></div>
   </div>
   <div id="battle">
     <div id="b-top"></div>
@@ -194,5 +220,6 @@ body { background:radial-gradient(circle at 50% 0%,#2f4380,#141d38 70%); }
 <script src="game.js"></script>
 <script src="battle.js"></script>
 <script src="art.js"></script>
+<script src="town.js"></script>
 </body>
 </html>
