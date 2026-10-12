@@ -1159,8 +1159,6 @@ class FlyingOrb {
       if (atk.has('crit') && atk.roll()) { attack *= 1 + ITEM_BAL.critBonus * atk.mul; flashZone(t, '#f59e0b'); } // 크리티컬
       if (rivalHit && atk.has('paralyze') && atk.roll()) { t.paralyzedShots = ITEM_BAL.paralyzeShots * atk.mul; flashZone(t, '#0ea5e9'); } // 마비
       if (atk.has('pierce') && atk.roll()) bounceCount = ITEM_BAL.bounceCount * atk.mul;      // 튕기기
-      if (atk.has('rebuild') && atk.roll() && this.sourceZone && this.sourceZone.owner === own) // 재건: 쏜 지역 회복
-        this.sourceZone.orbs = Math.min(this.sourceZone.maxOrbs, this.sourceZone.orbs + ITEM_BAL.rebuildHp * atk.mul);
       atk.chain('rapid', ITEM_BAL.chainShots);   // 속사: 다음 공격 구슬 빠르게
       atk.chain('supply', ITEM_BAL.chainShots);  // 보급: 다음 공격 동안 내 카드 확률 +10%
       atk.chain('buff', ITEM_BAL.chainShots, ITEM_BAL.rareChance);  // 버프샷: 다음 공격 동안 효과 2배
@@ -1168,13 +1166,20 @@ class FlyingOrb {
       atk.done();
     }
     // 맞는 쪽: 철벽 (관통샷이 터지면 무시)
-    const power = rivalHit && !pierceDefense ? defenseTake(attack, t) : attack;
+    let power = rivalHit && !pierceDefense ? defenseTake(attack, t) : attack;
     const wasRival = t.owner !== OWNER.NEUTRAL && t.owner !== own;
+    // [아이템 재건] 내 지역에 쏜 구슬(회복): 10% 확률로 회복량 2배, 그때 30% 확률로 붙어 있는 내 지역들도 같이 회복
+    if (wasMine && itemMode && hasItem(own, 'rebuild') && !(itemState[own].cursed > 0) &&
+        Math.random() < itemChance(own, ITEM_BAL.baseChance)) {
+      power *= 1 + ITEM_BAL.rebuildBonus * (itemState[own].buff > 0 ? 2 : 1);
+      flashZone(t, ZONE_COLORS.playerFullCharged);
+      if (Math.random() < itemChance(own, ITEM_BAL.rebuildSpreadChance)) {
+        t.neighbors.forEach(n => { if (n.owner === own) n.orbs = Math.min(n.maxOrbs, n.orbs + power); });
+      }
+    }
     applyOrbHit(t, own, power, src);
-    // [아이템 튕기기] 맞힌 곳에서 옆으로 튕김 (공격력 그대로). 내 지역(회복)이면 옆의 다친 내 지역으로
-    if (wasMine && fighters(own) && hasItem(own, 'pierce') && !(itemState[own].cursed > 0) && Math.random() < itemChance(own, ITEM_BAL.baseChance))
-      bounceCount = ITEM_BAL.bounceCount * (itemState[own].buff > 0 ? 2 : 1);
-    if (bounceCount > 0 && (wasRival || wasMine)) {
+    // [아이템 튕기기] 상대 땅에서만 옆 상대 지역으로 튕김 (공격력 그대로). 내 지역은 튕기지 않음
+    if (bounceCount > 0 && wasRival) {
       this.bounceLeft = bounceCount;
       this.bouncePower = attack;
       this.bounceOn(t, own, wasRival);
@@ -2601,7 +2606,8 @@ const ITEM_BAL = {
   piercingChance: 0.1, // (관통샷은 baseChance 사용)
   paralyzeShots: 5,    // 마비: 맞은 지역의 다음 5발
   paralyzeSpeed: 0.5,  // 마비: 공격 속도 배수
-  rebuildHp: 5,        // 재건: 쏜 지역 피 +5
+  rebuildBonus: 1,     // 재건: 내 지역 회복량 +100% (2배)
+  rebuildSpreadChance: 0.3, // 재건이 터지면 붙어 있는 내 지역도 같이 회복할 확률
   chainShots: 5,       // 속사·보급·버프샷·저주샷: 다음 5 공격
   rapidSpeed: 2,       // 속사: 구슬 속도 2배
   supplyBonus: 0.1,    // 보급: 내 카드 확률 +10%
@@ -2627,7 +2633,7 @@ const ITEM_ICON = {
 const ITEMS = [
   { key: 'power', name: '파워샷', desc: '10% 확률로 공격력 50% 증가' },
   { key: 'crit', name: '크리티컬', desc: '10% 확률로 공격력 2배' },
-  { key: 'pierce', name: '튕기기', desc: '10% 확률로 옆 지역으로 두 번 더 튕김 (공격력 그대로). 내 지역이면 회복' },
+  { key: 'pierce', name: '튕기기', desc: '10% 확률로 옆 상대 지역으로 두 번 더 튕김 (공격력 그대로)' },
   { key: 'piercing', name: '관통샷', desc: '10% 확률로 상대의 모든 방어 효과 무시' },
   { key: 'paralyze', name: '마비', desc: '10% 확률로 맞은 상대 지역의 다음 5발 공격 속도 50% 감소' },
   { key: 'rapid', name: '속사', desc: '10% 확률로 다음 5공격이 2배 빠르게 날아감' },
@@ -2636,7 +2642,7 @@ const ITEMS = [
   { key: 'fortress', name: '철벽', desc: '10% 확률로 상대 공격을 30%만 받음' },
   { key: 'reflect', name: '반사 방패', desc: '10% 확률로 상대 구슬을 쏜 곳으로 되돌림' },
   { key: 'absorb', name: '흡수', desc: '10% 확률로 상대 공격을 막고 그 2배만큼 회복' },
-  { key: 'rebuild', name: '재건', desc: '공격할 때 10% 확률로 쏜 지역 피 +5' },
+  { key: 'rebuild', name: '재건', desc: '내 지역에 쏘면 10% 확률로 회복 2배, 그때 30% 확률로 붙은 내 지역도 회복' },
   { key: 'longrange', name: '장거리 사격', desc: '모든 내 지역이 원거리 공격 가능' },
   { key: 'supply', name: '보급', desc: '10% 확률로 다음 5공격 동안 내 모든 카드 확률 +10%' }
 ];
