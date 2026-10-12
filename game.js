@@ -1779,7 +1779,7 @@ function setOwnedFromStore(storeIds) {
   const keys = Object.keys(PRODUCTS).filter(k => (storeIds || []).includes(PRODUCTS[k].storeId));
   try { localStorage.setItem(OWNED_KEY, JSON.stringify(keys)); } catch (e) {}
   if (typeof refreshSpeedButtons === 'function') refreshSpeedButtons();
-  if (typeof buildCountryCards === 'function') { try { buildCountryCards(); selectCountry(selectedCountryKey); } catch (e) {} }
+  if (typeof buildCountryCards === 'function') { try { buildCountryCards(); selectCountry(selectedCountryKey); updateStartBtn(); if (!document.getElementById('stage-view').hidden) renderStageThumbs(); } catch (e) {} }
 }
 // 앱 시작 시: 가진 상품 동기화 + 가격 미리 받아 두기
 if (StorePlugin) {
@@ -2265,6 +2265,7 @@ function switchBattlefield(mapKey) {
 window.switchBattlefield = switchBattlefield;
 
 function onStartBtnClick() {
+  if (isBrowsingCountry()) { openPurchase('all_countries'); return; } // 둘러보는 중: 구매
   const modal = document.getElementById('start-modal');
   if (modal) modal.style.display = 'none';
   startIntroZoom(selectedModalMapKey);
@@ -4074,15 +4075,27 @@ function selectCountry(key) {
   centerCard('country-grid', document.getElementById(`country-${key.toLowerCase()}`));
   const c = COUNTRIES.find(x => x.key === key);
   const btn = document.getElementById('enter-btn');
-  if (btn) btn.classList.toggle('locked', !isCountryOpen(c));
+  if (btn) btn.textContent = isCountryOpen(c) || !(c && c.paid) ? '참전하기' : '둘러보기';
 }
 
 // 참전하기: 열린 국가면 도시 맵 화면으로, 잠긴 국가면 안내
+// 구매 전 유료 나라: '둘러보기'로 들어가 맵을 구경만 하고, 시작 버튼 자리에 '구매하기'
+function isBrowsingCountry() {
+  const c = COUNTRIES.find(x => x.key === selectedCountryKey);
+  return !!c && !isCountryOpen(c);
+}
+function updateStartBtn() {
+  const btn = document.getElementById('start-btn');
+  if (btn) btn.textContent = isBrowsingCountry() ? '구매하기' : '시작';
+}
 function enterCountry() {
   const c = COUNTRIES.find(x => x.key === selectedCountryKey);
   if (!isCountryOpen(c)) {
-    if (c && c.paid) openPurchase('all_countries');
-    else openSheet('', `${c ? c.name : ''} 전선`, '곧 출시돼요.');
+    if (!c || !c.paid) { openSheet('', `${c ? c.name : ''} 전선`, '곧 출시돼요.'); return; }
+    const only = getCampaignOrder(c.key);
+    if (only.length === 1) selectedModalMapKey = only[0];
+    showStageView(); // 둘러보기
+    if (only.length === 1) [50, 200, 500].forEach(ms => setTimeout(() => centerStageCard(only[0], false), ms));
     return;
   }
   // 맵이 하나뿐인 나라(전세계): 맵 고르기 없이 바로 본진 선택으로
@@ -4126,6 +4139,7 @@ function showStageView() {
   // 나라가 바뀌면 그 나라 캠페인의 다음 맵을 고름
   if ((MAP_CONFIGS[selectedModalMapKey].country || 'KR') !== c.key) selectedModalMapKey = getNextStageKey();
   updateStageProgress();
+  updateStartBtn();
   try { sessionStorage.setItem('tapwar_in_country', c.key); } catch (e) {}
   // 보이게 된 뒤에 썸네일 크기·가운데 정렬 계산
   requestAnimationFrame(() => { renderStageThumbs(); selectModalMap(selectedModalMapKey); centerStageCard(selectedModalMapKey, false); });
@@ -4343,9 +4357,9 @@ function buildStageCards() {
     const btn = document.createElement('button');
     btn.id = `modal-map-${k}`;
     btn.className = 'stage-card' + (key === selectedModalMapKey ? ' active' : '') +
-      (unlocked ? '' : ' locked') + (cleared ? ' cleared' : '');
+      (unlocked || isBrowsingCountry() ? '' : ' locked') + (cleared ? ' cleared' : ''); // 둘러보기 중에는 맵을 밝게
     btn.onclick = (e) => {
-      if (!unlocked) {
+      if (!unlocked && !isBrowsingCountry()) { // 둘러보기 중에는 모든 맵 구경 가능
         const prev = MAP_CONFIGS[order[i - 1]];
         openSheet('', `${cfg.label} 잠김`, `${prev.label} 맵을 클리어하면 열려요.`);
         return;
