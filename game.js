@@ -1116,24 +1116,24 @@ class FlyingOrb {
     // [아이템] 카드는 중립 땅에는 효과 없음 (상대 색이 조금이라도 있으면 상대 땅으로 침)
     // 공격 쪽: 파워샷(상대 땅 2배) → 이 공격의 '공격력'
     let attack = this.power;
-    if (hasItem(own, 'power') && isRivalMarked(t, own)) attack *= 2;
+    if (hasItem(own, 'power') && isRivalMarked(t, own)) attack *= ITEM_BAL.powerMult;
     if (rivalHit) {
       // [아이템 반사 방패] 30% 확률로 쏜 곳으로 그대로 되돌림 (되돌린 구슬은 다시 반사되지 않음)
-      if (!this.reflected && this.sourceZone && hasItem(t.owner, 'reflect') && Math.random() < ITEM_CHANCE) {
+      if (!this.reflected && this.sourceZone && hasItem(t.owner, 'reflect') && Math.random() < ITEM_BAL.reflectChance) {
         const back = new FlyingOrb(t, this.sourceZone, t.owner, this.power);
         back.reflected = true;
         flyingOrbs.push(back);
         return;
       }
       // [아이템 흡수] 30% 확률로 막고, 내 피를 상대 공격력의 2배만큼 채움
-      if (hasItem(t.owner, 'absorb') && Math.random() < ITEM_CHANCE) {
-        t.orbs = Math.min(t.maxOrbs, t.orbs + attack * 2);
+      if (hasItem(t.owner, 'absorb') && Math.random() < ITEM_BAL.absorbChance) {
+        t.orbs = Math.min(t.maxOrbs, t.orbs + attack * ITEM_BAL.absorbHeal);
         return;
       }
     }
     // [아이템 크리티컬] 상대 땅에 30% 확률로 3배 (반사된 구슬도 해당)
-    if (hasItem(own, 'crit') && isRivalMarked(t, own) && Math.random() < ITEM_CHANCE) {
-      attack *= 3;
+    if (hasItem(own, 'crit') && isRivalMarked(t, own) && Math.random() < ITEM_BAL.critChance) {
+      attack *= ITEM_BAL.critMult;
       flashZone(t, '#f59e0b');
     }
     // 맞는 쪽: 철벽(상대 구슬 50%)
@@ -2423,7 +2423,7 @@ function updateOrbSpawners(currentTime) {
     const ranged = zone.targetZones.some(t => isRangedShot(zone, t));
     // 속사는 구슬 속도만, 발사 간격은 그대로
     const rangedMult = ranged ? RANGED_INTERVAL_MULT : 1;
-    const supply = hasItem(zone.owner, 'supply') ? 1 / 1.3 : 1; // [아이템 보급] 내 생산 30% 빠르게
+    const supply = hasItem(zone.owner, 'supply') ? 1 / ITEM_BAL.supplyRate : 1; // [아이템 보급] 내 생산 30% 빠르게
     const interval = baseInterval * rangedMult * supply * slow / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
 
     if (currentTime - zone.lastShotTime >= interval) {
@@ -2557,7 +2557,17 @@ function itemRounds() {
 const ITEM_EVERY_SEC = 30;
 const REBUILD_EVERY_SEC = 5;
 const REBUILD_HP = 2;
-const ITEM_CHANCE = 0.3; // 반사·흡수·크리티컬 확률
+// 아이템 수치 (밸런스 조절은 여기서)
+const ITEM_BAL = {
+  powerMult: 2,       // 파워샷: 상대 땅 공격력 배수
+  critChance: 0.3,    // 크리티컬 확률
+  critMult: 3,        // 크리티컬 배수
+  fortressTake: 0.5,  // 철벽: 상대 공격을 이만큼만 받음
+  reflectChance: 0.3, // 반사 방패 확률
+  absorbChance: 0.3,  // 흡수 확률
+  absorbHeal: 2,      // 흡수: 상대 공격력의 몇 배를 회복
+  supplyRate: 1.3     // 보급: 생산 속도 배수
+};
 const PIERCE_RATIOS = [0.5, 0.3]; // 관통탄 튕긴 구슬 공격력: 두 번째 50%, 세 번째 30%
 const ITEM_ICON = {
   rapid: '<path d="M3 8h9M5 12h10M3 16h9"/><circle cx="18" cy="12" r="3"/>',
@@ -2595,7 +2605,7 @@ let itemChoices = [];
 function itemHitPower(power, attacker, target) {
   if (!itemMode || !target) return power;
   const victim = target.owner;
-  if (victim !== OWNER.NEUTRAL && victim !== attacker && hasItem(victim, 'fortress')) return power * 0.5;
+  if (victim !== OWNER.NEUTRAL && victim !== attacker && hasItem(victim, 'fortress')) return power * ITEM_BAL.fortressTake;
   return power;
 }
 // 상대 색이 조금이라도 있는 지역: 상대 땅, 또는 상대 게이지가 찬 중립 땅
