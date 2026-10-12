@@ -2916,7 +2916,7 @@ function resetCountryEvent() {
   const c = COUNTRY_EVENT_CFG[country];
   countryEventNext = country === 'WD' ? WORLD_EVENT_FIRST : (c ? c.every : 0);
   quakeUntilMs = 0;
-  revoltUntil = 0; revoltNextShot = 0; tanks = []; fogUntil = 0;
+  revoltUntil = 0; revoltNextShot = 0; tanks = []; fogUntil = 0; eventBanners = [];
 }
 // 대항해시대: 양쪽 각각 무작위 완전점령 지역 1곳이 전선으로 대포(큰 구슬, 공격력 20) 발사
 function fireCannons(c) {
@@ -2985,16 +2985,46 @@ function triggerCountryEvent(country) {
 }
 // 나라 컨셉 발동 알림: 화면 위쪽에 컨셉 이름 글씨가 딱 떴다가 사라짐. 여러 개면 위아래로 겹치지 않게 쌓임
 const EVENT_BANNER_COLORS = { JP: '#b45309', CN: '#d97706', US: '#ca8a04', FR: '#7c3aed', DE: '#3f6212', ES: '#9a3412', GB: '#334155' };
+// 발동한 컨셉 이름은 지도 제목 양옆에 검은 글씨로 잠깐 (첫 번째 왼쪽, 두 번째 오른쪽)
+let eventBanners = [];
+const EVENT_BANNER_MS = 2400;
 function showEventBanner(country) {
-  const box = document.getElementById('event-banners');
   const concept = COUNTRY_CONCEPT[country];
-  if (!box || !concept) return;
-  const el = document.createElement('div');
-  el.className = 'event-banner';
-  el.style.color = EVENT_BANNER_COLORS[country] || '#1e293b';
-  el.textContent = concept[0];
-  box.appendChild(el);
-  el.addEventListener('animationend', () => el.remove());
+  if (!concept) return;
+  const now = performance.now();
+  eventBanners = eventBanners.filter(b => now - b.t0 < EVENT_BANNER_MS);
+  const used = new Set(eventBanners.map(b => b.side));
+  const side = !used.has('left') ? 'left' : !used.has('right') ? 'right' : 'left';
+  eventBanners = eventBanners.filter(b => b.side !== side);
+  eventBanners.push({ text: concept[0], side, t0: now });
+}
+function drawEventBanners(ctx, tx, midY, labelW, size) {
+  const now = performance.now();
+  eventBanners = eventBanners.filter(b => now - b.t0 < EVENT_BANNER_MS);
+  eventBanners.forEach(b => {
+    const k = (now - b.t0) / EVENT_BANNER_MS;
+    // 딱 튀어나왔다가(살짝 커졌다 제자리) 끝에서 사라짐
+    const scale = k < 0.08 ? 0.5 + (k / 0.08) * 0.65 : k < 0.16 ? 1.15 - ((k - 0.08) / 0.08) * 0.15 : 1;
+    const alpha = k < 0.08 ? k / 0.08 : k > 0.8 ? (1 - k) / 0.2 : 1;
+    const gap = size * 0.35;
+    const room = Math.max(40, (b.side === 'left' ? tx - labelW / 2 : viewW - (tx + labelW / 2)) - gap - 10);
+    let fs = size * 0.46;
+    ctx.save();
+    ctx.font = `900 ${fs}px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
+    const w = ctx.measureText(b.text).width;
+    if (w > room) { fs *= room / w; ctx.font = `900 ${fs}px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`; }
+    const x = b.side === 'left' ? tx - labelW / 2 - gap : tx + labelW / 2 + gap;
+    ctx.translate(x, midY);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+    ctx.textAlign = b.side === 'left' ? 'right' : 'left';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = fs * 0.22; ctx.strokeStyle = '#ffffff'; ctx.lineJoin = 'round';
+    ctx.strokeText(b.text, 0, 0);
+    ctx.fillStyle = '#111111';
+    ctx.fillText(b.text, 0, 0);
+    ctx.restore();
+  });
 }
 function quakeShakeOffset() {
   const left = quakeUntilMs - performance.now();
@@ -3442,6 +3472,7 @@ function drawMapTitle(ctx) {
   ctx.textBaseline = 'top';
   ctx.fillStyle = 'rgba(30, 41, 59, 0.6)';
   ctx.fillText(cfg.label, tx, top);
+  const labelW = ctx.measureText(cfg.label).width;
   // 맵 이름 위: 나라 컨셉 이름 + 다음 발동까지 남은 시간
   const concept = showTime ? conceptStatusText() : null;
   if (concept) {
@@ -3453,6 +3484,7 @@ function drawMapTitle(ctx) {
   }
   ctx.restore();
   if (showTime) drawSevenSegment(ctx, formatTimeString(gameElapsedTime), tx, top + size * 1.18, clockH);
+  if (eventBanners.length) drawEventBanners(ctx, tx, top + size * 0.5, labelW, size);
 }
 // 지도 제목 위에 보여 줄 컨셉 상태: '지진 · 다음 12초' (계속 켜진 컨셉은 이름만)
 function conceptStatusText() {
