@@ -12,10 +12,15 @@
     mode: 'home', tension: 0, nextBar: 0, bar: 0, timer: null, lastSfx: {},
   };
   const midi = n => 440 * Math.pow(2, (n - 69) / 12);
-  // Am - F - C - G (홈/게임 공통), 각 화음은 midi 노트
-  const CHORDS = [[57, 60, 64], [53, 57, 60], [48, 55, 64], [55, 59, 62]];
-  const BASS = [45, 41, 48, 43];
-  const BAR = 4.0; // 한 마디 길이(초) ≈ 60bpm
+  // 점령전 느낌: D단조 진행 Dm - B♭ - C - A (마지막 A가 긴장감을 만듦)
+  const CHORDS = [[62, 65, 69], [58, 62, 65], [60, 64, 67], [57, 61, 64]];
+  const BASS = [38, 34, 36, 33];
+  // 행진곡 선율 (마디당 8분음표 8개, 0 = 쉼)
+  const MELODY = [
+    [74, 0, 74, 76, 77, 0, 76, 74], [74, 0, 70, 0, 72, 74, 72, 70],
+    [72, 0, 72, 74, 76, 0, 74, 72], [73, 0, 76, 0, 81, 0, 79, 76],
+  ];
+  const BAR = 2.2; // 한 마디 길이(초) ≈ 109bpm 행진 템포
 
   function ensure() {
     if (S.ctx) { if (S.ctx.state === 'suspended') S.ctx.resume(); return true; }
@@ -48,31 +53,63 @@
     env(g, t, a, peak, rel, dur); o.start(t); o.stop(t + dur + 0.05);
     return o;
   }
-  function kick(t, peak) {
+  function noise(len) {
+    const c = S.ctx, buf = c.createBuffer(1, Math.floor(c.sampleRate * len), c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource(); src.buffer = buf; return src;
+  }
+  // 전쟁 북 (낮은 타이코)
+  function drum(t, peak, pitch) {
     const c = S.ctx, o = c.createOscillator(), g = c.createGain();
-    o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.25);
-    o.connect(g); g.connect(S.musicBus); env(g, t, 0.005, peak, 0.25, 0.3); o.start(t); o.stop(t + 0.35);
+    o.frequency.setValueAtTime(pitch || 120, t); o.frequency.exponentialRampToValueAtTime((pitch || 120) * 0.35, t + 0.3);
+    o.connect(g); g.connect(S.musicBus); env(g, t, 0.004, peak, 0.3, 0.4); o.start(t); o.stop(t + 0.45);
+  }
+  // 스네어 (군악대 작은북)
+  function snare(t, peak) {
+    const c = S.ctx, src = noise(0.2), f = c.createBiquadFilter(), g = c.createGain();
+    f.type = 'bandpass'; f.frequency.value = 2500; f.Q.value = 0.8;
+    src.connect(f); f.connect(g); g.connect(S.musicBus); env(g, t, 0.002, peak, 0.12, 0.15); src.start(t); src.stop(t + 0.2);
+  }
+  // 금관 느낌: 톱니파 + 필터가 열렸다 닫힘
+  function brass(n, t, dur, peak) {
+    const c = S.ctx;
+    [-6, 6].forEach(dt => {
+      const o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
+      o.type = 'sawtooth'; o.frequency.value = midi(n); o.detune.value = dt;
+      f.type = 'lowpass'; f.frequency.setValueAtTime(500, t); f.frequency.linearRampToValueAtTime(2600, t + 0.06); f.frequency.exponentialRampToValueAtTime(900, t + dur);
+      o.connect(f); f.connect(g); g.connect(S.musicBus); g.connect(S.delay);
+      env(g, t, 0.03, peak, Math.min(0.15, dur * 0.4), dur); o.start(t); o.stop(t + dur + 0.05);
+    });
   }
 
   function playBar(t, i) {
-    const ch = CHORDS[i % 4], bus = S.musicBus;
-    // 패드: 살짝 어긋난 톱니파 두 겹을 부드럽게
-    ch.forEach(n => { [-7, 7].forEach(dt => voice(bus, 'sawtooth', midi(n), t, BAR + 0.6, 0.035, 1.2, 1.4, 900, dt)); });
-    if (S.mode === 'home' && i % 2 === 1) return; // 홈은 아르페지오를 성기게
-    // 아르페지오: 삼각파 8분음표 + 딜레이
-    const step = BAR / 8, seq = [0, 1, 2, 1, 0, 2, 1, 2];
-    const tense = S.mode === 'game' ? S.tension : 0;
-    seq.forEach((k, j) => {
-      if (S.mode === 'home' && j % 2) return;
-      const n = ch[k] + 12 + (tense > 0.6 && j === 6 ? 12 : 0);
-      voice(bus, 'triangle', midi(n), t + j * step, step * 1.6, 0.05, 0.01, step, 3000, 0, true);
+    const k = i % 4, ch = CHORDS[k], bus = S.musicBus, e = BAR / 8, s16 = BAR / 16;
+    const game = S.mode === 'game', tense = game ? S.tension : 0;
+    // 낮은 현악 오스티나토: 16분음표로 쉬지 않고 몰아침
+    const ost = [0, 0, 12, 0, 0, 0, 12, 0, 0, 0, 12, 0, 0, 12, 0, 12];
+    ost.forEach((o, j) => {
+      if (!game && j % 2) return; // 홈은 8분음표로만
+      voice(bus, 'sawtooth', midi(BASS[k] + 12 + o), t + j * s16, s16 * 0.9, game ? 0.06 : 0.04, 0.005, s16 * 0.5, 1100);
     });
-    if (S.mode !== 'game') return;
-    // 긴장도가 오르면 베이스·킥이 더해짐
-    if (tense > 0.3) {
-      [0, BAR / 2].forEach(o => voice(bus, 'sine', midi(BASS[i % 4]), t + o, BAR * 0.45, 0.16 * Math.min(1, tense), 0.02, 0.3, 400));
+    // 어두운 패드
+    ch.forEach(n => voice(bus, 'sawtooth', midi(n - 12), t, BAR + 0.1, 0.02, 0.3, 0.4, 700, 5));
+    // 전쟁 북: 1, 3박 + 당김음
+    drum(t, 0.5, 110); drum(t + e * 4, 0.45, 110);
+    if (game) { drum(t + e * 3, 0.3, 140); drum(t + e * 7, 0.3, 140); }
+    if (!game) return;
+    // 베이스
+    voice(bus, 'sine', midi(BASS[k]), t, BAR * 0.5, 0.2, 0.01, 0.2, 300);
+    voice(bus, 'sine', midi(BASS[k]), t + BAR / 2, BAR * 0.5, 0.2, 0.01, 0.2, 300);
+    // 스네어 행진 리듬 (긴장도 0.25부터), 마지막 마디는 연타
+    if (tense > 0.25) {
+      [2, 6].forEach(b => snare(t + b * e, 0.18));
+      if (k === 3) for (let r = 0; r < 4; r++) snare(t + BAR - (4 - r) * s16, 0.08 + r * 0.04);
     }
-    if (tense > 0.55) for (let b = 0; b < 4; b++) kick(t + b * BAR / 4, 0.25 * tense);
+    // 금관 선율 (긴장도 0.45부터), 더 오르면 한 옥타브 위 겹침
+    if (tense > 0.45) {
+      MELODY[k].forEach((n, j) => { if (n) brass(n - 12, t + j * e, e * 0.9, 0.05); });
+      if (tense > 0.7) MELODY[k].forEach((n, j) => { if (n) brass(n, t + j * e, e * 0.9, 0.03); });
+    }
   }
 
   function schedule() {
@@ -124,7 +161,7 @@
 
   function setMode(m) {
     S.mode = m;
-    if (m === 'game') S.tension = 0;
+    if (m === 'game') S.tension = 0.3; // 시작부터 작은북이 깔리게
   }
   function setMusic(on) {
     S.musicOn = on; store('tw_music', on ? '1' : '0');
@@ -154,5 +191,5 @@
   document.addEventListener('DOMContentLoaded', refreshButtons);
   refreshButtons();
 
-  window.Sound = { sfx, setMode, toggleMusic: () => setMusic(!S.musicOn), toggleSfx: () => setSfx(!S.sfxOn), _s: S };
+  window.Sound = { sfx, setMode, toggleMusic: () => setMusic(!S.musicOn), toggleSfx: () => setSfx(!S.sfxOn), _s: S, _playBar: playBar };
 })();
