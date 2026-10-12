@@ -3430,8 +3430,8 @@ const ZONE_COLORS = {
   enemyFull: '#fecaca',
   enemyFullCharged: '#dc2626',
   enemyFullStroke: '#991b1b',
-  main: '#1e40af',             // 내 메인: 진한 남색 + 흰 테두리
-  mainCharged: '#172554',
+  main: '#3b82f6',             // 내 메인: 밝은 파랑 + 흰 테두리
+  mainCharged: '#1e40af',
   mainStroke: '#ffffff',
   enemyMain: '#be123c',        // 적 메인: 진한 와인 레드 + 흰 테두리
   enemyMainCharged: '#881337',
@@ -4360,7 +4360,7 @@ function buildStageCards() {
 // 튜토리얼 (처음 실행 시 자동, 홈의 '튜토리얼'로 다시 보기)
 // -------------------------------------------------------------
 const TUTORIAL_KEY = 'tapwar_tutorial_seen';
-const TC = { b: '#edebe3', s: '#cfcdc4', blue: '#60a5fa', blueS: '#1d4ed8', red: '#f87171', redS: '#b91c1c', yel: '#1e40af', grn2: '#2563eb', grnS: '#1e3a8a', wine: '#be123c' };
+const TC = { b: '#edebe3', s: '#cfcdc4', blue: '#60a5fa', blueS: '#1d4ed8', red: '#f87171', redS: '#b91c1c', yel: '#3b82f6', grn2: '#2563eb', grnS: '#1e3a8a', wine: '#be123c' };
 function hexPoints(x, y, r = 26) {
   return [0, 1, 2, 3, 4, 5].map(k => {
     const a = Math.PI / 3 * k + Math.PI / 6;
