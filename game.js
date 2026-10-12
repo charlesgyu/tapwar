@@ -2823,7 +2823,7 @@ function chooseItem(key) {
   renderItemBar();
   const mine = ITEMS.find(it => it.key === key).name, theirs = ITEMS.find(it => it.key === ek).name;
   document.getElementById('status-guide').innerText = `[${mine}] 선택! 적은 [${theirs}]을(를) 골랐습니다.`;
-  flashCenterText(`적: ${theirs}`);
+
 }
 window.chooseItem = chooseItem;
 
@@ -2902,6 +2902,7 @@ const WORLD_EFFECT_MULT = 3;    // 전세계 컨셉 효과 배수
 const WORLD_TANKS = 3;          // 전세계 독일: 사방에서 전차 3대
 const WORLD_EVENT_KEYS = ['JP', 'CN', 'US', 'FR', 'DE', 'ES', 'GB'];
 const WORLD_FOG_SEC = 30;
+const WORLD_FOG_CHANCE = 0.5; // 전세계에서 영국 안개가 뽑혔을 때 실제로 일어날 확률
 const FOG_COLOR = '#0b0f19';
 let fogUntil = 0;
 function isFogActive() { return currentCountryKey() === 'GB' || gameElapsedTime < fogUntil; }
@@ -2946,7 +2947,15 @@ function updateCountryEvent() {
   if (country === 'WD') {
     countryEventNext = gameElapsedTime + WORLD_EVENT_EVERY;
     // 서로 다른 나라 컨셉 2개가 동시에
-    shuffled(WORLD_EVENT_KEYS).slice(0, WORLD_EVENTS_AT_ONCE).forEach(k => triggerCountryEvent(k));
+    // 영국 안개는 뽑혀도 50% 확률로만 일어나고, 안 일어나면 다른 컨셉으로 바뀜
+    const keys = shuffled(WORLD_EVENT_KEYS);
+    const picked = [];
+    for (const k of keys) {
+      if (picked.length >= WORLD_EVENTS_AT_ONCE) break;
+      if (k === 'GB' && Math.random() >= WORLD_FOG_CHANCE) continue;
+      picked.push(k);
+    }
+    picked.forEach(k => triggerCountryEvent(k));
     return;
   }
   const c = COUNTRY_EVENT_CFG[country];
@@ -3433,8 +3442,27 @@ function drawMapTitle(ctx) {
   ctx.textBaseline = 'top';
   ctx.fillStyle = 'rgba(30, 41, 59, 0.6)';
   ctx.fillText(cfg.label, tx, top);
+  // 맵 이름 위: 나라 컨셉 이름 + 다음 발동까지 남은 시간
+  const concept = showTime ? conceptStatusText() : null;
+  if (concept) {
+    const cs = size * 0.4;
+    ctx.font = `800 ${cs}px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
+    ctx.textBaseline = 'bottom';
+    ctx.fillStyle = EVENT_BANNER_COLORS[currentCountryKey()] || '#475569';
+    ctx.fillText(concept, tx, top - cs * 0.15);
+  }
   ctx.restore();
   if (showTime) drawSevenSegment(ctx, formatTimeString(gameElapsedTime), tx, top + size * 1.18, clockH);
+}
+// 지도 제목 위에 보여 줄 컨셉 상태: '지진 · 다음 12초' (계속 켜진 컨셉은 이름만)
+function conceptStatusText() {
+  const key = currentCountryKey();
+  const concept = COUNTRY_CONCEPT[key];
+  if (!concept) return null;
+  if (key === 'GB' || key === 'IT') return concept[0];
+  if (!countryEventNext) return concept[0];
+  const left = Math.max(0, Math.ceil(countryEventNext - gameElapsedTime));
+  return key === 'WD' ? `${concept[0]} · 다음 컨셉까지 ${left}초` : `${concept[0]} · 다음까지 ${left}초`;
 }
 
 function drawExactDistrictsMap(ctx) {
