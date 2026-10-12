@@ -1475,6 +1475,10 @@ let isInstantConquerMode = false;
 
 function conquerZone(conqueredZone, newOwner, conqueredBySource) {
   extraMains.delete(conqueredZone); // 빼앗긴 추가 본진은 본진 지위를 잃음
+  if (window.Sound) {
+    if (newOwner === OWNER.PLAYER) Sound.sfx('capture');
+    else if (conqueredZone.owner === OWNER.PLAYER) Sound.sfx('lost');
+  }
   conqueredZone.owner = newOwner;
   conqueredZone.maxOrbs = ZONE_MAX_HP; // 함락된 메인은 메인 지위를 잃고 일반 지역(피 50)이 됨
   conqueredZone.orbs = conqueredZone.maxOrbs; // Full garrison upon capture
@@ -1715,6 +1719,7 @@ function beginGameAtZone(zone) {
   lastTimerText = '';
 
   currentState = GAME_STATE.PLAYING;
+  if (window.Sound) Sound.setMode('game');
   document.getElementById('status-guide').innerText = `${zone.name} 기지 확보! 작전 개시! (적 전면 섬멸 작전)`;
   if (itemMode) { nextItemAt = 0; openItemPick(); }
 }
@@ -2176,6 +2181,7 @@ window.addEventListener('touchend', (e) => {
 let selectedModalMapKey = 'KOREA';
 
 function selectModalMap(mapKey) {
+  if (window.Sound) Sound.setMode('home');
   selectedModalMapKey = mapKey;
   Object.keys(MAP_CONFIGS).forEach(key => {
     const card = document.getElementById(`modal-map-${key.toLowerCase()}`);
@@ -2749,6 +2755,9 @@ function addFx(zone, kind, color) {
   if (!zone) return;
   fxList.push({ x: zone.cx, y: zone.cy, zone, kind, color, t0: performance.now() });
   if (fxList.length > FX_MAX) fxList.splice(0, fxList.length - FX_MAX);
+  // 큰 아이템 발동만 소리 (안개에 가려진 곳은 소리도 없음)
+  if (window.Sound && (kind === 'crit' || kind === 'explode' || kind === 'reflect') &&
+      !(isFogActive() && zone.owner !== OWNER.PLAYER)) Sound.sfx(kind);
 }
 function drawZoneDots(ctx) {
   if (currentState === GAME_STATE.SELECT_START || !rawZones.length) return;
@@ -2899,6 +2908,7 @@ function openItemPick() {
   m.style.display = 'flex';
   renderItemBar();
   haptic('short'); // 아이템 카드 등장
+  if (window.Sound) Sound.sfx('card');
 }
 
 // 카드 모양 (고르기 화면·고른 카드 크게 보기 공통)
@@ -2912,6 +2922,7 @@ function gainItem(owner, key) {
 function chooseItem(key) {
   if (currentState !== GAME_STATE.PAUSED) return;
   gainItem(OWNER.PLAYER, key);
+  if (window.Sound) Sound.sfx('pick');
   const pool = ITEMS.filter(it => !itemsOf.enemy.includes(it.key));
   const ek = pool[Math.floor(Math.random() * pool.length)].key;
   gainItem(OWNER.ENEMY, ek);
@@ -3080,6 +3091,7 @@ function updateCountryEvent() {
 }
 function triggerCountryEvent(country) {
   haptic('strong'); // 나라 컨셉 발동 알림
+  if (window.Sound) Sound.sfx('concept');
   showEventBanner(country);
   if (country === 'GB') { fogUntil = gameElapsedTime + WORLD_FOG_SEC; return; }
   const c = COUNTRY_EVENT_CFG[country];
@@ -3310,6 +3322,7 @@ window.retryStage = retryStage;
 function gameOver(isWin, isSurrender = false) {
   currentState = GAME_STATE.GAME_OVER;
   haptic(isWin ? 'triple' : 'long');
+  if (window.Sound) { Sound.setMode('end'); Sound.sfx(isWin ? 'win' : 'lose'); }
   const im = document.getElementById('item-modal');
   if (im) im.style.display = 'none';
   const toast = document.getElementById('center-toast');
