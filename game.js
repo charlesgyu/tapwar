@@ -858,8 +858,7 @@ function loadSelectedMap(mapKey) {
       view.offsetY = 0;
       view.maxScale = cfg.maxScale || 3.5;
       setGameSpeed(1);
-      const s2 = document.getElementById('speed2-btn');
-      if (s2) s2.classList.remove('on');
+      refreshSpeedButtons();
       pendingStartZone = null;
 
       updateZoneScreenPositions();
@@ -1759,16 +1758,35 @@ window.confirmBaseSelection = confirmBaseSelection;
 window.cancelBaseSelection = cancelBaseSelection;
 
 // -------------------------------------------------------------
-// 유료 기능 (인앱 구매). 지금은 앱스토어 결제 연결 전이라 결제 화면만 표시
+// 유료 기능 (인앱 구매, StoreKit 2 / ios/App/App/StorePlugin.swift)
+// 비소모성 상품 2개. storeId 는 App Store Connect 에 등록한 제품 ID 와 같아야 함
 // -------------------------------------------------------------
 const PRODUCTS = {
-  speed2: { title: '배속', text: '게임을 2배·4배 빠르게 진행해요.\n한 번 구매하면 모든 맵에서 계속 쓸 수 있어요.' }
+  speed2: { storeId: 'com.tapwar.game.speed', title: '2배속', text: '게임을 2배 빠르게 진행해요.\n한 번 구매하면 모든 맵에서 계속 쓸 수 있어요.' },
+  all_countries: { storeId: 'com.tapwar.game.allcountries', title: '모든 나라 열기', text: '일본·중국·미국·유럽 5개국·전세계 전선을 모두 열어요.\n한 번 구매하면 계속 플레이할 수 있어요.' }
 };
 const OWNED_KEY = 'tapwar_owned_products';
 let purchaseProductId = null;
+const StorePlugin = (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() &&
+  window.Capacitor.registerPlugin) ? window.Capacitor.registerPlugin('Store') : null;
+const storePrices = {}; // storeId → 현지 가격 문자열
 
 function isOwned(id) {
   try { return (JSON.parse(localStorage.getItem(OWNED_KEY) || '[]')).includes(id); } catch (e) { return false; }
+}
+// App Store 가 알려 준 보유 목록(storeId)을 게임 상품 키로 바꿔 저장. 환불된 상품은 빠짐
+function setOwnedFromStore(storeIds) {
+  const keys = Object.keys(PRODUCTS).filter(k => (storeIds || []).includes(PRODUCTS[k].storeId));
+  try { localStorage.setItem(OWNED_KEY, JSON.stringify(keys)); } catch (e) {}
+  if (typeof refreshSpeedButtons === 'function') refreshSpeedButtons();
+  if (typeof buildCountryCards === 'function') { try { buildCountryCards(); selectCountry(selectedCountryKey); } catch (e) {} }
+}
+// 앱 시작 시: 가진 상품 동기화 + 가격 미리 받아 두기
+if (StorePlugin) {
+  StorePlugin.entitlements().then(r => setOwnedFromStore(r.owned)).catch(() => {});
+  StorePlugin.getProducts({ ids: Object.values(PRODUCTS).map(p => p.storeId) })
+    .then(r => (r.products || []).forEach(p => { storePrices[p.id] = p.price; })).catch(() => {});
+  StorePlugin.addListener('ownedChanged', r => setOwnedFromStore(r.owned));
 }
 function openPurchase(id) {
   const p = PRODUCTS[id];
@@ -1776,11 +1794,10 @@ function openPurchase(id) {
   purchaseProductId = id;
   document.getElementById('purchase-title').textContent = p.title;
   document.getElementById('purchase-text').textContent = p.text;
-  // TODO(IAP): StoreKit에서 받은 현지 가격 표시
-  document.getElementById('purchase-price').textContent = '';
+  document.getElementById('purchase-price').textContent = storePrices[p.storeId] || '';
   const buy = document.getElementById('purchase-buy');
-  buy.textContent = '구매하기';
-  buy.disabled = false;
+  buy.textContent = isOwned(id) ? '구매 완료' : '구매하기';
+  buy.disabled = isOwned(id);
   document.getElementById('purchase').style.display = 'flex';
 }
 function closePurchase() {
@@ -1788,18 +1805,35 @@ function closePurchase() {
   purchaseProductId = null;
 }
 function buyProduct() {
-  // TODO(IAP): StoreKit 결제 → 성공 시 OWNED_KEY에 저장(구매 복원 시에도 동일)
+  const id = purchaseProductId, p = PRODUCTS[id];
   const buy = document.getElementById('purchase-buy');
-  buy.textContent = '앱스토어 결제 연결 후 구매할 수 있어요';
+  if (!p) return;
+  if (!StorePlugin) { buy.textContent = '앱에서 구매할 수 있어요'; buy.disabled = true; return; }
+  buy.textContent = '결제 중…';
   buy.disabled = true;
+  StorePlugin.purchase({ id: p.storeId }).then(r => {
+    if (r.status === 'purchased') {
+      setOwnedFromStore(r.owned);
+      closePurchase();
+      openSheet('', '구매 완료', `${p.title}을(를) 쓸 수 있어요.`);
+    } else if (r.status === 'pending') {
+      buy.textContent = '승인 대기 중이에요';
+    } else {
+      buy.textContent = '구매하기';
+      buy.disabled = false;
+    }
+  }).catch(() => {
+    buy.textContent = '결제에 실패했어요. 다시 시도';
+    buy.disabled = false;
+  });
 }
 window.closePurchase = closePurchase;
 window.buyProduct = buyProduct;
 
 // 게임 중 ×2 버튼: 구매했으면 1배속↔2배속 전환, 아니면 결제 화면
-// 배속(유료 상품 하나): 구매하면 버튼을 누를 때마다 ×1 → ×2 → ×4 → ×1
+// 배속(유료 상품 하나): ×1 / ×2 두 버튼. ×4 없음
 // [테스트용] DEV_TEST_SPEED 가 true 면 구매 없이도 사용 가능. 정식 출시 전 false 로
-const DEV_TEST_SPEED = true;
+const DEV_TEST_SPEED = false;
 
 // -------------------------------------------------------------
 // 진동 (iOS 앱: Capacitor Haptics, 웹: navigator.vibrate 지원 기기만)
@@ -1821,20 +1855,25 @@ function haptic(kind) {
   } catch (e) {}
 }
 
-function onSpeed2Click() {
-  haptic('short');
-  const btn = document.getElementById('speed2-btn');
-  if (!DEV_TEST_SPEED && !isOwned('speed2')) {
-    openPurchase('speed2');
-    return;
-  }
-  const next = gameSpeed === 1 ? 2 : gameSpeed === 2 ? 4 : 1;
-  setGameSpeed(next);
-  btn.textContent = `×${next}`; // 현재 배속 표시
-  btn.classList.toggle('on', next > 1);
+// 배속 버튼 두 개: ×1(무료) / ×2(유료, 구매 전엔 어둡게 · 누르면 결제 화면). 고른 쪽이 진하게
+function speedOwned() { return DEV_TEST_SPEED || isOwned('speed2'); }
+function refreshSpeedButtons() {
+  const b1 = document.getElementById('speed1-btn'), b2 = document.getElementById('speed2-btn');
+  if (!b1 || !b2) return;
+  const owned = speedOwned();
+  if (!owned && gameSpeed !== 1) setGameSpeed(1);
+  b1.classList.toggle('on', gameSpeed === 1);
+  b2.classList.toggle('on', owned && gameSpeed === 2);
+  b2.classList.toggle('locked', !owned);
 }
-window.onSpeed2Click = onSpeed2Click;
-if (DEV_TEST_SPEED || isOwned('speed2')) { const b = document.getElementById('speed2-btn'); if (b) b.textContent = `×${gameSpeed}`; }
+function onSpeedClick(speed) {
+  haptic('short');
+  if (speed === 2 && !speedOwned()) { openPurchase('speed2'); return; }
+  setGameSpeed(speed);
+  refreshSpeedButtons();
+}
+window.onSpeedClick = onSpeedClick;
+refreshSpeedButtons();
 
 // 상단 플레이 시간·본진 안내·×2 버튼 표시 상태
 let lastHudKey = '';
@@ -1847,7 +1886,7 @@ function updateHudVisibility() {
   if (key === lastHudKey) return;
   lastHudKey = key;
   document.getElementById('top-timer').hidden = true; // 진행 시간은 지도 위 맵 이름 아래에 새김
-  document.getElementById('speed2-btn').hidden = !playing;
+  document.getElementById('speed-group').hidden = !playing;
   // 시작 안내는 상단 띠 대신, 처음 한 번 화면 가운데에 글자만 1초 떴다 사라짐
   document.getElementById('status-guide').hidden = true;
   if (choosing && !startGuideShown) {
@@ -3936,10 +3975,10 @@ const COUNTRIES = [
   { key: 'WD', flag: '🌏', name: '전세계', open: false, paid: true }
 ];
 const DEV_UNLOCK_KEY = 'tapwar_dev_unlock_all';
-// [테스트용] 유료 나라(일본·중국·미국·유럽 5개국·전세계)를 구매 없이 열기. 출시 전 false (인앱 구매 'country_jp' 등으로 열림)
-const DEV_TEST_COUNTRIES = true;
+// [테스트용] 유료 나라(일본·중국·미국·유럽 5개국·전세계)를 구매 없이 열기. 출시는 false (인앱 구매 'all_countries' 하나로 모두 열림)
+const DEV_TEST_COUNTRIES = false;
 function isCountryOpen(c) {
-  return !!c && (c.open || (c.paid && (DEV_TEST_COUNTRIES || isOwned(`country_${c.key.toLowerCase()}`))));
+  return !!c && (c.open || (c.paid && (DEV_TEST_COUNTRIES || isOwned('all_countries'))));
 }
 
 // 대한민국 캠페인 순서: 구역 수가 적은 맵부터 (같으면 MAP_CONFIGS 순서)
@@ -3950,7 +3989,7 @@ function getCampaignOrder(country) {
 }
 
 // [테스트용] true 면 모든 나라의 모든 맵을 클리어 여부와 관계없이 바로 플레이. 출시 전 false
-const DEV_UNLOCK_ALL_MAPS = true;
+const DEV_UNLOCK_ALL_MAPS = false;
 function isDevUnlockAll() {
   if (DEV_UNLOCK_ALL_MAPS) return true;
   try { return localStorage.getItem(DEV_UNLOCK_KEY) === '1'; } catch (e) { return false; }
@@ -3988,8 +4027,12 @@ function closeSheet() {
 window.closeSheet = closeSheet;
 
 function restorePurchases() {
-  // TODO(IAP): App Store 상품 등록 후 StoreKit 구매 복원 연결
-  openSheet('', '구매 복원', '앱스토어 결제를 연결한 뒤에 사용할 수 있어요.\n같은 Apple ID로 산 나라·기능을 다시 열어 줍니다.');
+  if (!StorePlugin) { openSheet('', '구매 복원', '앱에서 사용할 수 있어요.\n같은 Apple ID로 산 나라·기능을 다시 열어 줍니다.'); return; }
+  StorePlugin.restore().then(r => {
+    setOwnedFromStore(r.owned);
+    const names = Object.keys(PRODUCTS).filter(isOwned).map(k => PRODUCTS[k].title);
+    openSheet('', '구매 복원', names.length ? `복원했어요: ${names.join(', ')}` : '이 Apple ID로 구매한 항목이 없어요.');
+  }).catch(() => openSheet('', '구매 복원', '복원에 실패했어요. 잠시 후 다시 시도해 주세요.'));
 }
 window.restorePurchases = restorePurchases;
 
@@ -4038,8 +4081,8 @@ function selectCountry(key) {
 function enterCountry() {
   const c = COUNTRIES.find(x => x.key === selectedCountryKey);
   if (!isCountryOpen(c)) {
-    // TODO(IAP): 출시 후 인앱 구매 시트로 연결
-    openSheet('', `${c ? c.name : ''} 전선`, '곧 출시돼요.\n출시되면 인앱 구매로 열 수 있어요.');
+    if (c && c.paid) openPurchase('all_countries');
+    else openSheet('', `${c ? c.name : ''} 전선`, '곧 출시돼요.');
     return;
   }
   // 맵이 하나뿐인 나라(전세계): 맵 고르기 없이 바로 본진 선택으로
