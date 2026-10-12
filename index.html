@@ -773,6 +773,29 @@
     .end-total { font-size: 14px; font-weight: 800; color: #475569; margin-top: 10px; font-variant-numeric: tabular-nums; }
     .country-flag { font-size: 120px; line-height: 1.25; margin-bottom: 6px; }
     .start-card .stage-card.locked .country-flag { filter: saturate(0.7); }
+    /* 아이패드·폴더블(펼친 화면) 등 넓은 화면: 카드 줄을 넓혀 양옆 카드가 잘리지 않게, 글씨·카드 크게 */
+    @media (min-width: 600px) and (min-height: 600px) {
+      #start-modal .start-card > .home-view, #start-modal .home-view > .stage-wrap { max-width: min(1000px, 100%); }
+      .start-card .stage-grid { --stage-card-w: 300px; }
+      .stage-thumb { width: 210px; height: 210px; }
+      .country-flag { font-size: 150px; }
+      .start-logo { font-size: 64px; }
+      .start-card .stage-name { font-size: 30px; }
+      #start-modal .home-view > .start-btn { max-width: 520px; }
+      .country-concept { max-width: 520px; font-size: 18px; }
+      .country-concept b { font-size: 21px; }
+      .slide-arrow { width: 40px; height: 40px; font-size: 22px; }
+      .item-pick { max-width: 680px; padding: 28px; }
+      .item-card { min-height: 220px; }
+      .item-name { font-size: 21px; }
+      .item-desc { font-size: 15px; }
+      .item-chip, .item-slot { width: 48px; height: 48px; }
+      #item-bar { right: 24px; bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); }
+      #surrender-btn, #speed2-btn { font-size: 15px; padding: 11px 16px; top: calc(env(safe-area-inset-top, 0px) + 20px); }
+      #surrender-btn { left: 24px; }
+      #speed2-btn { right: 24px; }
+      #item-tip .item-card { width: 220px; }
+    }
     #enter-btn.locked { opacity: 0.45; }
     #enter-btn[hidden] { display: none; }
     .home-links[hidden] { display: none; }
@@ -1026,6 +1049,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=20261012_items_v24"></script>
+  <script src="game.js?v=20261012_items_v25"></script>
 </body>
 </html>
