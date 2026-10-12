@@ -2648,14 +2648,8 @@ let quakeUntilMs = 0;
 // 고르는 카드 수: 일반 맵 3장, 나라 전국 맵 4장, 전세계 5장 (30초마다 → 마지막 카드 60·90·120초)
 const NATIONAL_MAPS = new Set(['KOREA', 'JP_JAPAN', 'CN_CHINA', 'US_USA', 'FR_FRANCE', 'DE_GERMANY', 'IT_ITALY', 'ES_SPAIN', 'GB_UK']);
 // 한 번에 보여 주는 카드 수: 일반 맵 3장, 나라 전국 맵 4장, 전세계 5장
-function itemChoiceCount() {
-  if (currentCountryKey() === 'WD') return 5;
-  return NATIONAL_MAPS.has(currentMapKey) ? 4 : 3;
-}
-function itemRounds() {
-  if (currentCountryKey() === 'WD') return 5;
-  return NATIONAL_MAPS.has(currentMapKey) ? 4 : 3;
-}
+function itemChoiceCount() { return 5; } // 모든 맵 5장
+function itemRounds() { return 5; } // 모든 맵 5장
 const ITEM_EVERY_SEC = 30;
 // 아이템 수치 (밸런스 조절은 여기서)
 const ITEM_BAL = {
