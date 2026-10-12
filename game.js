@@ -2897,6 +2897,7 @@ const COUNTRY_CONCEPT = {
 };
 // [전세계 '세계 대전'] 30초마다 나라 컨셉 하나가 무작위로 (구역이 많은 만큼 더 많은 지역에)
 const WORLD_EVENT_EVERY = 30;
+const WORLD_EVENT_FIRST = 15; // 전세계 첫 컨셉은 15초, 그 뒤 30초마다
 const WORLD_EVENTS_AT_ONCE = 2; // 30초마다 동시에 일어나는 컨셉 수
 const WORLD_EFFECT_MULT = 3;    // 전세계 컨셉 효과 배수
 const WORLD_TANKS = 3;          // 전세계 독일: 사방에서 전차 3대
@@ -2913,7 +2914,7 @@ function worldEffect() { return currentCountryKey() === 'WD' ? WORLD_EFFECT_MULT
 function resetCountryEvent() {
   const country = (MAP_CONFIGS[currentMapKey] || {}).country;
   const c = COUNTRY_EVENT_CFG[country];
-  countryEventNext = country === 'WD' ? WORLD_EVENT_EVERY : (c ? c.every : 0);
+  countryEventNext = country === 'WD' ? WORLD_EVENT_FIRST : (c ? c.every : 0);
   quakeUntilMs = 0;
   revoltUntil = 0; revoltNextShot = 0; tanks = []; fogUntil = 0;
 }
@@ -3459,6 +3460,7 @@ function conceptStatusText() {
   const key = currentCountryKey();
   const concept = COUNTRY_CONCEPT[key];
   if (!concept) return null;
+  if (key === 'WD') return null; // 전세계는 제목 위 문구 없음
   if (key === 'GB' || key === 'IT') return concept[0];
   if (!countryEventNext) return concept[0];
   const left = Math.max(0, Math.ceil(countryEventNext - gameElapsedTime));
