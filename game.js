@@ -2983,17 +2983,16 @@ function triggerCountryEvent(country) {
   });
   if (country === 'JP') quakeUntilMs = performance.now() + 700;
 }
-// 나라 컨셉 발동 알림: 화면 위쪽에 '나라 · 컨셉 이름' 띠가 딱 떴다가 사라짐. 여러 개면 위아래로 겹치지 않게 쌓임
+// 나라 컨셉 발동 알림: 화면 위쪽에 컨셉 이름 글씨가 딱 떴다가 사라짐. 여러 개면 위아래로 겹치지 않게 쌓임
 const EVENT_BANNER_COLORS = { JP: '#b45309', CN: '#d97706', US: '#ca8a04', FR: '#7c3aed', DE: '#3f6212', ES: '#9a3412', GB: '#334155' };
 function showEventBanner(country) {
   const box = document.getElementById('event-banners');
   const concept = COUNTRY_CONCEPT[country];
   if (!box || !concept) return;
-  const nation = (COUNTRIES.find(c => c.key === country) || {}).name || '';
   const el = document.createElement('div');
   el.className = 'event-banner';
-  el.style.background = EVENT_BANNER_COLORS[country] || '#1e293b';
-  el.innerHTML = `<span class="event-banner-nation">${nation}</span><span class="event-banner-name">${concept[0]}</span>`;
+  el.style.color = EVENT_BANNER_COLORS[country] || '#1e293b';
+  el.textContent = concept[0];
   box.appendChild(el);
   el.addEventListener('animationend', () => el.remove());
 }
