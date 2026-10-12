@@ -1272,7 +1272,7 @@ function drawFlyingOrbs(ctx) {
     for (let i = 0; i < flyingOrbs.length; i++) {
       const orb = flyingOrbs[i];
       if (orb.isDead || orb.owner !== owner || !!orb.fromFull !== full) continue;
-      if (fog && owner === OWNER.ENEMY && orb.progress > FOG_VISIBLE_PROGRESS) continue;
+      if (fog && owner === OWNER.ENEMY) continue; // [영국 안개] 적 구슬은 전혀 안 보임
       const r = (orb.isCannon ? 9.6 : orb.power > 1 ? 4.5 : 3.2) * k;
       ctx.moveTo(orb.x + r, orb.y);
       ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
@@ -2537,7 +2537,6 @@ const COUNTRY_EVENT_CFG = {
   DE: { every: 60, tankSec: 3.5, width: 0.07, toast: '전차 돌파!', color: '#3f6212' }
 };
 const REBEL = 'rebel';
-const FOG_VISIBLE_PROGRESS = 0.12;
 let revoltUntil = 0, revoltNextShot = 0;
 let tankAnim = null; // { x0, y0, x1, y1, t0(게임 시간), dur, hit:Set }
 
@@ -2890,7 +2889,7 @@ const COUNTRY_CONCEPT = {
   IT: ['최고의 지휘관', '본진 2개로 시작해요. 하나는 무작위 위치에 생겨요'],
   WD: ['세계 대전', '30초마다 나라 컨셉 2개가 무작위로 3배 효과로 일어나요. 카드는 6장 골라요'],
   ES: ['대항해시대', '1분마다 양쪽의 완전점령 지역 한 곳이 대포를 쏴요 (공격력 20)'],
-  GB: ['안개', '적의 구슬은 처음 방향만 보이고 어디로 가는지는 보이지 않아요']
+  GB: ['안개', '내 지역이 아닌 곳은 모두 검게 가려지고 적의 구슬은 보이지 않아요']
 };
 // [전세계 '세계 대전'] 30초마다 나라 컨셉 하나가 무작위로 (구역이 많은 만큼 더 많은 지역에)
 const WORLD_EVENT_EVERY = 30;
@@ -2898,6 +2897,7 @@ const WORLD_EVENTS_AT_ONCE = 2; // 30초마다 동시에 일어나는 컨셉 수
 const WORLD_EFFECT_MULT = 3;    // 전세계 컨셉 효과 배수
 const WORLD_EVENT_KEYS = ['JP', 'CN', 'US', 'FR', 'DE', 'ES', 'GB'];
 const WORLD_FOG_SEC = 30;
+const FOG_COLOR = '#0b0f19';
 let fogUntil = 0;
 function isFogActive() { return currentCountryKey() === 'GB' || gameElapsedTime < fogUntil; }
 // 맵이 클수록 이벤트가 걸리는 지역 수를 늘림 (전세계 300구역 → 3배)
@@ -2978,9 +2978,11 @@ function quakeShakeOffset() {
 // 사막(모래색)·호황(금색) 효과가 걸린 지역 표시: 지역 위에 반투명 색 + 테두리
 function drawCountryEventMarks(ctx) {
   const t = gameElapsedTime;
+  const fogNow = currentState !== GAME_STATE.SELECT_START && isFogActive();
   for (let i = 0; i < rawZones.length; i++) {
     const z = rawZones[i];
     if (!z.path) continue;
+    if (fogNow && z.owner !== OWNER.PLAYER) continue; // [영국 안개] 가려진 지역의 표시도 숨김
     let color = null;
     if (t < revoltUntil && z.owner === OWNER.NEUTRAL && z.neighbors.some(n => n.owner !== OWNER.NEUTRAL)) color = COUNTRY_EVENT_CFG.FR.color;
     else if (z.slowUntil && t < z.slowUntil) color = COUNTRY_EVENT_CFG.CN.color;
@@ -3267,6 +3269,10 @@ function fillZoneFromBottom(ctx, zone, ratio, color) {
 }
 
 function getZoneStyle(zone) {
+  // [영국 안개] 내 지역이 아닌 곳은 모두 검게 (중립·적 구분 안 됨)
+  if (zone.owner !== OWNER.PLAYER && currentState !== GAME_STATE.SELECT_START && isFogActive()) {
+    return { base: FOG_COLOR, gauge: FOG_COLOR, ratio: 0, stroke: '#1f2937', width: 1.0 };
+  }
   const isFull = isFullyConquered(zone);
   const isPlayer = zone.owner === OWNER.PLAYER;
   const isMyMain = isPlayer && (zone === playerMainZone || isExtraMainOf(zone, OWNER.PLAYER));
@@ -3489,9 +3495,11 @@ function drawExactDistrictsMap(ctx) {
 
   // 4. 번쩍 효과 (점령 순간, 특수 기술 충전 완료 순간)
   const now = performance.now();
+  const fogNow = currentState !== GAME_STATE.SELECT_START && isFogActive();
   for (let i = 0; i < rawZones.length; i++) {
     const zone = rawZones[i];
     if (!zone.flashAt || !zone.path) continue;
+    if (fogNow && zone.owner !== OWNER.PLAYER) continue; // [영국 안개] 가려진 지역은 번쩍임도 안 보임
     const t = (now - zone.flashAt) / ZONE_FLASH_MS;
     if (t >= 1) { zone.flashAt = 0; continue; }
     ctx.save();
