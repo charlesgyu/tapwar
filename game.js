@@ -1121,9 +1121,12 @@ class FlyingOrb {
     const wasMine = fighters(own) && t.owner === own;
     const src = this.bounceStep ? null : this.sourceZone; // 튕긴 구슬은 '쏜 곳'이 없음
     // 튕긴 구슬: 첫 타격에서 정해진 공격력 그대로 (방어 쪽 철벽만 다시 계산)
+    // 같은 발에서 터진 카드(파워샷·크리티컬로 커진 공격력, 폭발, 마비)는 튕긴 곳에도 모두 적용
     if (this.bounceStep) {
       const pw = rivalHit ? defenseTake(this.power, t) : this.power;
       applyOrbHit(t, own, pw, null);
+      if (rivalHit && this.bounceParalyze) { t.paralyzedShots = this.bounceParalyze; flashZone(t, '#0ea5e9'); }
+      if (this.bounceExplode) explodeAround(t, own, this.power * this.bounceExplode);
       this.bounceOn(t, own, rivalHit);
       return;
     }
@@ -1156,9 +1159,10 @@ class FlyingOrb {
     }
     let bounceCount = 0;
     let explodeRatio = 0;
+    let paralyzeShots = 0;
     if (atk) {
       if (atk.has('crit') && atk.roll()) { attack *= 1 + ITEM_BAL.critBonus * atk.mul; flashZone(t, '#f59e0b'); } // 크리티컬
-      if (rivalHit && atk.has('paralyze') && atk.roll()) { t.paralyzedShots = ITEM_BAL.paralyzeShots * atk.mul; flashZone(t, '#0ea5e9'); } // 마비
+      if (rivalHit && atk.has('paralyze') && atk.roll()) { paralyzeShots = ITEM_BAL.paralyzeShots * atk.mul; t.paralyzedShots = paralyzeShots; flashZone(t, '#0ea5e9'); } // 마비
       if (atk.has('pierce') && atk.roll()) bounceCount = ITEM_BAL.bounceCount * atk.mul;      // 튕기기
       if (rivalHit && atk.has('explode') && atk.roll()) explodeRatio = ITEM_BAL.explodeRatio * atk.mul; // 폭발
       atk.chain('rapid', ITEM_BAL.chainShots);   // 속사: 다음 공격 구슬 빠르게
@@ -1181,16 +1185,13 @@ class FlyingOrb {
     }
     applyOrbHit(t, own, power, src);
     // [아이템 폭발] 맞힌 상대 지역에 붙어 있는 모든 상대 지역에 공격력의 50% (각 지역 철벽은 따로 계산)
-    if (explodeRatio > 0) {
-      flashZone(t, '#ea580c');
-      t.neighbors.forEach(n => {
-        if (n.owner !== OWNER.NEUTRAL && n.owner !== own) applyOrbHit(n, own, defenseTake(attack * explodeRatio, n), null);
-      });
-    }
+    if (explodeRatio > 0) explodeAround(t, own, attack * explodeRatio);
     // [아이템 튕기기] 상대 땅에서만 옆 상대 지역으로 튕김 (공격력 그대로). 내 지역은 튕기지 않음
     if (bounceCount > 0 && wasRival) {
       this.bounceLeft = bounceCount;
       this.bouncePower = attack;
+      this.bounceExplode = explodeRatio;
+      this.bounceParalyze = paralyzeShots;
       this.bounceOn(t, own, wasRival);
     }
   }
@@ -1210,6 +1211,8 @@ class FlyingOrb {
     b.bounceLeft = left;
     b.bouncePower = this.bouncePower || this.power;
     b.bounceHit = hit.concat([t]);
+    b.bounceExplode = this.bounceExplode || 0;
+    b.bounceParalyze = this.bounceParalyze || 0;
     flyingOrbs.push(b);
   }
 
@@ -2670,6 +2673,13 @@ let itemChoices = [];
 // [아이템 상호작용] 구슬이 실제로 주는 양: 공격하는 쪽 카드(파워샷 등)로 정해진 power 에
 // 맞는 쪽 카드를 적용. 철벽: 상대(적·나) 구슬에 맞을 때만 50% (중립 땅·자기 땅에는 그대로)
 // 내 카드 발동 확률 (보급 발동 중이면 +10%)
+// [아이템 폭발] t 에 붙어 있는 모든 상대 지역에 dmg (각 지역 철벽은 따로)
+function explodeAround(t, own, dmg) {
+  flashZone(t, '#ea580c');
+  t.neighbors.forEach(n => {
+    if (n.owner !== OWNER.NEUTRAL && n.owner !== own) applyOrbHit(n, own, defenseTake(dmg, n), null);
+  });
+}
 function itemChance(owner, base) {
   const st = itemState[owner];
   return base + (st && st.supply > 0 && !(st.cursed > 0) ? ITEM_BAL.supplyBonus : 0);
