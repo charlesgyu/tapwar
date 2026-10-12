@@ -4190,7 +4190,7 @@ function getCampaignTotalTime() {
 // - App Store Connect 에서 만든 순위표 ID 로 바꿔 넣을 것 (형식: 경과 시간 - 초 단위, 정렬: 낮은 점수 우선)
 // -------------------------------------------------------------
 const LEADERBOARDS = {
-  KR: 'tapwar.leaderboard.kr.totaltime', // TODO: App Store Connect 순위표 ID
+  KR: 'tapwar.leaderboard.kr.totaltime', // App Store Connect 순위표 ID (형식: 경과 시간 - 초, 낮은 점수 우선)
   JP: 'tapwar.leaderboard.jp.totaltime',
   CN: 'tapwar.leaderboard.cn.totaltime',
   US: 'tapwar.leaderboard.us.totaltime',
@@ -4205,8 +4205,11 @@ const GameCenter = (window.Capacitor && window.Capacitor.isNativePlatform && win
   window.Capacitor.registerPlugin) ? window.Capacitor.registerPlugin('GameCenter') : null;
 if (GameCenter) GameCenter.authenticate().catch(() => {});
 
-// 맵별 순위표 ID: 나라 순위표 ID 뒤에 맵 키 (예: tapwar.leaderboard.kr.ulsan). App Store Connect 에서 같은 이름으로 만들 것
+// 맵별 순위는 쓰지 않음 (나라별 순위 10개만: 대한민국·일본·중국·미국·유럽 5개국·Earth)
+// 다시 켜려면 true 로 바꾸고 App Store Connect 에 tapwar.leaderboard.kr.ulsan 같은 맵별 순위표를 만들 것
+const MAP_RANKINGS = false;
 function mapLeaderboardId(countryKey, mapKey) {
+  if (!MAP_RANKINGS) return null;
   const base = LEADERBOARDS[countryKey];
   return base ? base.replace(/totaltime$/, mapKey.toLowerCase()) : null;
 }
@@ -4376,7 +4379,7 @@ function buildStageCards() {
       `<canvas class="stage-thumb" id="thumb-${k}"></canvas>` +
       `<span class="stage-title"><span class="stage-name">${cfg.label || key}</span><span class="stage-sub">${cfg.count || ''}</span></span>` +
       `<span class="stage-recrow"><span class="stage-record" id="modal-${k}-record"></span>` +
-      (cleared ? `<span class="map-rank-pct" id="rank-${k}"></span>` : '') + `</span>`;
+      (cleared && MAP_RANKINGS ? `<span class="map-rank-pct" id="rank-${k}"></span>` : '') + `</span>`;
     grid.appendChild(btn);
   });
   // 마지막 맵 다음 카드: 이 나라의 글로벌 순위 (총 시간)
