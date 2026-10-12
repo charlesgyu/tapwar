@@ -608,7 +608,7 @@ const MAP_CONFIGS = {
     maxScale: 14,                     // 전국처럼 큰 맵은 4배 더 확대 (기본 3.5 → 14)
     minimap: { w: 84, h: 104 },       // 세로로 긴 전국 맵은 미니맵을 작게
     file: 'assets/south_korea_exact_zones.json',
-    bounds: { minLng: 125.7, maxLng: 131.1, minLat: 33.1, maxLat: 38.65 },
+    bounds: { minLng: 125.7, maxLng: 132.0, minLat: 33.1, maxLat: 38.65 }, // 동쪽 끝 독도까지
     aspectRatio: 0.82
   },
   SEOUL: {
@@ -3519,7 +3519,7 @@ function conceptStatusText() {
   const key = currentCountryKey();
   const concept = COUNTRY_CONCEPT[key];
   if (!concept) return null;
-  if (key === 'WD') return null; // 전세계는 제목 위 문구 없음
+  if (key === 'WD' || key === 'KR') return null; // 전세계·대한민국은 제목 위 문구 없음
   if (key === 'GB' || key === 'IT') return concept[0];
   if (!countryEventNext) return concept[0];
   const left = Math.max(0, Math.ceil(countryEventNext - gameElapsedTime));
