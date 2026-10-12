@@ -17,3 +17,6 @@ assets/south_korea_simplified_zones.json
 # Capacitor / Node
 node_modules/
 www/
+
+# Claude Code 워크플로우 임시 worktree
+.claude/worktrees/
