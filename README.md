@@ -1,5 +1,7 @@
 # 📜 TAPWAR (탭워) 공식 게임 설정 및 룰북 (System Design Manifesto)
 
+> 🧑‍⚕️ **새 프로젝트 [모두의 힐러]** 는 `healer/` 폴더에서 독립적으로 개발합니다. 실행법·기획은 [healer/README.md](healer/README.md) 참고.
+
 > **버전:** v2026.10.11-SeoulEdition  
 > **장르:** 실시간 행정구역 전선 전략 시뮬레이션 (Real-Time Administrative Front-Line Strategy)  
 > **비주얼 톤앤매너:** 미니 메트로(Mini Metro) 스타일 미니멀 라이트 디자인 (웜 크림 모눈종이 그리드 + 깔끔한 일러스트 지도)

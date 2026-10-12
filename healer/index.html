@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#cfe6f5">
+  <title>모두의 힐러</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #cfe6f5; color: #2a2020;
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, sans-serif; touch-action: none; }
+    #game { position: relative; width: 100%; height: 100%; }
+    canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+    #hud { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between;
+      padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+    .top { display: flex; align-items: flex-start; gap: 8px; }
+    .card { background: rgba(255,255,255,0.9); border: 1.5px solid #5a4030; border-radius: 10px; box-shadow: 0 2px 0 #5a4030; }
+    .status { padding: 6px 10px; min-width: 150px; }
+    .status .name { font-weight: 800; font-size: 13px; display: flex; justify-content: space-between; align-items: baseline; }
+    .status .lv { font-size: 11px; color: #7a5a3a; font-weight: 700; }
+    .bar { height: 7px; border-radius: 4px; background: #e6dccb; margin-top: 4px; overflow: hidden; border: 1px solid #c9b89a; }
+    .bar i { display: block; height: 100%; border-radius: 4px; }
+    .bar.hp i { background: linear-gradient(#ff8a8a, #e04a4a); }
+    .bar.mp i { background: linear-gradient(#8ac8ff, #3a86e0); }
+    .title { margin-left: auto; padding: 6px 10px; font-weight: 900; font-size: 13px; color: #4a3a30; letter-spacing: 0.5px; }
+    .title small { display: block; font-size: 10px; font-weight: 600; color: #8a7a6a; }
+    .gold { padding: 6px 10px; font-weight: 800; font-size: 12px; }
+    .bottom { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .prompt { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; font-weight: 800; font-size: 14px; animation: pop 0.18s ease-out; }
+    .prompt button { pointer-events: auto; border: 0; border-radius: 8px; padding: 8px 14px; font-weight: 800; font-size: 14px; color: #fff; background: #5aa84a; box-shadow: 0 2px 0 #2f6b2f; font-family: inherit; }
+    .prompt button:active { transform: translateY(2px); box-shadow: none; }
+    .toast { background: rgba(42,32,32,0.88); color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; text-align: center; max-width: 92%; animation: pop 0.18s ease-out; }
+    .hidden { display: none !important; }
+    .hint { font-size: 11px; color: #5a4a40; background: rgba(255,255,255,0.7); padding: 3px 8px; border-radius: 6px; }
+    @keyframes pop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  </style>
+</head>
+<body>
+  <div id="game">
+    <canvas id="view"></canvas>
+    <div id="hud">
+      <div class="top">
+        <div class="card status">
+          <div class="name"><span>리프</span><span class="lv">Lv.1 사제</span></div>
+          <div class="bar hp"><i style="width:100%"></i></div>
+          <div class="bar mp"><i style="width:100%"></i></div>
+        </div>
+        <div class="card gold">🪙 <span id="gold">120</span></div>
+        <div class="card title">모두의 힐러<small>시작의 마을</small></div>
+      </div>
+      <div class="bottom">
+        <div id="prompt" class="card prompt hidden"><span id="prompt-name"></span><button id="prompt-btn">들어가기</button></div>
+        <div id="toast" class="toast hidden"></div>
+      </div>
+    </div>
+  </div>
+  <script src="js/pixel.js"></script>
+  <script src="js/sprites.js"></script>
+  <script src="js/town.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
