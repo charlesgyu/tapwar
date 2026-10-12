@@ -25,6 +25,18 @@ function resizeCanvas() {
   updateZoneScreenPositions();
 }
 window.addEventListener('resize', resizeCanvas);
+// 화면을 돌리거나(가로·세로) 접었다 펴서 카드 크기가 바뀌면 맵 썸네일을 새 크기·화소로 다시 그림 (늘어나 흐려지지 않게)
+let thumbRedrawTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(thumbRedrawTimer);
+  thumbRedrawTimer = setTimeout(() => {
+    try {
+      const stage = document.getElementById('stage-view');
+      if (stage && !stage.hidden) renderStageThumbs();
+      document.querySelectorAll('canvas[id^="cthumb-"]').forEach(c => drawMapThumb(c, c.id.slice(7).toUpperCase()));
+    } catch (e) {}
+  }, 150);
+});
 
 // Game States
 const GAME_STATE = {
