@@ -1095,9 +1095,10 @@ class FlyingOrb {
     // [아이템 속사] 원거리 느려짐 없음, 오히려 1.5배
     if (isRangedShot(sourceZone, targetZone)) this.speed /= RANGED_SLOW;
     // [아이템 속사] 발동 후 다음 공격 구슬(상대 땅으로 가는)은 2배 빠르게
-    if (itemMode && itemState[owner] && itemState[owner].rapid > 0 && isRivalMarked(targetZone, owner)) {
-      this.speed *= ITEM_BAL.rapidSpeed * (itemState[owner].rapidMul || 1);
-      itemState[owner].rapid--;
+    const rst = itemMode && sourceZone && sourceZone.owner === owner ? zoneItemState(sourceZone) : null;
+    if (rst && rst.rapid > 0 && isRivalMarked(targetZone, owner)) {
+      this.speed *= ITEM_BAL.rapidSpeed;
+      rst.rapid--;
     }
     this.progress = 0;
     this.curve = (Math.random() - 0.5) * 16;
@@ -1149,7 +1150,7 @@ class FlyingOrb {
       return;
     }
     // [아이템] 카드는 상대 땅(상대 색이 조금이라도 있는 곳)을 공격할 때만. 중립 땅에는 효과 없음
-    const atk = fighters(own) && isRivalMarked(t, own) ? itemAttackState(own, this.sourceZone) : null;
+    const atk = fighters(own) && isRivalMarked(t, own) ? itemAttackState(own, this.sourceZone, t) : null;
     let attack = this.power;
     let pierceDefense = false;
     if (atk) {
@@ -1159,7 +1160,7 @@ class FlyingOrb {
       if (pierceDefense) { flashZone(t, '#7c3aed'); addFx(t, 'piercing'); }
     }
     if (rivalHit && !pierceDefense) {
-      const dp = defenseChance(t.owner);
+      const dp = defenseChance(t);
       // [아이템 반사 방패] 쏜 곳으로 그대로 되돌림 (되돌린 구슬은 다시 반사되지 않음)
       if (!this.reflected && this.sourceZone && hasItem(t.owner, 'reflect') && Math.random() < dp) {
         const back = new FlyingOrb(t, this.sourceZone, t.owner, this.power);
@@ -1195,12 +1196,13 @@ class FlyingOrb {
     let power = rivalHit && !pierceDefense ? defenseTake(attack, t) : attack;
     const wasRival = t.owner !== OWNER.NEUTRAL && t.owner !== own;
     // [아이템 재건] 내 지역에 쏜 구슬(회복): 10% 확률로 회복량 2배, 그때 30% 확률로 붙어 있는 내 지역들도 같이 회복
-    if (wasMine && itemMode && hasItem(own, 'rebuild') && !(itemState[own].cursed > 0) &&
-        Math.random() < itemChance(own, ITEM_BAL.baseChance)) {
-      power *= 1 + ITEM_BAL.rebuildBonus * (itemState[own].buff > 0 ? 2 : 1);
+    const rbs = this.sourceZone && this.sourceZone.owner === own ? zoneItemState(this.sourceZone) : newItemState();
+    if (wasMine && itemMode && hasItem(own, 'rebuild') && !(rbs.cursed > 0) &&
+        Math.random() < itemChance(rbs, ITEM_BAL.baseChance)) {
+      power *= 1 + ITEM_BAL.rebuildBonus * (rbs.buff > 0 ? 2 : 1);
       flashZone(t, ZONE_COLORS.playerFullCharged);
       addFx(t, 'rebuild');
-      if (Math.random() < itemChance(own, ITEM_BAL.rebuildSpreadChance)) {
+      if (Math.random() < itemChance(rbs, ITEM_BAL.rebuildSpreadChance)) {
         t.neighbors.forEach(n => { if (n.owner === own) { n.orbs = Math.min(n.maxOrbs, n.orbs + power); addFx(n, 'rebuildSpread'); } });
       }
     }
@@ -2716,7 +2718,14 @@ let itemRound = 0;
 let nextItemAt = 0;
 let rebuildAt = { player: 0, enemy: 0 };
 const newItemState = () => ({ supply: 0, buff: 0, cursed: 0, rapid: 0, supplyNew: 0, buffNew: 0 });
-let itemState = { player: newItemState(), enemy: newItemState() };
+// 속사·보급·버프샷·저주샷의 '다음 5공격'은 지역마다 따로 셈 (터진 지역에서만 적용)
+// 주인이 바뀌거나 게임이 새로 시작되면 그 지역의 상태는 사라짐
+let itemGen = 0;
+function zoneItemState(z) {
+  if (!z) return null;
+  if (!z.ist || z.ist.owner !== z.owner || z.ist.gen !== itemGen) z.ist = Object.assign(newItemState(), { owner: z.owner, gen: itemGen });
+  return z.ist;
+}
 let itemChoices = [];
 
 // [아이템 상호작용] 구슬이 실제로 주는 양: 공격하는 쪽 카드(파워샷 등)로 정해진 power 에
@@ -2818,33 +2827,35 @@ function explodeAround(t, own, dmg) {
     if (n.owner !== OWNER.NEUTRAL && n.owner !== own) { addFx(n, 'explodeHit'); applyOrbHit(n, own, defenseTake(dmg, n), null); }
   });
 }
-function itemChance(owner, base) {
-  const st = itemState[owner];
+// st = 판정하는 지역의 상태 (그 지역에 보급이 켜져 있으면 +10%p)
+function itemChance(st, base) {
   return base + (st && st.supply > 0 && !(st.cursed > 0) ? ITEM_BAL.supplyBonus : 0);
 }
-function defenseChance(victim) { return itemChance(victim, ITEM_BAL.baseChance); }
+// 맞는 지역의 방어 확률 (그 지역에 보급이 켜져 있으면 +10%p)
+function defenseChance(t) { return itemChance(zoneItemState(t), ITEM_BAL.baseChance); }
 // [아이템 철벽] 확률로 상대 공격을 30%만 받음
 function defenseTake(power, t) {
-  if (hasItem(t.owner, 'fortress') && Math.random() < defenseChance(t.owner)) { addFx(t, 'fortress'); return power * ITEM_BAL.fortressTake; }
+  if (hasItem(t.owner, 'fortress') && Math.random() < defenseChance(t)) { addFx(t, 'fortress'); return power * ITEM_BAL.fortressTake; }
   return power;
 }
 // 공격 한 번의 카드 상태: 저주면 카드 없음, 버프샷이면 효과 2배, 보급이면 확률 +10%
-function itemAttackState(own, src) {
-  const st = itemState[own];
+function itemAttackState(own, src, tgt) {
+  // 쏜 지역이 이미 주인이 바뀌었으면(빼앗긴 지역에서 날아온 구슬) 상태 없이 기본 확률만
+  const st = src && src.owner === own ? zoneItemState(src) : newItemState();
   const cursed = st.cursed > 0, mul = !cursed && st.buff > 0 ? 2 : 1;
   const used = { supply: st.supply > 0, buff: st.buff > 0, cursed };
   const o = {
     mul,
     has: k => !cursed && hasItem(own, k),
-    roll: (base = ITEM_BAL.baseChance) => Math.random() < itemChance(own, base),
+    roll: (base = ITEM_BAL.baseChance) => Math.random() < itemChance(st, base),
     chain(k, shots, base) {
       if (!o.has(k) || !o.roll(base)) return;
       const n = shots * mul;
       addFx(src && src.owner === own ? src : null, k); // 속사·보급·버프샷·저주샷: 쏜 지역에 고리
-      if (k === 'rapid') { st.rapid = n; st.rapidMul = 1; }
+      if (k === 'rapid') st.rapid = n;
       if (k === 'supply') st.supplyNew = n;
       if (k === 'buff') st.buffNew = n;
-      if (k === 'curse') { itemState[itemRival(own)].cursed = n; }
+      if (k === 'curse' && tgt && tgt.owner !== OWNER.NEUTRAL && tgt.owner !== own) zoneItemState(tgt).cursed = n; // 맞은 상대 지역만 저주
     },
     // 이번 공격이 끝나면 '다음 N 공격' 카운트를 하나 줄이고, 이번에 새로 터진 것은 다음 공격부터
     done() {
@@ -2874,7 +2885,7 @@ function resetItems() {
   itemRound = 0;
   nextItemAt = 0;
   rebuildAt = { player: 0, enemy: 0 };
-  itemState = { player: newItemState(), enemy: newItemState() };
+  itemGen++;
   const m = document.getElementById('item-modal');
   if (m) m.style.display = 'none';
   renderItemBar();
