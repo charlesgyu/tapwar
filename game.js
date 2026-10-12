@@ -3425,18 +3425,19 @@ function drawBackdropZones(ctx) {
 const ZONE_COLORS = {
   base: '#edebe3',
   baseStroke: '#cfcdc4',
+  // 내 색은 적(빨강 계열)과 같은 짜임의 파랑 계열
   player: '#60a5fa',
-  playerStroke: '#2563eb',
+  playerStroke: '#1d4ed8',
   enemy: '#f87171',
   enemyStroke: '#b91c1c',
-  playerFull: '#bbf7d0',
-  playerFullCharged: '#22c55e',
-  playerFullStroke: '#16a34a',
+  playerFull: '#bfdbfe',
+  playerFullCharged: '#2563eb',
+  playerFullStroke: '#1e3a8a',
   enemyFull: '#fecaca',
   enemyFullCharged: '#dc2626',
   enemyFullStroke: '#991b1b',
-  main: '#fde047',
-  mainCharged: '#eab308',
+  main: '#1e40af',             // 내 메인: 진한 남색 + 흰 테두리
+  mainCharged: '#172554',
   mainStroke: '#ffffff',
   enemyMain: '#be123c',        // 적 메인: 진한 와인 레드 + 흰 테두리
   enemyMainCharged: '#881337',
@@ -4365,7 +4366,7 @@ function buildStageCards() {
 // 튜토리얼 (처음 실행 시 자동, 홈의 '튜토리얼'로 다시 보기)
 // -------------------------------------------------------------
 const TUTORIAL_KEY = 'tapwar_tutorial_seen';
-const TC = { b: '#edebe3', s: '#cfcdc4', blue: '#60a5fa', blueS: '#2563eb', red: '#f87171', redS: '#b91c1c', yel: '#fde047', grn2: '#22c55e', grnS: '#16a34a', wine: '#be123c' };
+const TC = { b: '#edebe3', s: '#cfcdc4', blue: '#60a5fa', blueS: '#1d4ed8', red: '#f87171', redS: '#b91c1c', yel: '#1e40af', grn2: '#2563eb', grnS: '#1e3a8a', wine: '#be123c' };
 function hexPoints(x, y, r = 26) {
   return [0, 1, 2, 3, 4, 5].map(k => {
     const a = Math.PI / 3 * k + Math.PI / 6;
@@ -4469,7 +4470,7 @@ const TUTORIAL = [
       // 가운데 지역을 둘러싼 이웃 6곳이 하나씩 내 땅이 되고 → 가운데가 초록 → 먼 곳으로 원거리 공격
       const ring = [[cx + 45, cy], [cx + 22.5, cy - 39], [cx - 22.5, cy - 39], [cx - 45, cy], [cx - 22.5, cy + 39], [cx + 22.5, cy + 39]];
       return svgWrap(ring.map(([x, y], i) => hexAnim(x, y, D, [[0, TC.b], [0.06 + i * 0.07, TC.blue], [0.97, TC.blue], [1, TC.b]], TC.blueS)).join('') +
-        hexAnim(cx, cy, D, [[0, TC.blue], [0.46, '#bbf7d0'], [0.97, '#bbf7d0'], [1, TC.blue]], '#ffffff', 3) +
+        hexAnim(cx, cy, D, [[0, TC.blue], [0.46, '#bfdbfe'], [0.97, '#bfdbfe'], [1, TC.blue]], '#ffffff', 3) +
         riseFill('tut-r5', cx, cy, 0.46, 0.66, D, TC.grn2) + outlineAnim(cx, cy, D, [[0, '#ffffff'], [1, '#ffffff']], 3) +
         `<polygon points="${hexPoints(185, 40, 17)}" fill="${TC.red}" stroke="${TC.redS}" stroke-width="2" stroke-linejoin="round"/>` +
         [0.7, 0.8, 0.9].map(t => flyOrb(cx, cy, 185, 40, t, t + 0.07, D, TC.grnS)).join('')); })() },
