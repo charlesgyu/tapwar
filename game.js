@@ -1122,11 +1122,16 @@ class FlyingOrb {
     const src = this.bounceStep ? null : this.sourceZone; // 튕긴 구슬은 '쏜 곳'이 없음
     // 튕긴 구슬: 첫 타격에서 정해진 공격력 그대로 (방어 쪽 철벽만 다시 계산)
     // 같은 발에서 터진 카드(파워샷·크리티컬로 커진 공격력, 폭발, 마비)는 튕긴 곳에도 모두 적용
+    // 튕긴 두 번째 타격은 아이템 효과 50%, 세 번째는 거기서 30% 더 줄어듦 (기본 공격력은 그대로)
     if (this.bounceStep) {
-      const pw = rivalHit ? defenseTake(this.power, t) : this.power;
+      const f = bounceEffectScale(this.bounceStep);
+      const base = this.bounceBase || this.power;
+      const atkPow = base + (this.power - base) * f;
+      const pw = rivalHit ? defenseTake(atkPow, t) : atkPow;
       applyOrbHit(t, own, pw, null);
-      if (rivalHit && this.bounceParalyze) { t.paralyzedShots = this.bounceParalyze; flashZone(t, '#0ea5e9'); }
-      if (this.bounceExplode) explodeAround(t, own, this.power * this.bounceExplode);
+      const para = Math.round((this.bounceParalyze || 0) * f);
+      if (rivalHit && para > 0) { t.paralyzedShots = para; flashZone(t, '#0ea5e9'); }
+      if (this.bounceExplode) explodeAround(t, own, atkPow * this.bounceExplode * f);
       this.bounceOn(t, own, rivalHit);
       return;
     }
@@ -1191,6 +1196,7 @@ class FlyingOrb {
       this.bounceLeft = bounceCount;
       this.bouncePower = attack;
       this.bounceExplode = explodeRatio;
+      this.bounceBase = this.power;
       this.bounceParalyze = paralyzeShots;
       this.bounceOn(t, own, wasRival);
     }
@@ -1212,6 +1218,7 @@ class FlyingOrb {
     b.bouncePower = this.bouncePower || this.power;
     b.bounceHit = hit.concat([t]);
     b.bounceExplode = this.bounceExplode || 0;
+    b.bounceBase = this.bounceBase || this.power;
     b.bounceParalyze = this.bounceParalyze || 0;
     flyingOrbs.push(b);
   }
@@ -2615,6 +2622,8 @@ const ITEM_BAL = {
   powerBonus: 0.5,     // 파워샷: 공격력 +50%
   critBonus: 1,        // 크리티컬: 공격력 +100% (2배)
   bounceCount: 2,      // 튕기기: 두 번 더 튕김 (공격력 그대로)
+  bounceFirstScale: 0.5, // 튕긴 두 번째 타격: 아이템 효과 50%
+  bounceNextScale: 0.7,  // 세 번째부터: 앞 타격보다 30% 감소
   explodeRatio: 0.5,   // 폭발: 붙어 있는 상대 지역에 공격력의 50%
   piercingChance: 0.1, // (관통샷은 baseChance 사용)
   paralyzeShots: 5,    // 마비: 맞은 지역의 다음 5발
@@ -2673,6 +2682,8 @@ let itemChoices = [];
 // [아이템 상호작용] 구슬이 실제로 주는 양: 공격하는 쪽 카드(파워샷 등)로 정해진 power 에
 // 맞는 쪽 카드를 적용. 철벽: 상대(적·나) 구슬에 맞을 때만 50% (중립 땅·자기 땅에는 그대로)
 // 내 카드 발동 확률 (보급 발동 중이면 +10%)
+// 튕긴 타격의 아이템 효과 비율: 두 번째 50%, 세 번째는 거기서 30% 감소(35%), 그 뒤도 30%씩
+function bounceEffectScale(step) { return ITEM_BAL.bounceFirstScale * Math.pow(ITEM_BAL.bounceNextScale, step - 1); }
 // [아이템 폭발] t 에 붙어 있는 모든 상대 지역에 dmg (각 지역 철벽은 따로)
 function explodeAround(t, own, dmg) {
   flashZone(t, '#ea580c');
