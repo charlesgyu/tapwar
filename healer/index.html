@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#2a2140">
+<title>모두의 힐러</title>
+<style>
+:root { --bg:#2a2140; --panel:#3a2f57; --panel2:#4a3d6e; --text:#fff8ec; --dim:#b8aecf; --pri:#7c5cff; --gold:#ffb347; --red:#e5546a; --green:#57d38c; }
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { margin:0; height:100%; background:var(--bg); color:var(--text); font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; overflow:hidden; user-select:none; -webkit-user-select:none; touch-action:manipulation; }
+#app { position:fixed; inset:0; max-width:520px; margin:0 auto; display:flex; flex-direction:column; padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+.btn { border:0; border-radius:12px; padding:11px 14px; margin:4px 0; background:var(--panel2); color:var(--text); font-size:14px; font-weight:600; width:100%; box-shadow:0 3px 0 #0004; }
+.btn:active { transform:translateY(2px); box-shadow:0 1px 0 #0004; }
+.btn.sm { width:auto; padding:6px 10px; font-size:12px; border-radius:9px; margin:2px; }
+.btn.pri { background:var(--pri); } .btn.red { background:var(--red); } .btn.gold { background:var(--gold); color:#3a2300; }
+small { font-size:11px; } .dim { color:var(--dim); } .bad { color:#ff8a9a; } .hot { color:var(--gold); }
+h4 { margin:16px 0 6px; font-size:14px; color:#ffe9b0; } h4 small { color:var(--dim); font-weight:400; }
+
+/* ---------- 마을 ---------- */
+#town { flex:1; display:flex; flex-direction:column; min-height:0; }
+#top { display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 14px; background:#0003; font-size:13px; }
+.tb-l { display:flex; align-items:center; gap:6px; } .xp { width:60px; height:6px; background:#0006; border-radius:4px; overflow:hidden; } .xp i { display:block; height:100%; background:var(--green); }
+.title { text-align:center; padding:14px 0 4px; }
+.title h1 { margin:0; font-size:30px; letter-spacing:2px; background:linear-gradient(#fff6c8,#ffb347); -webkit-background-clip:text; color:transparent; text-shadow:0 2px 12px #ffb34744; }
+.title p { margin:2px 0; font-size:12px; color:var(--dim); }
+#town-info { text-align:center; font-size:12px; color:var(--dim); padding:0 10px 6px; }
+.tower-btn { margin:6px 16px 10px; padding:16px; border-radius:18px; background:linear-gradient(135deg,#7c5cff,#c25cff); font-size:18px; font-weight:800; text-align:center; box-shadow:0 5px 0 #4a2fa0; }
+.tower-btn:active { transform:translateY(3px); box-shadow:0 2px 0 #4a2fa0; }
+.grid { flex:1; overflow-y:auto; display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:4px 16px 20px; align-content:start; }
+.bld { background:var(--panel); border-radius:16px; padding:12px 4px; text-align:center; box-shadow:0 4px 0 #0004; }
+.bld:active { transform:translateY(2px); }
+.bld .e { font-size:30px; display:block; } .bld b { font-size:13px; } .bld small { display:block; color:var(--dim); font-size:10px; margin-top:2px; }
+
+/* ---------- 시트/팝업 ---------- */
+#sheet { position:fixed; inset:0; background:#0008; display:none; z-index:10; }
+#sheet.open { display:flex; align-items:flex-end; justify-content:center; }
+.sheet-in { background:var(--bg); width:100%; max-width:520px; height:88%; border-radius:22px 22px 0 0; display:flex; flex-direction:column; animation:up .2s; }
+@keyframes up { from { transform:translateY(40px); opacity:.5; } }
+.sheet-h { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border-bottom:1px solid #fff1; font-size:17px; font-weight:800; }
+.sheet-h button { background:none; border:0; color:var(--text); font-size:22px; }
+#sheet-body { flex:1; overflow-y:auto; padding:6px 16px 40px; }
+#popup, #boon { position:fixed; inset:0; background:#000a; display:none; z-index:20; align-items:center; justify-content:center; padding:16px; }
+#popup.open, #boon.open { display:flex; }
+.pop { background:var(--panel); border-radius:18px; padding:18px; width:100%; max-width:380px; max-height:85%; overflow-y:auto; font-size:14px; line-height:1.5; box-shadow:0 10px 40px #0008; }
+.pop hr { border:0; border-top:1px solid #fff2; }
+#popup-btns, #boon-btns { margin-top:12px; }
+#toasts { position:fixed; top:60px; left:0; right:0; z-index:30; display:flex; flex-direction:column; align-items:center; gap:6px; pointer-events:none; }
+.toast { background:#000c; padding:8px 14px; border-radius:20px; font-size:13px; transition:.4s; max-width:90%; text-align:center; }
+.toast.out { opacity:0; transform:translateY(-10px); }
+
+.npc { background:var(--panel); padding:10px 12px; border-radius:12px; font-size:13px; margin:8px 0; }
+.quest { background:var(--panel); padding:10px 12px; border-radius:12px; font-size:13px; margin:6px 0; line-height:1.5; }
+.quest.main { border:1px solid var(--gold); } .quest.hidden { border:1px dashed #c9f; }
+.qbar { height:6px; background:#0005; border-radius:4px; overflow:hidden; margin:4px 0 2px; } .qbar i { display:block; height:100%; background:var(--green); } .qbar.fat i { background:var(--red); }
+.row-c { display:flex; gap:12px; align-items:center; }
+.stats { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.stat { background:var(--panel); border-radius:10px; padding:6px 10px; display:flex; align-items:center; gap:6px; font-size:13px; }
+.stat span { flex:1; } .stat small { color:var(--dim); }
+.equip { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+.eslot { background:var(--panel); border-radius:10px; padding:6px 2px; text-align:center; font-size:10px; min-height:62px; }
+.eslot small { display:block; font-size:10px; line-height:1.2; margin-top:2px; }
+.ic { display:inline-flex; width:34px; height:34px; align-items:center; justify-content:center; border:2px solid; border-radius:9px; font-size:18px; background:#0003; }
+.ic.empty { border-color:#fff2; opacity:.4; } .ic.sm { width:24px; height:24px; font-size:13px; border-radius:6px; }
+.bag { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+.bitem { position:relative; aspect-ratio:1; border:2px solid; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px; background:var(--panel); }
+.bitem.nowear { opacity:.55; } .bitem i { position:absolute; right:2px; bottom:0; font-size:9px; font-style:normal; color:var(--gold); } .bitem s { position:absolute; left:3px; top:0; font-size:9px; text-decoration:none; color:#c9f; }
+.cons { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; } .cons span { background:var(--panel); padding:4px 8px; border-radius:8px; font-size:11px; }
+.beltrow { display:flex; gap:8px; } .bslot { width:52px; height:52px; border-radius:12px; background:var(--panel); display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:20px; border:2px dashed #fff3; }
+.bslot.locked { opacity:.4; } .bslot small { font-size:10px; }
+.affix { color:#7fc8ff; } .set { color:#d7a6ff; }
+.party-list { display:flex; flex-direction:column; gap:6px; }
+.pm { display:flex; align-items:center; gap:10px; background:var(--panel); border-radius:12px; padding:6px 10px; font-size:13px; }
+.pm > div:nth-child(2) { flex:1; } .pm small { display:block; color:var(--dim); }
+.pm.me { border:1px solid #f5e17a66; } .col { display:flex; flex-direction:column; }
+.chibi { width:40px; height:44px; flex:none; } .chibi.big { width:70px; height:77px; }
+.shoprow { display:flex; align-items:center; gap:6px; background:var(--panel); border-radius:10px; padding:8px 10px; margin:5px 0; font-size:13px; }
+.shoprow > span { flex:1; } .shoprow small { color:var(--dim); } .shoprow.locked { opacity:.5; }
+.loadout { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+.lslot { background:var(--panel); border-radius:10px; padding:8px 2px; text-align:center; font-size:22px; min-height:58px; }
+.lslot small { display:block; font-size:10px; }
+.warn { background:#e5546a33; border:1px solid var(--red); border-radius:10px; padding:8px; font-size:12px; margin:8px 0; }
+.cps { display:flex; flex-wrap:wrap; gap:6px; } .cps .btn { width:auto; flex:1 0 30%; }
+
+/* ---------- 전투 ---------- */
+#battle { flex:1; display:none; flex-direction:column; min-height:0; background:#15101f; }
+#b-top { display:flex; align-items:center; gap:8px; padding:6px 10px; font-size:12px; background:#0005; flex-wrap:wrap; }
+#b-top > span:first-child { flex:1; } .buffs i { font-style:normal; background:#2e5d8a; border-radius:6px; padding:1px 5px; margin-right:3px; font-size:10px; }
+#cvwrap { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; touch-action:none; }
+#cv { touch-action:none; border-radius:8px; }
+#b-party { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; padding:6px 6px 2px; }
+.pf { background:var(--panel); border-radius:9px; padding:4px; border:2px solid transparent; min-height:52px; }
+.pf.sel { border-color:#7cf; background:#3d4f80; } .pf.dead { opacity:.5; filter:grayscale(1); }
+.pn { font-size:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hpb { position:relative; height:14px; background:#0007; border-radius:5px; overflow:hidden; margin-top:2px; }
+.hpb i { display:block; height:100%; transition:width .1s; } .hpb span { position:absolute; inset:0; font-size:9px; text-align:center; line-height:14px; text-shadow:0 1px 1px #000; }
+.pc { font-size:11px; min-height:13px; line-height:13px; }
+#b-me { padding:2px 8px; display:grid; grid-template-columns:1fr 1fr; gap:3px; }
+.mbar { position:relative; height:16px; background:#0007; border-radius:6px; overflow:hidden; }
+.mbar i { display:block; height:100%; } .mbar span { position:absolute; inset:0; font-size:10px; text-align:center; line-height:16px; text-shadow:0 1px 1px #000; }
+.mbar.hp i { background:#d94a5c; } .mbar.mp i { background:#3d7cff; } .mbar.cast { grid-column:1/3; } .mbar.cast i { background:#ffd23f; } .mbar.cast.idle span { color:var(--dim); }
+#b-skills { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; padding:6px 8px 10px; }
+.sk { position:relative; height:54px; border:0; border-radius:12px; background:var(--panel2); color:var(--text); display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 3px 0 #0005; touch-action:none; }
+.sk span { font-size:20px; line-height:1; } .sk small { font-size:9px; margin-top:2px; white-space:nowrap; }
+.sk em { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-style:normal; font-size:18px; font-weight:800; text-shadow:0 0 4px #000; }
+.sk.off { opacity:.45; } .sk:active { transform:translateY(2px); box-shadow:0 1px 0 #0005; }
+.sk.ult { background:linear-gradient(135deg,#ffb347,#ff6fa8); }
+.boons { display:flex; flex-direction:column; gap:8px; }
+.boon { background:var(--panel2); border-radius:14px; padding:10px; display:grid; grid-template-columns:40px 1fr; grid-template-rows:auto auto; align-items:center; column-gap:8px; }
+.boon:active { background:var(--pri); } .boon .bi { grid-row:1/3; font-size:28px; text-align:center; } .boon small { color:var(--dim); }
+.hiddenq { background:#6a3fa066; border:1px dashed #c9f; padding:6px; border-radius:8px; margin:6px 0; font-size:12px; }
+.pop h3 { margin:0 0 6px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="town">
+    <div id="top"></div>
+    <div class="title"><h1>모두의 힐러</h1><p>끝없는 탑을 오르는 귀여운 힐러의 모험</p></div>
+    <div id="town-info"></div>
+    <div class="tower-btn" onclick="G.open('tower')">🗼 탑 오르기</div>
+    <div class="grid">
+      <div class="bld" onclick="G.open('char')"><span class="e">🧝</span><b>캐릭터</b><small>스탯·장비</small></div>
+      <div class="bld" onclick="G.open('office')"><span class="e">🏢</span><b>모험가 사무소</b><small>파티·퀘스트</small></div>
+      <div class="bld" onclick="G.open('guild')"><span class="e">🏰</span><b>길드</b><small>고정 파티</small></div>
+      <div class="bld" onclick="G.open('temple')"><span class="e">⛪</span><b>신전</b><small>스킬</small></div>
+      <div class="bld" onclick="G.open('smith')"><span class="e">⚒️</span><b>대장간</b><small>수리·강화·조합</small></div>
+      <div class="bld" onclick="G.open('inn')"><span class="e">🏨</span><b>여관</b><small>피로 회복</small></div>
+      <div class="bld" onclick="G.open('shop')"><span class="e">🛒</span><b>상인</b><small>포션·판매</small></div>
+      <div class="bld" onclick="G.open('auction')"><span class="e">🔨</span><b>경매장</b><small>1시간 갱신</small></div>
+      <div class="bld" onclick="G.open('bank')"><span class="e">🏦</span><b>은행</b><small>보관</small></div>
+      <div class="bld" onclick="G.open('engrave')"><span class="e">🖋️</span><b>각인사</b><small>영구 강화</small></div>
+    </div>
+  </div>
+  <div id="battle">
+    <div id="b-top"></div>
+    <div id="cvwrap"><canvas id="cv"></canvas></div>
+    <div id="b-party"></div>
+    <div id="b-me"></div>
+    <div id="b-skills"></div>
+  </div>
+</div>
+<div id="sheet"><div class="sheet-in"><div class="sheet-h"><span id="sheet-title"></span><button onclick="closeSheet()">✕</button></div><div id="sheet-body"></div></div></div>
+<div id="popup"><div class="pop"><div id="popup-body"></div><div id="popup-btns"></div></div></div>
+<div id="boon"><div class="pop"><div id="boon-body"></div><div id="boon-btns"></div></div></div>
+<div id="toasts"></div>
+<script src="data.js"></script>
+<script src="game.js"></script>
+<script src="battle.js"></script>
+</body>
+</html>
