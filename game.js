@@ -1081,7 +1081,12 @@ class FlyingOrb {
     this.speed = (this.owner === OWNER.PLAYER) ? baseOrbSpeed : ENEMY_CONFIG.enemyOrbSpeed;
     // [원거리] 맞닿지 않은 곳으로 가는 구슬은 2배 느림
     // [아이템 속사] 원거리 느려짐 없음, 오히려 1.5배
-    if (isRangedShot(sourceZone, targetZone)) this.speed = (hasItem(owner, 'rapid') && isRivalMarked(targetZone, owner)) ? this.speed * 1.5 : this.speed / RANGED_SLOW;
+    if (isRangedShot(sourceZone, targetZone)) this.speed /= RANGED_SLOW;
+    // [아이템 속사] 발동 후 다음 공격 구슬(상대 땅으로 가는)은 2배 빠르게
+    if (itemMode && itemState[owner] && itemState[owner].rapid > 0 && isRivalMarked(targetZone, owner)) {
+      this.speed *= ITEM_BAL.rapidSpeed * (itemState[owner].rapidMul || 1);
+      itemState[owner].rapid--;
+    }
     this.progress = 0;
     this.curve = (Math.random() - 0.5) * 16;
     this.isDead = false;
@@ -1113,63 +1118,85 @@ class FlyingOrb {
     const t = this.targetZone, own = this.owner;
     const fighters = o => o === OWNER.PLAYER || o === OWNER.ENEMY;
     const rivalHit = fighters(own) && fighters(t.owner) && t.owner !== own;
-    // [아이템] 카드는 중립 땅에는 효과 없음 (상대 색이 조금이라도 있으면 상대 땅으로 침)
-    // 공격 쪽: 파워샷(상대 땅 2배) → 이 공격의 '공격력'
+    const wasMine = fighters(own) && t.owner === own;
+    const src = this.bounceStep ? null : this.sourceZone; // 튕긴 구슬은 '쏜 곳'이 없음
+    // 튕긴 구슬: 첫 타격에서 정해진 공격력 그대로 (방어 쪽 철벽만 다시 계산)
+    if (this.bounceStep) {
+      const pw = rivalHit ? defenseTake(this.power, t) : this.power;
+      applyOrbHit(t, own, pw, null);
+      this.bounceOn(t, own, rivalHit);
+      return;
+    }
+    // [아이템] 카드는 상대 땅(상대 색이 조금이라도 있는 곳)을 공격할 때만. 중립 땅에는 효과 없음
+    const atk = fighters(own) && isRivalMarked(t, own) ? itemAttackState(own) : null;
     let attack = this.power;
-    if (hasItem(own, 'power') && isRivalMarked(t, own)) attack *= ITEM_BAL.powerMult;
-    // [아이템 관통샷] 확률로 상대의 모든 방어 효과(반사·흡수·철벽) 무시
-    const pierceDefense = rivalHit && hasItem(own, 'piercing') && Math.random() < ITEM_BAL.piercingChance;
-    if (pierceDefense) flashZone(t, '#7c3aed');
+    let pierceDefense = false;
+    if (atk) {
+      // 공격 쪽 카드 (각 확률, 버프샷이면 효과 2배)
+      if (atk.has('power') && atk.roll()) attack *= 1 + ITEM_BAL.powerBonus * atk.mul;          // 파워샷
+      pierceDefense = rivalHit && atk.has('piercing') && atk.roll();                            // 관통샷
+      if (pierceDefense) flashZone(t, '#7c3aed');
+    }
     if (rivalHit && !pierceDefense) {
-      // [아이템 반사 방패] 확률로 쏜 곳으로 그대로 되돌림 (되돌린 구슬은 다시 반사되지 않음)
-      if (!this.reflected && this.sourceZone && hasItem(t.owner, 'reflect') && Math.random() < ITEM_BAL.reflectChance) {
+      const dp = defenseChance(t.owner);
+      // [아이템 반사 방패] 쏜 곳으로 그대로 되돌림 (되돌린 구슬은 다시 반사되지 않음)
+      if (!this.reflected && this.sourceZone && hasItem(t.owner, 'reflect') && Math.random() < dp) {
         const back = new FlyingOrb(t, this.sourceZone, t.owner, this.power);
         back.reflected = true;
         flyingOrbs.push(back);
+        if (atk) atk.done();
         return;
       }
-      // [아이템 흡수] 확률로 막고, 내 피를 상대 공격력의 배수만큼 채움
-      if (hasItem(t.owner, 'absorb') && Math.random() < ITEM_BAL.absorbChance) {
+      // [아이템 흡수] 막고, 내 피를 상대 공격력의 2배만큼 채움
+      if (hasItem(t.owner, 'absorb') && Math.random() < dp) {
         t.orbs = Math.min(t.maxOrbs, t.orbs + attack * ITEM_BAL.absorbHeal);
+        if (atk) atk.done();
         return;
       }
     }
-    // [아이템 크리티컬] 상대 땅에 확률로 3배 (반사된 구슬도 해당)
-    if (hasItem(own, 'crit') && isRivalMarked(t, own) && Math.random() < ITEM_BAL.critChance) {
-      attack *= ITEM_BAL.critMult;
-      flashZone(t, '#f59e0b');
+    let bounceCount = 0;
+    if (atk) {
+      if (atk.has('crit') && atk.roll()) { attack *= 1 + ITEM_BAL.critBonus * atk.mul; flashZone(t, '#f59e0b'); } // 크리티컬
+      if (rivalHit && atk.has('paralyze') && atk.roll()) { t.paralyzedShots = ITEM_BAL.paralyzeShots * atk.mul; flashZone(t, '#0ea5e9'); } // 마비
+      if (atk.has('pierce') && atk.roll()) bounceCount = ITEM_BAL.bounceCount * atk.mul;      // 튕기기
+      if (atk.has('rebuild') && atk.roll() && this.sourceZone && this.sourceZone.owner === own) // 재건: 쏜 지역 회복
+        this.sourceZone.orbs = Math.min(this.sourceZone.maxOrbs, this.sourceZone.orbs + ITEM_BAL.rebuildHp * atk.mul);
+      atk.chain('rapid', ITEM_BAL.chainShots);   // 속사: 다음 공격 구슬 빠르게
+      atk.chain('supply', ITEM_BAL.chainShots);  // 보급: 다음 공격 동안 내 카드 확률 +10%
+      atk.chain('buff', ITEM_BAL.chainShots, ITEM_BAL.rareChance);  // 버프샷: 다음 공격 동안 효과 2배
+      atk.chain('curse', ITEM_BAL.chainShots, ITEM_BAL.rareChance); // 저주샷: 상대 다음 공격 동안 상대 카드 효과 없음
+      atk.done();
     }
-    // 맞는 쪽: 철벽(상대 구슬 50%), 관통샷이 터지면 무시
-    const power = pierceDefense ? attack : itemHitPower(attack, own, t);
-    // [아이템 마비] 확률로 맞은 상대 지역의 다음 5발 공격 속도 50% 감소
-    if (rivalHit && hasItem(own, 'paralyze') && Math.random() < ITEM_BAL.paralyzeChance) {
-      t.paralyzedShots = ITEM_BAL.paralyzeShots;
-      flashZone(t, '#0ea5e9');
-    }
+    // 맞는 쪽: 철벽 (관통샷이 터지면 무시)
+    const power = rivalHit && !pierceDefense ? defenseTake(attack, t) : attack;
     const wasRival = t.owner !== OWNER.NEUTRAL && t.owner !== own;
-    const wasMine = fighters(own) && t.owner === own;
-    // 튕긴 구슬은 출발 지역(맞은 지역)을 '쏜 곳'으로 치지 않음 (재배치 등에 영향 없게)
-    applyOrbHit(t, own, power, this.pierceStep ? null : this.sourceZone);
-    // [아이템 튕기기] 맞닿은 공격·원거리 공격 모두: 맞힌 상대 지역에서 옆의 상대 지역으로 튕겨 나감
-    // 첫 타격 → 두 번째(원래 공격력의 50%) → 세 번째(30%)까지. 이미 맞힌 지역으로는 튕기지 않음
-    // (도착할 때마다 파워샷·크리티컬·철벽 등은 그대로 계산)
-    // 내 지역에 맞으면(회복) 옆의 피가 닳은 내 지역으로 튕겨 회복 (같은 50% → 30%)
-    const step = this.pierceStep || 0;
-    if ((wasRival || wasMine) && step < PIERCE_RATIOS.length && hasItem(own, 'pierce')) {
-      const hit = this.pierceHit || [this.sourceZone];
-      const next = t.neighbors.filter(n => !hit.includes(n) && n !== t && (wasRival
-        ? (n.owner !== OWNER.NEUTRAL && n.owner !== own)
-        : (n.owner === own && n.orbs < n.maxOrbs)));
-      if (next.length) {
-        const n2 = next[Math.floor(Math.random() * next.length)];
-        const basePower = this.pierceBase || this.power;
-        const bounce = new FlyingOrb(t, n2, own, basePower * PIERCE_RATIOS[step]);
-        bounce.pierceStep = step + 1;
-        bounce.pierceBase = basePower;
-        bounce.pierceHit = hit.concat([t]);
-        flyingOrbs.push(bounce);
-      }
+    applyOrbHit(t, own, power, src);
+    // [아이템 튕기기] 맞힌 곳에서 옆으로 튕김 (공격력 그대로). 내 지역(회복)이면 옆의 다친 내 지역으로
+    if (wasMine && fighters(own) && hasItem(own, 'pierce') && !(itemState[own].cursed > 0) && Math.random() < itemChance(own, ITEM_BAL.baseChance))
+      bounceCount = ITEM_BAL.bounceCount * (itemState[own].buff > 0 ? 2 : 1);
+    if (bounceCount > 0 && (wasRival || wasMine)) {
+      this.bounceLeft = bounceCount;
+      this.bouncePower = attack;
+      this.bounceOn(t, own, wasRival);
     }
+  }
+
+  // 튕기기: 옆의 (상대 땅 / 다친 내 땅) 으로 다음 구슬. 이미 맞힌 곳 제외
+  bounceOn(t, own, rival) {
+    const left = this.bounceStep ? this.bounceLeft - 1 : this.bounceLeft;
+    if (!left || left <= 0) return;
+    const hit = this.bounceHit || [this.sourceZone];
+    const next = t.neighbors.filter(n => !hit.includes(n) && n !== t && (rival
+      ? (n.owner !== OWNER.NEUTRAL && n.owner !== own)
+      : (n.owner === own && n.orbs < n.maxOrbs)));
+    if (!next.length) return;
+    const n2 = next[Math.floor(Math.random() * next.length)];
+    const b = new FlyingOrb(t, n2, own, this.bouncePower || this.power);
+    b.bounceStep = (this.bounceStep || 0) + 1;
+    b.bounceLeft = left;
+    b.bouncePower = this.bouncePower || this.power;
+    b.bounceHit = hit.concat([t]);
+    flyingOrbs.push(b);
   }
 
   draw(ctx) {
@@ -2431,9 +2458,8 @@ function updateOrbSpawners(currentTime) {
     const ranged = zone.targetZones.some(t => isRangedShot(zone, t));
     // 속사는 구슬 속도만, 발사 간격은 그대로
     const rangedMult = ranged ? RANGED_INTERVAL_MULT : 1;
-    const supply = hasItem(zone.owner, 'supply') ? 1 / ITEM_BAL.supplyRate : 1; // [아이템 보급] 내 생산 30% 빠르게
     const paralyzed = zone.paralyzedShots > 0 ? 1 / ITEM_BAL.paralyzeSpeed : 1; // [아이템 마비] 공격 속도 50% → 간격 2배
-    const interval = baseInterval * rangedMult * supply * slow * paralyzed / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
+    const interval = baseInterval * rangedMult * slow * paralyzed / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
 
     if (currentTime - zone.lastShotTime >= interval) {
       zone.lastShotTime = currentTime;
@@ -2558,34 +2584,35 @@ let quakeUntilMs = 0;
 // 적도 같은 때 무작위로 1장씩 고름. 고른 카드는 화면 아래에 아이콘으로 (나: 파랑, 적: 빨강)
 // 아이템 모드 판은 기록·순위에 남기지 않음
 // -------------------------------------------------------------
-// 고르는 카드 수: 일반 맵 3장, 나라 전국 맵 4장, 전세계 5장
+// 고르는 카드 수: 일반 맵 4장, 나라 전국 맵 5장, 전세계 6장
 const NATIONAL_MAPS = new Set(['KOREA', 'JP_JAPAN', 'CN_CHINA', 'US_USA', 'FR_FRANCE', 'DE_GERMANY', 'IT_ITALY', 'ES_SPAIN', 'GB_UK']);
 function itemRounds() {
-  if (currentCountryKey() === 'WD') return 5;
-  return NATIONAL_MAPS.has(currentMapKey) ? 4 : 3;
+  if (currentCountryKey() === 'WD') return 6;
+  return NATIONAL_MAPS.has(currentMapKey) ? 5 : 4;
 }
 const ITEM_EVERY_SEC = 30;
-const REBUILD_EVERY_SEC = 5;
-const REBUILD_HP = 2;
 // 아이템 수치 (밸런스 조절은 여기서)
 const ITEM_BAL = {
-  powerMult: 2,       // 파워샷: 상대 땅 공격력 배수
-  critChance: 0.1,    // 크리티컬 확률
-  critMult: 3,        // 크리티컬 배수
-  fortressTake: 0.5,  // 철벽: 상대 공격을 이만큼만 받음
-  reflectChance: 0.1, // 반사 방패 확률
-  absorbChance: 0.1,  // 흡수 확률
-  piercingChance: 0.1, // 관통샷: 모든 방어 효과 무시 확률
-  paralyzeChance: 0.1, // 마비 확률
-  paralyzeShots: 5,    // 마비: 다음 몇 발
+  baseChance: 0.1,     // 카드 발동 확률
+  rareChance: 0.05,    // 저주샷·버프샷 발동 확률
+  powerBonus: 0.5,     // 파워샷: 공격력 +50%
+  critBonus: 1,        // 크리티컬: 공격력 +100% (2배)
+  bounceCount: 2,      // 튕기기: 두 번 더 튕김 (공격력 그대로)
+  piercingChance: 0.1, // (관통샷은 baseChance 사용)
+  paralyzeShots: 5,    // 마비: 맞은 지역의 다음 5발
   paralyzeSpeed: 0.5,  // 마비: 공격 속도 배수
-  absorbHeal: 2,      // 흡수: 상대 공격력의 몇 배를 회복
-  supplyRate: 1.3     // 보급: 생산 속도 배수
+  rebuildHp: 5,        // 재건: 쏜 지역 피 +5
+  chainShots: 5,       // 속사·보급·버프샷·저주샷: 다음 5 공격
+  rapidSpeed: 2,       // 속사: 구슬 속도 2배
+  supplyBonus: 0.1,    // 보급: 내 카드 확률 +10%
+  fortressTake: 0.3,   // 철벽: 상대 공격을 30%만 받음
+  absorbHeal: 2        // 흡수: 상대 공격력의 2배 회복
 };
-const PIERCE_RATIOS = [0.5, 0.3]; // 튕기기 튕긴 구슬 공격력: 두 번째 50%, 세 번째 30%
 const ITEM_ICON = {
   rapid: '<path d="M3 8h9M5 12h10M3 16h9"/><circle cx="18" cy="12" r="3"/>',
   power: '<circle cx="12" cy="12" r="6"/><path d="M12 9v6M9 12h6"/>',
+  curse: '<circle cx="12" cy="12" r="8"/><path d="M8 9l2 2M10 9l-2 2M14 9l2 2M16 9l-2 2M8 16c2-2 6-2 8 0"/>',
+  buff: '<path d="M12 3v18M5 10l7-7 7 7"/><path d="M5 17h14"/>',
   piercing: '<path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/><path d="M3 12h18M17 8l4 4-4 4"/>',
   paralyze: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   pierce: '<path d="M3 12h17M15 7l5 5-5 5"/><rect x="9" y="6" width="3" height="12" rx="1"/>',
@@ -2598,33 +2625,71 @@ const ITEM_ICON = {
   absorb: '<circle cx="12" cy="12" r="8"/><path d="M12 7v10M7 12h10"/>'
 };
 const ITEMS = [
-  { key: 'rapid', name: '속사', desc: '상대 땅으로 가는 원거리 구슬이 빠르게 (발사 간격 그대로)' },
-  { key: 'power', name: '파워샷', desc: '상대 땅 공격력 2배 (상대 색이 조금이라도 있는 곳)' },
-  { key: 'pierce', name: '튕기기', desc: '옆 지역으로 두 번 더 튕김 (50% → 30%). 내 지역에 쏘면 옆의 다친 내 지역도 회복' },
-  { key: 'fortress', name: '철벽', desc: '상대 공격을 50%만 받음' },
-  { key: 'rebuild', name: '재건', desc: '5초마다 내 모든 지역 피 +2' },
-  { key: 'reflect', name: '반사 방패', desc: '10% 확률로 상대 구슬을 쏜 곳으로 되돌림' },
-  { key: 'longrange', name: '장거리 사격', desc: '모든 내 지역이 원거리 공격 가능' },
-  { key: 'supply', name: '보급', desc: '내 생산 속도 30% 빠르게' },
-  { key: 'crit', name: '크리티컬', desc: '10% 확률로 상대 땅에 3배 피해' },
+  { key: 'power', name: '파워샷', desc: '10% 확률로 공격력 50% 증가' },
+  { key: 'crit', name: '크리티컬', desc: '10% 확률로 공격력 2배' },
+  { key: 'pierce', name: '튕기기', desc: '10% 확률로 옆 지역으로 두 번 더 튕김 (공격력 그대로). 내 지역이면 회복' },
   { key: 'piercing', name: '관통샷', desc: '10% 확률로 상대의 모든 방어 효과 무시' },
   { key: 'paralyze', name: '마비', desc: '10% 확률로 맞은 상대 지역의 다음 5발 공격 속도 50% 감소' },
-  { key: 'absorb', name: '흡수', desc: '10% 확률로 상대 공격을 막고 그 2배만큼 회복' }
+  { key: 'rapid', name: '속사', desc: '10% 확률로 다음 5공격이 2배 빠르게 날아감' },
+  { key: 'curse', name: '저주샷', desc: '5% 확률로 상대의 다음 5공격에 상대 아이템 효과 없음' },
+  { key: 'buff', name: '버프샷', desc: '5% 확률로 내 다음 5공격의 모든 아이템 효과 2배' },
+  { key: 'fortress', name: '철벽', desc: '10% 확률로 상대 공격을 30%만 받음' },
+  { key: 'reflect', name: '반사 방패', desc: '10% 확률로 상대 구슬을 쏜 곳으로 되돌림' },
+  { key: 'absorb', name: '흡수', desc: '10% 확률로 상대 공격을 막고 그 2배만큼 회복' },
+  { key: 'rebuild', name: '재건', desc: '공격할 때 10% 확률로 쏜 지역 피 +5' },
+  { key: 'longrange', name: '장거리 사격', desc: '모든 내 지역이 원거리 공격 가능' },
+  { key: 'supply', name: '보급', desc: '10% 확률로 다음 5공격 동안 내 모든 카드 확률 +10%' }
 ];
 const itemMode = true; // 모든 판이 아이템 모드 (노멀 모드 없음)
 let itemsOf = { player: [], enemy: [] };
 let itemRound = 0;
 let nextItemAt = 0;
 let rebuildAt = { player: 0, enemy: 0 };
+const newItemState = () => ({ supply: 0, buff: 0, cursed: 0, rapid: 0, supplyNew: 0, buffNew: 0 });
+let itemState = { player: newItemState(), enemy: newItemState() };
 let itemChoices = [];
 
 // [아이템 상호작용] 구슬이 실제로 주는 양: 공격하는 쪽 카드(파워샷 등)로 정해진 power 에
 // 맞는 쪽 카드를 적용. 철벽: 상대(적·나) 구슬에 맞을 때만 50% (중립 땅·자기 땅에는 그대로)
-function itemHitPower(power, attacker, target) {
-  if (!itemMode || !target) return power;
-  const victim = target.owner;
-  if (victim !== OWNER.NEUTRAL && victim !== attacker && hasItem(victim, 'fortress')) return power * ITEM_BAL.fortressTake;
+// 내 카드 발동 확률 (보급 발동 중이면 +10%)
+function itemChance(owner, base) {
+  const st = itemState[owner];
+  return base + (st && st.supply > 0 && !(st.cursed > 0) ? ITEM_BAL.supplyBonus : 0);
+}
+function defenseChance(victim) { return itemChance(victim, ITEM_BAL.baseChance); }
+// [아이템 철벽] 확률로 상대 공격을 30%만 받음
+function defenseTake(power, t) {
+  if (hasItem(t.owner, 'fortress') && Math.random() < defenseChance(t.owner)) return power * ITEM_BAL.fortressTake;
   return power;
+}
+// 공격 한 번의 카드 상태: 저주면 카드 없음, 버프샷이면 효과 2배, 보급이면 확률 +10%
+function itemAttackState(own) {
+  const st = itemState[own];
+  const cursed = st.cursed > 0, mul = !cursed && st.buff > 0 ? 2 : 1;
+  const used = { supply: st.supply > 0, buff: st.buff > 0, cursed };
+  const o = {
+    mul,
+    has: k => !cursed && hasItem(own, k),
+    roll: (base = ITEM_BAL.baseChance) => Math.random() < itemChance(own, base),
+    chain(k, shots, base) {
+      if (!o.has(k) || !o.roll(base)) return;
+      const n = shots * mul;
+      if (k === 'rapid') { st.rapid = n; st.rapidMul = 1; }
+      if (k === 'supply') st.supplyNew = n;
+      if (k === 'buff') st.buffNew = n;
+      if (k === 'curse') { itemState[itemRival(own)].cursed = n; }
+      if (own === OWNER.PLAYER) flashCenterText(ITEMS.find(x => x.key === k).name + '!');
+    },
+    // 이번 공격이 끝나면 '다음 N 공격' 카운트를 하나 줄이고, 이번에 새로 터진 것은 다음 공격부터
+    done() {
+      if (used.supply) st.supply--;
+      if (used.buff) st.buff--;
+      if (used.cursed) st.cursed--;
+      if (st.supplyNew) { st.supply = st.supplyNew; st.supplyNew = 0; }
+      if (st.buffNew) { st.buff = st.buffNew; st.buffNew = 0; }
+    }
+  };
+  return o;
 }
 // 상대 색이 조금이라도 있는 지역: 상대 땅, 또는 상대 게이지가 찬 중립 땅
 function isRivalMarked(t, attacker) {
@@ -2643,6 +2708,7 @@ function resetItems() {
   itemRound = 0;
   nextItemAt = 0;
   rebuildAt = { player: 0, enemy: 0 };
+  itemState = { player: newItemState(), enemy: newItemState() };
   const m = document.getElementById('item-modal');
   if (m) m.style.display = 'none';
   renderItemBar();
@@ -2683,7 +2749,6 @@ function itemCardHtml(it) {
 }
 function gainItem(owner, key) {
   itemsOf[owner].push(key);
-  if (key === 'rebuild') rebuildAt[owner] = gameElapsedTime + REBUILD_EVERY_SEC;
 }
 
 function chooseItem(key) {
@@ -2754,11 +2819,7 @@ window.showItemInfo = showItemInfo;
 function updateItems() {
   if (!itemMode) return;
   [OWNER.PLAYER, OWNER.ENEMY].forEach(owner => {
-    // [아이템 재건] 5초마다 내 모든 지역 피 +2
-    if (hasItem(owner, 'rebuild') && gameElapsedTime >= rebuildAt[owner]) {
-      rebuildAt[owner] = gameElapsedTime + REBUILD_EVERY_SEC;
-      rawZones.forEach(z => { if (z.owner === owner) z.orbs = Math.min(z.maxOrbs, z.orbs + REBUILD_HP); });
-    }
+
   });
   if (itemRound < itemRounds() && gameElapsedTime >= nextItemAt) openItemPick();
 }
@@ -2771,7 +2832,7 @@ const COUNTRY_CONCEPT = {
   FR: ['혁명', '1분마다 10초 동안 점령 지역과 맞닿은 중립 지역이 주변을 공격해요'],
   DE: ['전차 돌파', '1분마다 전차가 지나가고, 지나간 지역은 중립이 돼요 (본진 제외)'],
   IT: ['최고의 지휘관', '본진 2개로 시작해요. 하나는 무작위 위치에 생겨요'],
-  WD: ['세계 대전', '본진 3개로 시작하고, 30초마다 나라 컨셉 하나가 무작위로 일어나요. 카드는 5장 골라요'],
+  WD: ['세계 대전', '본진 3개로 시작하고, 30초마다 나라 컨셉 하나가 무작위로 일어나요. 카드는 6장 골라요'],
   ES: ['대항해시대', '1분마다 양쪽의 완전점령 지역 한 곳이 대포를 쏴요 (공격력 20)'],
   GB: ['안개', '적의 구슬은 처음 방향만 보이고 어디로 가는지는 보이지 않아요']
 };
