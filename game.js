@@ -1116,33 +1116,41 @@ class FlyingOrb {
     // [아이템] 카드는 중립 땅에는 효과 없음 (상대 색이 조금이라도 있으면 상대 땅으로 침)
     // 공격 쪽: 파워샷(상대 땅 2배) → 이 공격의 '공격력'
     let attack = this.power;
-    if (hasItem(own, 'power') && isRivalMarked(t, own)) attack *= 2;
-    if (rivalHit) {
-      // [아이템 반사 방패] 30% 확률로 쏜 곳으로 그대로 되돌림 (되돌린 구슬은 다시 반사되지 않음)
-      if (!this.reflected && this.sourceZone && hasItem(t.owner, 'reflect') && Math.random() < ITEM_CHANCE) {
+    if (hasItem(own, 'power') && isRivalMarked(t, own)) attack *= ITEM_BAL.powerMult;
+    // [아이템 관통샷] 확률로 상대의 모든 방어 효과(반사·흡수·철벽) 무시
+    const pierceDefense = rivalHit && hasItem(own, 'piercing') && Math.random() < ITEM_BAL.piercingChance;
+    if (pierceDefense) flashZone(t, '#7c3aed');
+    if (rivalHit && !pierceDefense) {
+      // [아이템 반사 방패] 확률로 쏜 곳으로 그대로 되돌림 (되돌린 구슬은 다시 반사되지 않음)
+      if (!this.reflected && this.sourceZone && hasItem(t.owner, 'reflect') && Math.random() < ITEM_BAL.reflectChance) {
         const back = new FlyingOrb(t, this.sourceZone, t.owner, this.power);
         back.reflected = true;
         flyingOrbs.push(back);
         return;
       }
-      // [아이템 흡수] 30% 확률로 막고, 내 피를 상대 공격력의 2배만큼 채움
-      if (hasItem(t.owner, 'absorb') && Math.random() < ITEM_CHANCE) {
-        t.orbs = Math.min(t.maxOrbs, t.orbs + attack * 2);
+      // [아이템 흡수] 확률로 막고, 내 피를 상대 공격력의 배수만큼 채움
+      if (hasItem(t.owner, 'absorb') && Math.random() < ITEM_BAL.absorbChance) {
+        t.orbs = Math.min(t.maxOrbs, t.orbs + attack * ITEM_BAL.absorbHeal);
         return;
       }
     }
-    // [아이템 크리티컬] 상대 땅에 30% 확률로 3배 (반사된 구슬도 해당)
-    if (hasItem(own, 'crit') && isRivalMarked(t, own) && Math.random() < ITEM_CHANCE) {
-      attack *= 3;
+    // [아이템 크리티컬] 상대 땅에 확률로 3배 (반사된 구슬도 해당)
+    if (hasItem(own, 'crit') && isRivalMarked(t, own) && Math.random() < ITEM_BAL.critChance) {
+      attack *= ITEM_BAL.critMult;
       flashZone(t, '#f59e0b');
     }
-    // 맞는 쪽: 철벽(상대 구슬 50%)
-    const power = itemHitPower(attack, own, t);
+    // 맞는 쪽: 철벽(상대 구슬 50%), 관통샷이 터지면 무시
+    const power = pierceDefense ? attack : itemHitPower(attack, own, t);
+    // [아이템 마비] 확률로 맞은 상대 지역의 다음 5발 공격 속도 50% 감소
+    if (rivalHit && hasItem(own, 'paralyze') && Math.random() < ITEM_BAL.paralyzeChance) {
+      t.paralyzedShots = ITEM_BAL.paralyzeShots;
+      flashZone(t, '#0ea5e9');
+    }
     const wasRival = t.owner !== OWNER.NEUTRAL && t.owner !== own;
     const wasMine = fighters(own) && t.owner === own;
     // 튕긴 구슬은 출발 지역(맞은 지역)을 '쏜 곳'으로 치지 않음 (재배치 등에 영향 없게)
     applyOrbHit(t, own, power, this.pierceStep ? null : this.sourceZone);
-    // [아이템 관통탄] 맞닿은 공격·원거리 공격 모두: 맞힌 상대 지역에서 옆의 상대 지역으로 튕겨 나감
+    // [아이템 튕기기] 맞닿은 공격·원거리 공격 모두: 맞힌 상대 지역에서 옆의 상대 지역으로 튕겨 나감
     // 첫 타격 → 두 번째(원래 공격력의 50%) → 세 번째(30%)까지. 이미 맞힌 지역으로는 튕기지 않음
     // (도착할 때마다 파워샷·크리티컬·철벽 등은 그대로 계산)
     // 내 지역에 맞으면(회복) 옆의 피가 닳은 내 지역으로 튕겨 회복 (같은 50% → 30%)
@@ -2423,11 +2431,13 @@ function updateOrbSpawners(currentTime) {
     const ranged = zone.targetZones.some(t => isRangedShot(zone, t));
     // 속사는 구슬 속도만, 발사 간격은 그대로
     const rangedMult = ranged ? RANGED_INTERVAL_MULT : 1;
-    const supply = hasItem(zone.owner, 'supply') ? 1 / 1.3 : 1; // [아이템 보급] 내 생산 30% 빠르게
-    const interval = baseInterval * rangedMult * supply * slow / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
+    const supply = hasItem(zone.owner, 'supply') ? 1 / ITEM_BAL.supplyRate : 1; // [아이템 보급] 내 생산 30% 빠르게
+    const paralyzed = zone.paralyzedShots > 0 ? 1 / ITEM_BAL.paralyzeSpeed : 1; // [아이템 마비] 공격 속도 50% → 간격 2배
+    const interval = baseInterval * rangedMult * supply * slow * paralyzed / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
 
     if (currentTime - zone.lastShotTime >= interval) {
       zone.lastShotTime = currentTime;
+      if (zone.paralyzedShots > 0) zone.paralyzedShots--;
       
       let power = 1;
       if (EXPERIMENT_NO_SKILL || isUnleashed(zone)) {
@@ -2557,11 +2567,27 @@ function itemRounds() {
 const ITEM_EVERY_SEC = 30;
 const REBUILD_EVERY_SEC = 5;
 const REBUILD_HP = 2;
-const ITEM_CHANCE = 0.3; // 반사·흡수·크리티컬 확률
-const PIERCE_RATIOS = [0.5, 0.3]; // 관통탄 튕긴 구슬 공격력: 두 번째 50%, 세 번째 30%
+// 아이템 수치 (밸런스 조절은 여기서)
+const ITEM_BAL = {
+  powerMult: 2,       // 파워샷: 상대 땅 공격력 배수
+  critChance: 0.1,    // 크리티컬 확률
+  critMult: 3,        // 크리티컬 배수
+  fortressTake: 0.5,  // 철벽: 상대 공격을 이만큼만 받음
+  reflectChance: 0.1, // 반사 방패 확률
+  absorbChance: 0.1,  // 흡수 확률
+  piercingChance: 0.1, // 관통샷: 모든 방어 효과 무시 확률
+  paralyzeChance: 0.1, // 마비 확률
+  paralyzeShots: 5,    // 마비: 다음 몇 발
+  paralyzeSpeed: 0.5,  // 마비: 공격 속도 배수
+  absorbHeal: 2,      // 흡수: 상대 공격력의 몇 배를 회복
+  supplyRate: 1.3     // 보급: 생산 속도 배수
+};
+const PIERCE_RATIOS = [0.5, 0.3]; // 튕기기 튕긴 구슬 공격력: 두 번째 50%, 세 번째 30%
 const ITEM_ICON = {
   rapid: '<path d="M3 8h9M5 12h10M3 16h9"/><circle cx="18" cy="12" r="3"/>',
   power: '<circle cx="12" cy="12" r="6"/><path d="M12 9v6M9 12h6"/>',
+  piercing: '<path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/><path d="M3 12h18M17 8l4 4-4 4"/>',
+  paralyze: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   pierce: '<path d="M3 12h17M15 7l5 5-5 5"/><rect x="9" y="6" width="3" height="12" rx="1"/>',
   fortress: '<path d="M4 20V9l3 2V7l2.5 2L12 6l2.5 3L17 7v4l3-2v11z"/>',
   rebuild: '<path d="M12 21s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 11c0 5.5-7 10-7 10z"/>',
@@ -2574,14 +2600,16 @@ const ITEM_ICON = {
 const ITEMS = [
   { key: 'rapid', name: '속사', desc: '상대 땅으로 가는 원거리 구슬이 빠르게 (발사 간격 그대로)' },
   { key: 'power', name: '파워샷', desc: '상대 땅 공격력 2배 (상대 색이 조금이라도 있는 곳)' },
-  { key: 'pierce', name: '관통탄', desc: '옆 지역으로 두 번 더 튕김 (50% → 30%). 내 지역에 쏘면 옆의 다친 내 지역도 회복' },
+  { key: 'pierce', name: '튕기기', desc: '옆 지역으로 두 번 더 튕김 (50% → 30%). 내 지역에 쏘면 옆의 다친 내 지역도 회복' },
   { key: 'fortress', name: '철벽', desc: '상대 공격을 50%만 받음' },
   { key: 'rebuild', name: '재건', desc: '5초마다 내 모든 지역 피 +2' },
-  { key: 'reflect', name: '반사 방패', desc: '30% 확률로 상대 구슬을 쏜 곳으로 되돌림' },
+  { key: 'reflect', name: '반사 방패', desc: '10% 확률로 상대 구슬을 쏜 곳으로 되돌림' },
   { key: 'longrange', name: '장거리 사격', desc: '모든 내 지역이 원거리 공격 가능' },
   { key: 'supply', name: '보급', desc: '내 생산 속도 30% 빠르게' },
-  { key: 'crit', name: '크리티컬', desc: '30% 확률로 상대 땅에 3배 피해' },
-  { key: 'absorb', name: '흡수', desc: '30% 확률로 상대 공격을 막고 그 2배만큼 회복' }
+  { key: 'crit', name: '크리티컬', desc: '10% 확률로 상대 땅에 3배 피해' },
+  { key: 'piercing', name: '관통샷', desc: '10% 확률로 상대의 모든 방어 효과 무시' },
+  { key: 'paralyze', name: '마비', desc: '10% 확률로 맞은 상대 지역의 다음 5발 공격 속도 50% 감소' },
+  { key: 'absorb', name: '흡수', desc: '10% 확률로 상대 공격을 막고 그 2배만큼 회복' }
 ];
 const itemMode = true; // 모든 판이 아이템 모드 (노멀 모드 없음)
 let itemsOf = { player: [], enemy: [] };
@@ -2595,7 +2623,7 @@ let itemChoices = [];
 function itemHitPower(power, attacker, target) {
   if (!itemMode || !target) return power;
   const victim = target.owner;
-  if (victim !== OWNER.NEUTRAL && victim !== attacker && hasItem(victim, 'fortress')) return power * 0.5;
+  if (victim !== OWNER.NEUTRAL && victim !== attacker && hasItem(victim, 'fortress')) return power * ITEM_BAL.fortressTake;
   return power;
 }
 // 상대 색이 조금이라도 있는 지역: 상대 땅, 또는 상대 게이지가 찬 중립 땅
