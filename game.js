@@ -2534,13 +2534,13 @@ function updateOrbSpawners(currentTime) {
 //   US 자본주의: 1분마다 무작위 지역들의 구슬 공격력 10초 동안 5
 // -------------------------------------------------------------
 const COUNTRY_EVENT_CFG = {
-  KR: { every: 60, duration: 10, toast: '필사즉생', color: '#b91c1c' },
-  JP: { every: 45, duration: 10, toast: '지진!', color: '#92400e' },
-  CN: { every: 60, duration: 10, toast: '모래폭풍', color: '#d97706' },
-  US: { every: 60, share: 0.15, min: 2, duration: 10, power: 5, toast: '자본주의 호황', color: '#eab308' },
-  FR: { every: 60, duration: 10, fireEvery: 1.0, toast: '혁명!', color: '#7c3aed' },
-  ES: { every: 60, duration: 10, fireEvery: 1.0, power: 20, toast: '대항해시대 포격!', color: '#b45309' },
-  DE: { every: 60, tankSec: 3.5, width: 0.07, toast: '전차 돌파!', color: '#3f6212' }
+  KR: { every: 50, duration: 10, toast: '필사즉생', color: '#b91c1c' },
+  JP: { every: 50, duration: 10, toast: '지진!', color: '#92400e' },
+  CN: { every: 50, duration: 10, toast: '모래폭풍', color: '#d97706' },
+  US: { every: 50, share: 0.15, min: 2, duration: 10, power: 5, toast: '자본주의 호황', color: '#eab308' },
+  FR: { every: 50, duration: 10, fireEvery: 1.0, toast: '혁명!', color: '#7c3aed' },
+  ES: { every: 50, duration: 10, fireEvery: 1.0, power: 20, toast: '대항해시대 포격!', color: '#b45309' },
+  DE: { every: 50, tankSec: 3.5, width: 0.07, toast: '전차 돌파!', color: '#3f6212' }
 };
 const REBEL = 'rebel';
 let revoltUntil = 0, revoltNextShot = 0;
@@ -2631,7 +2631,7 @@ let quakeUntilMs = 0;
 // 적도 같은 때 무작위로 1장씩 고름. 고른 카드는 화면 아래에 아이콘으로 (나: 파랑, 적: 빨강)
 // 아이템 모드 판은 기록·순위에 남기지 않음
 // -------------------------------------------------------------
-// 고르는 카드 수: 일반 맵 3장, 나라 전국 맵 5장, 전세계 6장
+// 고르는 카드 수: 일반 맵 3장, 나라 전국 맵 4장, 전세계 5장 (30초마다 → 마지막 카드 60·90·120초)
 const NATIONAL_MAPS = new Set(['KOREA', 'JP_JAPAN', 'CN_CHINA', 'US_USA', 'FR_FRANCE', 'DE_GERMANY', 'IT_ITALY', 'ES_SPAIN', 'GB_UK']);
 // 한 번에 보여 주는 카드 수: 일반 맵 3장, 나라 전국 맵 4장, 전세계 5장
 function itemChoiceCount() {
@@ -2639,8 +2639,8 @@ function itemChoiceCount() {
   return NATIONAL_MAPS.has(currentMapKey) ? 4 : 3;
 }
 function itemRounds() {
-  if (currentCountryKey() === 'WD') return 6;
-  return NATIONAL_MAPS.has(currentMapKey) ? 5 : 3;
+  if (currentCountryKey() === 'WD') return 5;
+  return NATIONAL_MAPS.has(currentMapKey) ? 4 : 3;
 }
 const ITEM_EVERY_SEC = 30;
 // 아이템 수치 (밸런스 조절은 여기서)
@@ -2893,16 +2893,16 @@ function updateItems() {
 
 // 맵 화면에서 나라 이름 아래에 보여 줄 컨셉 [이름, 설명]
 const COUNTRY_CONCEPT = {
-  KR: ['필사즉생', '1분마다 10초 동안 피가 깎인 지역의 공격력이 2배가 돼요'],
-  JP: ['지진', '45초마다 모든 완전점령 지역이 10초 동안 공격을 멈추고 화면이 흔들려요'],
-  CN: ['모래폭풍', '1분마다 모든 완전점령 지역의 공격 속도가 10초 동안 절반이 돼요'],
-  US: ['자본주의 호황', '1분마다 무작위 점령 지역들의 공격력이 10초 동안 강해져요'],
-  FR: ['혁명', '1분마다 10초 동안 점령 지역과 맞닿은 중립 지역이 주변을 공격해요'],
-  DE: ['전차 돌파', '1분마다 전차가 지나가고, 지나간 지역은 중립이 돼요 (본진 제외)'],
+  KR: ['필사즉생', '50초마다 10초 동안 피가 깎인 지역의 공격력이 2배가 돼요'],
+  JP: ['지진', '50초마다 모든 완전점령 지역이 10초 동안 공격을 멈추고 화면이 흔들려요'],
+  CN: ['모래폭풍', '50초마다 모든 완전점령 지역의 공격 속도가 10초 동안 절반이 돼요'],
+  US: ['자본주의 호황', '50초마다 무작위 점령 지역들의 공격력이 10초 동안 강해져요'],
+  FR: ['혁명', '50초마다 10초 동안 점령 지역과 맞닿은 중립 지역이 주변을 공격해요'],
+  DE: ['전차 돌파', '50초마다 전차가 지나가고, 지나간 지역은 중립이 돼요 (본진 제외)'],
   IT: ['최고의 지휘관', '본진 2개로 시작해요. 하나는 무작위 위치에 생겨요'],
-  ES: ['대항해시대', '1분마다 10초 동안 모든 완전점령 지역이 1초마다 대포를 쏴요 (공격력 20)'],
+  ES: ['대항해시대', '50초마다 10초 동안 모든 완전점령 지역이 1초마다 대포를 쏴요 (공격력 20)'],
   GB: ['안개', '내 지역이 아닌 곳은 모두 검게 가려지고 적의 구슬은 보이지 않아요'],
-  WD: ['세계 대전', '15초부터 1분마다 나라 컨셉 2개가 무작위로 3배 효과로 일어나요. 카드는 6장 골라요']
+  WD: ['세계 대전', '15초부터 1분마다 나라 컨셉 2개가 무작위로 3배 효과로 일어나요. 카드는 5장 골라요']
 };
 // [전세계 '세계 대전'] 30초마다 나라 컨셉 하나가 무작위로 (구역이 많은 만큼 더 많은 지역에)
 const WORLD_EVENT_EVERY = 60;
