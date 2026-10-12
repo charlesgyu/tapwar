@@ -1763,7 +1763,7 @@ window.cancelBaseSelection = cancelBaseSelection;
 // -------------------------------------------------------------
 const PRODUCTS = {
   speed2: { storeId: 'com.tapwar.game.speed', title: '2배속', text: '게임을 2배 빠르게 진행해요.\n한 번 구매하면 모든 맵에서 계속 쓸 수 있어요.' },
-  all_countries: { storeId: 'com.tapwar.game.allcountries', title: '추가 나라 열기', text: '일본·중국·미국·유럽 5개국·Earth 전선을 모두 열어요.\n한 번 구매하면 계속 플레이할 수 있어요.' }
+  all_countries: { storeId: 'com.tapwar.game.allcountries', title: '모든 나라 열기', text: '일본·중국·미국·유럽 5개국·Earth 전선을 모두 열어요.\n한 번 구매하면 계속 플레이할 수 있어요.' }
 };
 const OWNED_KEY = 'tapwar_owned_products';
 let purchaseProductId = null;
