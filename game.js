@@ -1140,22 +1140,23 @@ class FlyingOrb {
       const base = this.bounceBase || this.power;
       const atkPow = base + (this.power - base) * f;
       const pw = rivalHit ? defenseTake(atkPow, t) : atkPow;
+      addFx(t, 'hit', OWNER_DOT[own] || '#7c3aed');
       applyOrbHit(t, own, pw, null);
       const para = Math.round((this.bounceParalyze || 0) * f);
-      if (rivalHit && para > 0) { t.paralyzedShots = para; flashZone(t, '#0ea5e9'); }
+      if (rivalHit && para > 0) { t.paralyzedShots = para; flashZone(t, '#0ea5e9'); addFx(t, 'paralyze'); }
       if (this.bounceExplode && f > 0) explodeAround(t, own, atkPow * this.bounceExplode * f);
       this.bounceOn(t, own, rivalHit);
       return;
     }
     // [아이템] 카드는 상대 땅(상대 색이 조금이라도 있는 곳)을 공격할 때만. 중립 땅에는 효과 없음
-    const atk = fighters(own) && isRivalMarked(t, own) ? itemAttackState(own) : null;
+    const atk = fighters(own) && isRivalMarked(t, own) ? itemAttackState(own, this.sourceZone) : null;
     let attack = this.power;
     let pierceDefense = false;
     if (atk) {
       // 공격 쪽 카드 (각 확률, 버프샷이면 효과 2배)
-      if (atk.has('power') && atk.roll()) attack *= 1 + ITEM_BAL.powerBonus * atk.mul;          // 파워샷
+      if (atk.has('power') && atk.roll()) { attack *= 1 + ITEM_BAL.powerBonus * atk.mul; addFx(t, 'power'); } // 파워샷
       pierceDefense = rivalHit && atk.has('piercing') && atk.roll();                            // 관통샷
-      if (pierceDefense) flashZone(t, '#7c3aed');
+      if (pierceDefense) { flashZone(t, '#7c3aed'); addFx(t, 'piercing'); }
     }
     if (rivalHit && !pierceDefense) {
       const dp = defenseChance(t.owner);
@@ -1163,6 +1164,7 @@ class FlyingOrb {
       if (!this.reflected && this.sourceZone && hasItem(t.owner, 'reflect') && Math.random() < dp) {
         const back = new FlyingOrb(t, this.sourceZone, t.owner, this.power);
         back.reflected = true;
+        addFx(t, 'reflect');
         flyingOrbs.push(back);
         if (atk) atk.done();
         return;
@@ -1170,6 +1172,7 @@ class FlyingOrb {
       // [아이템 흡수] 막고, 내 피를 상대 공격력의 2배만큼 채움
       if (hasItem(t.owner, 'absorb') && Math.random() < dp) {
         t.orbs = Math.min(t.maxOrbs, t.orbs + attack * ITEM_BAL.absorbHeal);
+        addFx(t, 'absorb');
         if (atk) atk.done();
         return;
       }
@@ -1178,8 +1181,8 @@ class FlyingOrb {
     let explodeRatio = 0;
     let paralyzeShots = 0;
     if (atk) {
-      if (atk.has('crit') && atk.roll()) { attack *= 1 + ITEM_BAL.critBonus * atk.mul; flashZone(t, '#f59e0b'); } // 크리티컬
-      if (rivalHit && atk.has('paralyze') && atk.roll()) { paralyzeShots = ITEM_BAL.paralyzeShots * atk.mul; t.paralyzedShots = paralyzeShots; flashZone(t, '#0ea5e9'); } // 마비
+      if (atk.has('crit') && atk.roll()) { attack *= 1 + ITEM_BAL.critBonus * atk.mul; flashZone(t, '#f59e0b'); addFx(t, 'crit'); } // 크리티컬
+      if (rivalHit && atk.has('paralyze') && atk.roll()) { paralyzeShots = ITEM_BAL.paralyzeShots * atk.mul; t.paralyzedShots = paralyzeShots; flashZone(t, '#0ea5e9'); addFx(t, 'paralyze'); } // 마비
       if (atk.has('pierce') && atk.roll()) bounceCount = ITEM_BAL.bounceCount * atk.mul;      // 튕기기
       if (rivalHit && atk.has('explode') && atk.roll()) explodeRatio = ITEM_BAL.explodeRatio * atk.mul; // 폭발
       atk.chain('rapid', ITEM_BAL.chainShots);   // 속사: 다음 공격 구슬 빠르게
@@ -1196,10 +1199,12 @@ class FlyingOrb {
         Math.random() < itemChance(own, ITEM_BAL.baseChance)) {
       power *= 1 + ITEM_BAL.rebuildBonus * (itemState[own].buff > 0 ? 2 : 1);
       flashZone(t, ZONE_COLORS.playerFullCharged);
+      addFx(t, 'rebuild');
       if (Math.random() < itemChance(own, ITEM_BAL.rebuildSpreadChance)) {
-        t.neighbors.forEach(n => { if (n.owner === own) n.orbs = Math.min(n.maxOrbs, n.orbs + power); });
+        t.neighbors.forEach(n => { if (n.owner === own) { n.orbs = Math.min(n.maxOrbs, n.orbs + power); addFx(n, 'rebuildSpread'); } });
       }
     }
+    addFx(t, 'hit', OWNER_DOT[own] || '#7c3aed');
     applyOrbHit(t, own, power, src);
     // [아이템 폭발] 맞힌 상대 지역에 붙어 있는 모든 상대 지역에 공격력의 50% (각 지역 철벽은 따로 계산)
     if (explodeRatio > 0) explodeAround(t, own, attack * explodeRatio);
@@ -2502,6 +2507,7 @@ function updateOrbSpawners(currentTime) {
 
     if (currentTime - zone.lastShotTime >= interval) {
       zone.lastShotTime = currentTime;
+      zone.firedAt = performance.now(); // 가운데 점이 살짝 커짐
       if (zone.paralyzedShots > 0) zone.paralyzedShots--;
       
       let power = 1;
@@ -2712,11 +2718,95 @@ let itemChoices = [];
 // 내 카드 발동 확률 (보급 발동 중이면 +10%)
 // 튕긴 타격의 아이템 효과 비율 (지금은 0: 효과 없음)
 function bounceEffectScale(step) { return ITEM_BAL.bounceFirstScale * Math.pow(ITEM_BAL.bounceNextScale, step - 1); }
+// -------------------------------------------------------------
+// 지역 가운데 점(구슬이 나가고 맞는 곳) + 효과(파문·고리)
+//   점: 내 지역 파랑, 적 빨강, 중립 회색. 구슬을 쏠 때 살짝 커졌다 작아짐
+//   파문: 구슬이 맞는 순간 그 점에서 퍼짐. 아이템이 터지면 카드마다 다른 색·크기의 고리
+// -------------------------------------------------------------
+const ZONE_DOT_PX = 3.2;
+const FX_MAX = 400;
+let fxList = [];
+const FX = {
+  hit: { r0: 2, r1: 11, w: 1.6, ms: 380 },
+  crit: { color: '#f59e0b', r0: 4, r1: 28, w: 3.2, ms: 520 },
+  power: { color: '#dc2626', r0: 4, r1: 20, w: 2.6, ms: 460 },
+  piercing: { color: '#7c3aed', r0: 4, r1: 24, w: 3, ms: 500, dash: true },
+  paralyze: { color: '#0ea5e9', r0: 22, r1: 4, w: 2.6, ms: 560, dash: true },
+  explode: { color: '#ea580c', r0: 6, r1: 48, w: 4, ms: 620 },
+  explodeHit: { color: '#ea580c', r0: 2, r1: 14, w: 2, ms: 420 },
+  reflect: { color: '#38bdf8', r0: 16, r1: 16, w: 4, ms: 420, shield: true },
+  absorb: { color: '#16a34a', r0: 26, r1: 3, w: 3, ms: 520 },
+  fortress: { color: '#64748b', r0: 15, r1: 15, w: 4.5, ms: 420, shield: true },
+  rebuild: { color: '#22c55e', r0: 3, r1: 22, w: 2.6, ms: 520 },
+  rebuildSpread: { color: '#22c55e', r0: 2, r1: 12, w: 2, ms: 460 },
+  rapid: { color: '#eab308', r0: 4, r1: 18, w: 2.4, ms: 420, dash: true },
+  supply: { color: '#10b981', r0: 4, r1: 18, w: 2.4, ms: 460 },
+  buff: { color: '#facc15', r0: 4, r1: 26, w: 3.4, ms: 560 },
+  curse: { color: '#4c1d95', r0: 24, r1: 4, w: 3, ms: 620, dash: true }
+};
+const OWNER_DOT = { player: '#2563eb', enemy: '#dc2626', neutral: '#a8a29e' };
+function addFx(zone, kind, color) {
+  if (!zone) return;
+  fxList.push({ x: zone.cx, y: zone.cy, zone, kind, color, t0: performance.now() });
+  if (fxList.length > FX_MAX) fxList.splice(0, fxList.length - FX_MAX);
+}
+function drawZoneDots(ctx) {
+  if (currentState === GAME_STATE.SELECT_START || !rawZones.length) return;
+  const fogNow = isFogActive();
+  const now = performance.now();
+  const base = ZONE_DOT_PX / view.scale;
+  ctx.save();
+  ctx.lineWidth = 1.2 / view.scale;
+  ctx.strokeStyle = '#ffffff';
+  for (let i = 0; i < rawZones.length; i++) {
+    const z = rawZones[i];
+    if (z.isHidden || !z.path) continue;
+    if (fogNow && z.owner !== OWNER.PLAYER) continue;
+    const t = z.firedAt ? (now - z.firedAt) / 220 : 1;
+    const r = base * (t < 1 ? 1 + 0.9 * (1 - t) : 1);
+    ctx.fillStyle = OWNER_DOT[z.owner] || OWNER_DOT.neutral;
+    ctx.beginPath();
+    ctx.arc(z.cx, z.cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawFx(ctx) {
+  if (!fxList.length) return;
+  const now = performance.now();
+  const fogNow = currentState !== GAME_STATE.SELECT_START && isFogActive();
+  const sc = 1 / view.scale;
+  fxList = fxList.filter(f => now - f.t0 < FX[f.kind].ms);
+  ctx.save();
+  fxList.forEach(f => {
+    if (fogNow && f.zone && f.zone.owner !== OWNER.PLAYER) return; // 안개: 가려진 지역의 효과는 숨김
+    const d = FX[f.kind];
+    const k = (now - f.t0) / d.ms;
+    const e = 1 - Math.pow(1 - k, 2);
+    const r = (d.r0 + (d.r1 - d.r0) * e) * sc;
+    ctx.globalAlpha = Math.max(0, 1 - k);
+    ctx.strokeStyle = f.color || d.color;
+    ctx.lineWidth = d.w * sc;
+    ctx.setLineDash(d.dash ? [4 * sc, 3 * sc] : []);
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    if (d.shield) { // 방패: 안쪽을 옅게 채움
+      ctx.globalAlpha = Math.max(0, 0.25 * (1 - k));
+      ctx.fillStyle = d.color;
+      ctx.fill();
+    }
+  });
+  ctx.restore();
+}
+
 // [아이템 폭발] t 에 붙어 있는 모든 상대 지역에 dmg (각 지역 철벽은 따로)
 function explodeAround(t, own, dmg) {
   flashZone(t, '#ea580c');
+  addFx(t, 'explode');
   t.neighbors.forEach(n => {
-    if (n.owner !== OWNER.NEUTRAL && n.owner !== own) applyOrbHit(n, own, defenseTake(dmg, n), null);
+    if (n.owner !== OWNER.NEUTRAL && n.owner !== own) { addFx(n, 'explodeHit'); applyOrbHit(n, own, defenseTake(dmg, n), null); }
   });
 }
 function itemChance(owner, base) {
@@ -2726,11 +2816,11 @@ function itemChance(owner, base) {
 function defenseChance(victim) { return itemChance(victim, ITEM_BAL.baseChance); }
 // [아이템 철벽] 확률로 상대 공격을 30%만 받음
 function defenseTake(power, t) {
-  if (hasItem(t.owner, 'fortress') && Math.random() < defenseChance(t.owner)) return power * ITEM_BAL.fortressTake;
+  if (hasItem(t.owner, 'fortress') && Math.random() < defenseChance(t.owner)) { addFx(t, 'fortress'); return power * ITEM_BAL.fortressTake; }
   return power;
 }
 // 공격 한 번의 카드 상태: 저주면 카드 없음, 버프샷이면 효과 2배, 보급이면 확률 +10%
-function itemAttackState(own) {
+function itemAttackState(own, src) {
   const st = itemState[own];
   const cursed = st.cursed > 0, mul = !cursed && st.buff > 0 ? 2 : 1;
   const used = { supply: st.supply > 0, buff: st.buff > 0, cursed };
@@ -2741,6 +2831,7 @@ function itemAttackState(own) {
     chain(k, shots, base) {
       if (!o.has(k) || !o.roll(base)) return;
       const n = shots * mul;
+      addFx(src && src.owner === own ? src : null, k); // 속사·보급·버프샷·저주샷: 쏜 지역에 고리
       if (k === 'rapid') { st.rapid = n; st.rapidMul = 1; }
       if (k === 'supply') st.supplyNew = n;
       if (k === 'buff') st.buffNew = n;
@@ -2925,7 +3016,7 @@ function resetCountryEvent() {
   const c = COUNTRY_EVENT_CFG[country];
   countryEventNext = country === 'WD' ? WORLD_EVENT_FIRST : (c ? c.every : 0);
   quakeUntilMs = 0;
-  revoltUntil = 0; revoltNextShot = 0; tanks = []; fogUntil = 0; eventBanners = []; cannonUntil = 0; cannonNextShot = 0; resolveUntil = 0;
+  revoltUntil = 0; revoltNextShot = 0; tanks = []; fogUntil = 0; eventBanners = []; cannonUntil = 0; cannonNextShot = 0; resolveUntil = 0; fxList = [];
 }
 // 대항해시대: 양쪽 각각 무작위 완전점령 지역 1곳이 전선으로 대포(큰 구슬, 공격력 20) 발사
 // 대항해시대: 나라 맵은 10초 동안 모든 완전점령 지역이 1초마다 대포를 쏨(충전과 상관없이, updateCannons).
@@ -4754,6 +4845,8 @@ function gameLoop(timestamp) {
     drawCountryEventMarks(ctx);
     drawTank(ctx);
     drawFocusRings(ctx);
+    drawZoneDots(ctx);
+    drawFx(ctx);
     drawFlyingOrbs(ctx);
     drawParticles(ctx);
 
