@@ -604,7 +604,7 @@ let currentMapKey = 'KOREA';
 
 const MAP_CONFIGS = {
   KOREA: {
-    name: '한반도 전국 전선 (164개 시·군)',
+    name: '한반도 전국 전선 (165개 지역, 독도 포함)',
     maxScale: 14,                     // 전국처럼 큰 맵은 4배 더 확대 (기본 3.5 → 14)
     minimap: { w: 84, h: 104 },       // 세로로 긴 전국 맵은 미니맵을 작게
     file: 'assets/south_korea_exact_zones.json',
@@ -704,7 +704,7 @@ const MAP_CONFIGS = {
   // WD — tools/build_*_maps.sh 로 생성
   WD_WORLD: { country: 'WD', name: '전세계', label: '전세계', count: 300, file: 'assets/w_world_zones.json', maxScale: 30 },
 };
-MAP_CONFIGS.KOREA.label = '전국'; MAP_CONFIGS.KOREA.count = 164;
+MAP_CONFIGS.KOREA.label = '전국'; MAP_CONFIGS.KOREA.count = 165;
 MAP_CONFIGS.SEOUL.label = '서울'; MAP_CONFIGS.SEOUL.count = 25;
 MAP_CONFIGS.GYEONGGI.label = '경기'; MAP_CONFIGS.GYEONGGI.count = 31;
 MAP_CONFIGS.KOREA.guide = '전국 전선 작전: 시작할 거점 도시를 탭하세요!';
