@@ -1155,10 +1155,12 @@ class FlyingOrb {
       }
     }
     let bounceCount = 0;
+    let explodeRatio = 0;
     if (atk) {
       if (atk.has('crit') && atk.roll()) { attack *= 1 + ITEM_BAL.critBonus * atk.mul; flashZone(t, '#f59e0b'); } // 크리티컬
       if (rivalHit && atk.has('paralyze') && atk.roll()) { t.paralyzedShots = ITEM_BAL.paralyzeShots * atk.mul; flashZone(t, '#0ea5e9'); } // 마비
       if (atk.has('pierce') && atk.roll()) bounceCount = ITEM_BAL.bounceCount * atk.mul;      // 튕기기
+      if (rivalHit && atk.has('explode') && atk.roll()) explodeRatio = ITEM_BAL.explodeRatio * atk.mul; // 폭발
       atk.chain('rapid', ITEM_BAL.chainShots);   // 속사: 다음 공격 구슬 빠르게
       atk.chain('supply', ITEM_BAL.chainShots);  // 보급: 다음 공격 동안 내 카드 확률 +10%
       atk.chain('buff', ITEM_BAL.chainShots, ITEM_BAL.rareChance);  // 버프샷: 다음 공격 동안 효과 2배
@@ -1178,6 +1180,13 @@ class FlyingOrb {
       }
     }
     applyOrbHit(t, own, power, src);
+    // [아이템 폭발] 맞힌 상대 지역에 붙어 있는 모든 상대 지역에 공격력의 50% (각 지역 철벽은 따로 계산)
+    if (explodeRatio > 0) {
+      flashZone(t, '#ea580c');
+      t.neighbors.forEach(n => {
+        if (n.owner !== OWNER.NEUTRAL && n.owner !== own) applyOrbHit(n, own, defenseTake(attack * explodeRatio, n), null);
+      });
+    }
     // [아이템 튕기기] 상대 땅에서만 옆 상대 지역으로 튕김 (공격력 그대로). 내 지역은 튕기지 않음
     if (bounceCount > 0 && wasRival) {
       this.bounceLeft = bounceCount;
@@ -2603,6 +2612,7 @@ const ITEM_BAL = {
   powerBonus: 0.5,     // 파워샷: 공격력 +50%
   critBonus: 1,        // 크리티컬: 공격력 +100% (2배)
   bounceCount: 2,      // 튕기기: 두 번 더 튕김 (공격력 그대로)
+  explodeRatio: 0.5,   // 폭발: 붙어 있는 상대 지역에 공격력의 50%
   piercingChance: 0.1, // (관통샷은 baseChance 사용)
   paralyzeShots: 5,    // 마비: 맞은 지역의 다음 5발
   paralyzeSpeed: 0.5,  // 마비: 공격 속도 배수
@@ -2619,6 +2629,7 @@ const ITEM_ICON = {
   power: '<circle cx="12" cy="12" r="6"/><path d="M12 9v6M9 12h6"/>',
   curse: '<circle cx="12" cy="12" r="8"/><path d="M8 9l2 2M10 9l-2 2M14 9l2 2M16 9l-2 2M8 16c2-2 6-2 8 0"/>',
   buff: '<path d="M12 3v18M5 10l7-7 7 7"/><path d="M5 17h14"/>',
+  explode: '<circle cx="12" cy="13" r="5"/><path d="M12 2v4M4.9 5.6l2.8 2.8M19.1 5.6l-2.8 2.8M2 13h3M19 13h3"/>',
   piercing: '<path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/><path d="M3 12h18M17 8l4 4-4 4"/>',
   paralyze: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   pierce: '<path d="M3 12h17M15 7l5 5-5 5"/><rect x="9" y="6" width="3" height="12" rx="1"/>',
@@ -2634,6 +2645,7 @@ const ITEMS = [
   { key: 'power', name: '파워샷', desc: '10% 확률로 공격력 50% 증가' },
   { key: 'crit', name: '크리티컬', desc: '10% 확률로 공격력 2배' },
   { key: 'pierce', name: '튕기기', desc: '10% 확률로 옆 상대 지역으로 두 번 더 튕김 (공격력 그대로)' },
+  { key: 'explode', name: '폭발', desc: '10% 확률로 맞힌 곳에 붙은 모든 상대 지역에 50% 피해' },
   { key: 'piercing', name: '관통샷', desc: '10% 확률로 상대의 모든 방어 효과 무시' },
   { key: 'paralyze', name: '마비', desc: '10% 확률로 맞은 상대 지역의 다음 5발 공격 속도 50% 감소' },
   { key: 'rapid', name: '속사', desc: '10% 확률로 다음 5공격이 2배 빠르게 날아감' },
