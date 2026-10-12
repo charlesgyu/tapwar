@@ -2538,7 +2538,7 @@ const COUNTRY_EVENT_CFG = {
 };
 const REBEL = 'rebel';
 let revoltUntil = 0, revoltNextShot = 0;
-let tankAnim = null; // { x0, y0, x1, y1, t0(게임 시간), dur, hit:Set }
+let tanks = []; // 달리는 전차들 { x0, y0, x1, y1, t0(게임 시간), dur, hit:Set, w }
 
 function currentCountryKey() {
   return (MAP_CONFIGS[currentMapKey] || {}).country || 'KR';
@@ -2575,32 +2575,36 @@ function updateRevolt() {
 // 전차: 맵을 가로질러 지나가며 경로 근처 지역을 중립으로
 function startTank() {
   const area = getMapArea();
-  const ang = Math.random() * Math.PI;
+  const ang = Math.random() * Math.PI * 2; // 사방 어느 쪽에서든
   const cx = area.x + area.w / 2, cy = area.y + area.h / 2, L = Math.hypot(area.w, area.h) / 2;
   const off = (Math.random() - 0.5) * 0.6;
   const ox = -Math.sin(ang) * off * L, oy = Math.cos(ang) * off * L;
-  tankAnim = { x0: cx - Math.cos(ang) * L + ox, y0: cy - Math.sin(ang) * L + oy, x1: cx + Math.cos(ang) * L + ox, y1: cy + Math.sin(ang) * L + oy,
-               t0: gameElapsedTime, dur: COUNTRY_EVENT_CFG.DE.tankSec, hit: new Set(), w: Math.min(area.w, area.h) * COUNTRY_EVENT_CFG.DE.width * worldEffect() };
+  tanks.push({ x0: cx - Math.cos(ang) * L + ox, y0: cy - Math.sin(ang) * L + oy, x1: cx + Math.cos(ang) * L + ox, y1: cy + Math.sin(ang) * L + oy,
+               t0: gameElapsedTime, dur: COUNTRY_EVENT_CFG.DE.tankSec, hit: new Set(), w: Math.min(area.w, area.h) * COUNTRY_EVENT_CFG.DE.width });
 }
 function updateTank() {
-  if (!tankAnim) return;
-  const k = (gameElapsedTime - tankAnim.t0) / tankAnim.dur;
-  if (k >= 1) { tankAnim = null; return; }
-  const x = tankAnim.x0 + (tankAnim.x1 - tankAnim.x0) * k, y = tankAnim.y0 + (tankAnim.y1 - tankAnim.y0) * k;
-  rawZones.forEach(z => {
-    if (tankAnim.hit.has(z) || z.owner === OWNER.NEUTRAL) return;
-    if (Math.hypot(z.cx - x, z.cy - y) < tankAnim.w) {
-      tankAnim.hit.add(z);
-      if (!isMainZone(z)) { neutralizeZone(z); flashZone(z, COUNTRY_EVENT_CFG.DE.color); }
-    }
+  tanks = tanks.filter(tk => {
+    const k = (gameElapsedTime - tk.t0) / tk.dur;
+    if (k >= 1) return false;
+    const x = tk.x0 + (tk.x1 - tk.x0) * k, y = tk.y0 + (tk.y1 - tk.y0) * k;
+    rawZones.forEach(z => {
+      if (tk.hit.has(z) || z.owner === OWNER.NEUTRAL) return;
+      if (Math.hypot(z.cx - x, z.cy - y) < tk.w) {
+        tk.hit.add(z);
+        if (!isMainZone(z)) { neutralizeZone(z); flashZone(z, COUNTRY_EVENT_CFG.DE.color); }
+      }
+    });
+    return true;
   });
 }
 function drawTank(ctx) {
-  if (!tankAnim) return;
-  const k = Math.min(1, (gameElapsedTime - tankAnim.t0) / tankAnim.dur);
-  const x = tankAnim.x0 + (tankAnim.x1 - tankAnim.x0) * k, y = tankAnim.y0 + (tankAnim.y1 - tankAnim.y0) * k;
-  const ang = Math.atan2(tankAnim.y1 - tankAnim.y0, tankAnim.x1 - tankAnim.x0);
-  const s = tankAnim.w * 0.9;
+  tanks.forEach(tk => drawOneTank(ctx, tk));
+}
+function drawOneTank(ctx, tk) {
+  const k = Math.min(1, (gameElapsedTime - tk.t0) / tk.dur);
+  const x = tk.x0 + (tk.x1 - tk.x0) * k, y = tk.y0 + (tk.y1 - tk.y0) * k;
+  const ang = Math.atan2(tk.y1 - tk.y0, tk.x1 - tk.x0);
+  const s = tk.w * 0.9;
   ctx.save();
   ctx.translate(x, y); ctx.rotate(ang);
   ctx.fillStyle = 'rgba(63, 98, 18, 0.18)';
@@ -2895,6 +2899,7 @@ const COUNTRY_CONCEPT = {
 const WORLD_EVENT_EVERY = 30;
 const WORLD_EVENTS_AT_ONCE = 2; // 30초마다 동시에 일어나는 컨셉 수
 const WORLD_EFFECT_MULT = 3;    // 전세계 컨셉 효과 배수
+const WORLD_TANKS = 3;          // 전세계 독일: 사방에서 전차 3대
 const WORLD_EVENT_KEYS = ['JP', 'CN', 'US', 'FR', 'DE', 'ES', 'GB'];
 const WORLD_FOG_SEC = 30;
 const FOG_COLOR = '#0b0f19';
@@ -2902,14 +2907,14 @@ let fogUntil = 0;
 function isFogActive() { return currentCountryKey() === 'GB' || gameElapsedTime < fogUntil; }
 // 맵이 클수록 이벤트가 걸리는 지역 수를 늘림 (전세계 300구역 → 3배)
 function eventScale() { return currentCountryKey() === 'WD' ? Math.max(1, Math.round(rawZones.length / 100)) * WORLD_EFFECT_MULT : 1; }
-// [전세계] 컨셉 효과 배수: 걸리는 지역 수·대포 수 ×3, 전차 폭 ×3, 혁명 사격 ×3 빠르게
+// [전세계] 컨셉 효과 배수: 걸리는 지역 수·대포 수 ×3, 혁명 사격 ×3 빠르게 (독일은 전차 3대)
 function worldEffect() { return currentCountryKey() === 'WD' ? WORLD_EFFECT_MULT : 1; }
 function resetCountryEvent() {
   const country = (MAP_CONFIGS[currentMapKey] || {}).country;
   const c = COUNTRY_EVENT_CFG[country];
   countryEventNext = country === 'WD' ? WORLD_EVENT_EVERY : (c ? c.every : 0);
   quakeUntilMs = 0;
-  revoltUntil = 0; revoltNextShot = 0; tankAnim = null; fogUntil = 0;
+  revoltUntil = 0; revoltNextShot = 0; tanks = []; fogUntil = 0;
 }
 // 대항해시대: 양쪽 각각 무작위 완전점령 지역 1곳이 전선으로 대포(큰 구슬, 공격력 20) 발사
 function fireCannons(c) {
@@ -2926,7 +2931,6 @@ function fireCannons(c) {
     fired = true;
    });
   });
-  if (fired) flashCenterText(c.toast);
 }
 function pickEventZones(c) {
   const owned = rawZones.filter(z => z.owner !== OWNER.NEUTRAL && !isMainZone(z) && !z.isHidden);
@@ -2952,11 +2956,12 @@ function updateCountryEvent() {
 }
 function triggerCountryEvent(country) {
   haptic('strong'); // 나라 컨셉 발동 알림
-  if (country === 'GB') { fogUntil = gameElapsedTime + WORLD_FOG_SEC; flashCenterText('안개!'); return; }
+  showEventBanner(country);
+  if (country === 'GB') { fogUntil = gameElapsedTime + WORLD_FOG_SEC; return; }
   const c = COUNTRY_EVENT_CFG[country];
   if (!c) return;
-  if (country === 'FR') { revoltUntil = gameElapsedTime + c.duration; revoltNextShot = gameElapsedTime; flashCenterText(c.toast); return; }
-  if (country === 'DE') { startTank(); flashCenterText(c.toast); return; }
+  if (country === 'FR') { revoltUntil = gameElapsedTime + c.duration; revoltNextShot = gameElapsedTime; return; }
+  if (country === 'DE') { for (let i = 0; i < (currentCountryKey() === 'WD' ? WORLD_TANKS : 1); i++) startTank(); return; } // 전세계는 전차 3대
   if (country === 'ES') { fireCannons(c); return; }
   const zones = pickEventZones(c);
   if (zones.length === 0) return;
@@ -2967,7 +2972,20 @@ function triggerCountryEvent(country) {
     flashZone(z, c.color);
   });
   if (country === 'JP') quakeUntilMs = performance.now() + 700;
-  flashCenterText(c.toast);
+}
+// 나라 컨셉 발동 알림: 화면 위쪽에 '나라 · 컨셉 이름' 띠가 딱 떴다가 사라짐. 여러 개면 위아래로 겹치지 않게 쌓임
+const EVENT_BANNER_COLORS = { JP: '#b45309', CN: '#d97706', US: '#ca8a04', FR: '#7c3aed', DE: '#3f6212', ES: '#9a3412', GB: '#334155' };
+function showEventBanner(country) {
+  const box = document.getElementById('event-banners');
+  const concept = COUNTRY_CONCEPT[country];
+  if (!box || !concept) return;
+  const nation = (COUNTRIES.find(c => c.key === country) || {}).name || '';
+  const el = document.createElement('div');
+  el.className = 'event-banner';
+  el.style.background = EVENT_BANNER_COLORS[country] || '#1e293b';
+  el.innerHTML = `<span class="event-banner-nation">${nation}</span><span class="event-banner-name">${concept[0]}</span>`;
+  box.appendChild(el);
+  el.addEventListener('animationend', () => el.remove());
 }
 function quakeShakeOffset() {
   const left = quakeUntilMs - performance.now();
