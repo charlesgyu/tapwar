@@ -2497,6 +2497,9 @@ function updateOrbSpawners(currentTime) {
     const paralyzed = zone.paralyzedShots > 0 ? 1 / ITEM_BAL.paralyzeSpeed : 1; // [아이템 마비] 공격 속도 50% → 간격 2배
     const interval = baseInterval * rangedMult * slow * paralyzed / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
 
+    // [일본 지진] 완전점령 지역은 10초 동안 공격 정지
+    if (zone.stunUntil && gameElapsedTime < zone.stunUntil) return;
+
     if (currentTime - zone.lastShotTime >= interval) {
       zone.lastShotTime = currentTime;
       if (zone.paralyzedShots > 0) zone.paralyzedShots--;
@@ -2514,6 +2517,8 @@ function updateOrbSpawners(currentTime) {
 
       // [미국 자본주의] 호황 지역은 구슬 공격력 5
       if (zone.boostUntil && gameElapsedTime < zone.boostUntil) power = Math.max(power, COUNTRY_EVENT_CFG.US.power);
+      // [대한민국 필사즉생] 발동 후 10초 동안 피가 깎인 지역은 공격력 2배
+      if (gameElapsedTime < resolveUntil && zone.orbs < zone.maxOrbs) power *= 2;
       zone.targetZones.forEach(target => {
         flyingOrbs.push(new FlyingOrb(zone, target, zone.owner, power));
       });
@@ -2529,15 +2534,18 @@ function updateOrbSpawners(currentTime) {
 //   US 자본주의: 1분마다 무작위 지역들의 구슬 공격력 10초 동안 5
 // -------------------------------------------------------------
 const COUNTRY_EVENT_CFG = {
-  JP: { every: 45, share: 0.15, min: 2, toast: '지진!', color: '#92400e' },
-  CN: { every: 60, share: 0.2, min: 2, duration: 10, toast: '모래폭풍', color: '#d97706' },
+  KR: { every: 60, duration: 10, toast: '필사즉생', color: '#b91c1c' },
+  JP: { every: 45, duration: 10, toast: '지진!', color: '#92400e' },
+  CN: { every: 60, duration: 10, toast: '모래폭풍', color: '#d97706' },
   US: { every: 60, share: 0.15, min: 2, duration: 10, power: 5, toast: '자본주의 호황', color: '#eab308' },
   FR: { every: 60, duration: 10, fireEvery: 1.0, toast: '혁명!', color: '#7c3aed' },
-  ES: { every: 60, power: 20, toast: '대항해시대 포격!', color: '#b45309' },
+  ES: { every: 60, duration: 10, fireEvery: 1.0, power: 20, toast: '대항해시대 포격!', color: '#b45309' },
   DE: { every: 60, tankSec: 3.5, width: 0.07, toast: '전차 돌파!', color: '#3f6212' }
 };
 const REBEL = 'rebel';
 let revoltUntil = 0, revoltNextShot = 0;
+let resolveUntil = 0; // 대한민국 필사즉생 지속 끝 시각
+let cannonUntil = 0, cannonNextShot = 0; // 스페인 대항해시대 지속 끝 시각, 다음 일제 사격 시각
 let tanks = []; // 달리는 전차들 { x0, y0, x1, y1, t0(게임 시간), dur, hit:Set, w }
 
 function currentCountryKey() {
@@ -2623,7 +2631,7 @@ let quakeUntilMs = 0;
 // 적도 같은 때 무작위로 1장씩 고름. 고른 카드는 화면 아래에 아이콘으로 (나: 파랑, 적: 빨강)
 // 아이템 모드 판은 기록·순위에 남기지 않음
 // -------------------------------------------------------------
-// 고르는 카드 수: 일반 맵 4장, 나라 전국 맵 5장, 전세계 6장
+// 고르는 카드 수: 일반 맵 3장, 나라 전국 맵 5장, 전세계 6장
 const NATIONAL_MAPS = new Set(['KOREA', 'JP_JAPAN', 'CN_CHINA', 'US_USA', 'FR_FRANCE', 'DE_GERMANY', 'IT_ITALY', 'ES_SPAIN', 'GB_UK']);
 // 한 번에 보여 주는 카드 수: 일반 맵 3장, 나라 전국 맵 4장, 전세계 5장
 function itemChoiceCount() {
@@ -2632,7 +2640,7 @@ function itemChoiceCount() {
 }
 function itemRounds() {
   if (currentCountryKey() === 'WD') return 6;
-  return NATIONAL_MAPS.has(currentMapKey) ? 5 : 4;
+  return NATIONAL_MAPS.has(currentMapKey) ? 5 : 3;
 }
 const ITEM_EVERY_SEC = 30;
 // 아이템 수치 (밸런스 조절은 여기서)
@@ -2885,23 +2893,24 @@ function updateItems() {
 
 // 맵 화면에서 나라 이름 아래에 보여 줄 컨셉 [이름, 설명]
 const COUNTRY_CONCEPT = {
-  JP: ['지진', '45초마다 무작위 점령 지역들의 피가 절반으로 깎이고 화면이 흔들려요'],
-  CN: ['모래폭풍', '1분마다 무작위 점령 지역들의 공격 속도가 10초 동안 절반이 돼요'],
+  KR: ['필사즉생', '1분마다 10초 동안 피가 깎인 지역의 공격력이 2배가 돼요'],
+  JP: ['지진', '45초마다 모든 완전점령 지역이 10초 동안 공격을 멈추고 화면이 흔들려요'],
+  CN: ['모래폭풍', '1분마다 모든 완전점령 지역의 공격 속도가 10초 동안 절반이 돼요'],
   US: ['자본주의 호황', '1분마다 무작위 점령 지역들의 공격력이 10초 동안 강해져요'],
   FR: ['혁명', '1분마다 10초 동안 점령 지역과 맞닿은 중립 지역이 주변을 공격해요'],
   DE: ['전차 돌파', '1분마다 전차가 지나가고, 지나간 지역은 중립이 돼요 (본진 제외)'],
   IT: ['최고의 지휘관', '본진 2개로 시작해요. 하나는 무작위 위치에 생겨요'],
-  WD: ['세계 대전', '30초마다 나라 컨셉 2개가 무작위로 3배 효과로 일어나요. 카드는 6장 골라요'],
-  ES: ['대항해시대', '1분마다 양쪽의 완전점령 지역 한 곳이 대포를 쏴요 (공격력 20)'],
-  GB: ['안개', '내 지역이 아닌 곳은 모두 검게 가려지고 적의 구슬은 보이지 않아요']
+  ES: ['대항해시대', '1분마다 10초 동안 모든 완전점령 지역이 1초마다 대포를 쏴요 (공격력 20)'],
+  GB: ['안개', '내 지역이 아닌 곳은 모두 검게 가려지고 적의 구슬은 보이지 않아요'],
+  WD: ['세계 대전', '15초부터 1분마다 나라 컨셉 2개가 무작위로 3배 효과로 일어나요. 카드는 6장 골라요']
 };
 // [전세계 '세계 대전'] 30초마다 나라 컨셉 하나가 무작위로 (구역이 많은 만큼 더 많은 지역에)
-const WORLD_EVENT_EVERY = 30;
-const WORLD_EVENT_FIRST = 15; // 전세계 첫 컨셉은 15초, 그 뒤 30초마다
+const WORLD_EVENT_EVERY = 60;
+const WORLD_EVENT_FIRST = 15; // 전세계 첫 컨셉은 15초, 그 뒤 1분마다
 const WORLD_EVENTS_AT_ONCE = 2; // 30초마다 동시에 일어나는 컨셉 수
 const WORLD_EFFECT_MULT = 3;    // 전세계 컨셉 효과 배수
 const WORLD_TANKS = 3;          // 전세계 독일: 사방에서 전차 3대
-const WORLD_EVENT_KEYS = ['JP', 'CN', 'US', 'FR', 'DE', 'ES', 'GB'];
+const WORLD_EVENT_KEYS = ['KR', 'JP', 'CN', 'US', 'FR', 'DE', 'ES', 'GB'];
 const WORLD_FOG_SEC = 30;
 const WORLD_FOG_CHANCE = 0.5; // 전세계에서 영국 안개가 뽑혔을 때 실제로 일어날 확률
 const FOG_COLOR = '#0b0f19';
@@ -2912,26 +2921,26 @@ function eventScale() { return currentCountryKey() === 'WD' ? Math.max(1, Math.r
 // [전세계] 컨셉 효과 배수: 걸리는 지역 수·대포 수 ×3, 혁명 사격 ×3 빠르게 (독일은 전차 3대)
 function worldEffect() { return currentCountryKey() === 'WD' ? WORLD_EFFECT_MULT : 1; }
 function resetCountryEvent() {
-  const country = (MAP_CONFIGS[currentMapKey] || {}).country;
+  const country = currentCountryKey();
   const c = COUNTRY_EVENT_CFG[country];
   countryEventNext = country === 'WD' ? WORLD_EVENT_FIRST : (c ? c.every : 0);
   quakeUntilMs = 0;
-  revoltUntil = 0; revoltNextShot = 0; tanks = []; fogUntil = 0; eventBanners = [];
+  revoltUntil = 0; revoltNextShot = 0; tanks = []; fogUntil = 0; eventBanners = []; cannonUntil = 0; cannonNextShot = 0; resolveUntil = 0;
 }
 // 대항해시대: 양쪽 각각 무작위 완전점령 지역 1곳이 전선으로 대포(큰 구슬, 공격력 20) 발사
+// 대항해시대: 나라 맵은 10초 동안 모든 완전점령 지역이 1초마다 대포를 쏨(충전과 상관없이, updateCannons).
+// 전세계는 지속 대신 모든 완전점령 지역이 한 번에 공격력 3배(60) 대포를 쏨
 function fireCannons(c) {
-  let fired = false;
+  if (currentCountryKey() !== 'WD') { cannonUntil = gameElapsedTime + c.duration; cannonNextShot = gameElapsedTime; return; }
   [OWNER.PLAYER, OWNER.ENEMY].forEach(owner => {
-   const full = shuffled(rawZones.filter(z => z.owner === owner && !z.isHidden && isFullyConquered(z)));
-   full.slice(0, eventScale()).forEach(src => {
-    const tg = pickMainZoneFrontierTarget(src);
-    if (!tg) return;
-    const orb = new FlyingOrb(src, tg, owner, c.power);
-    orb.isCannon = true;
-    flyingOrbs.push(orb);
-    flashZone(src, c.color);
-    fired = true;
-   });
+    rawZones.filter(z => z.owner === owner && !z.isHidden && isFullyConquered(z)).forEach(src => {
+      const tg = pickMainZoneFrontierTarget(src);
+      if (!tg) return;
+      const orb = new FlyingOrb(src, tg, owner, c.power * WORLD_EFFECT_MULT);
+      orb.isCannon = true;
+      flyingOrbs.push(orb);
+      flashZone(src, c.color);
+    });
   });
 }
 function pickEventZones(c) {
@@ -2940,10 +2949,24 @@ function pickEventZones(c) {
   for (let i = owned.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [owned[i], owned[j]] = [owned[j], owned[i]]; }
   return owned.slice(0, n);
 }
+// [스페인 대항해시대] 지속 중 1초마다 양쪽의 모든 완전점령 지역이 전선으로 대포(공격력 20, 큰 구슬)
+function updateCannons() {
+  if (gameElapsedTime >= cannonUntil || gameElapsedTime < cannonNextShot) return;
+  cannonNextShot = gameElapsedTime + COUNTRY_EVENT_CFG.ES.fireEvery;
+  rawZones.forEach(src => {
+    if (src.owner === OWNER.NEUTRAL || src.isHidden || !isFullyConquered(src)) return;
+    const tg = pickMainZoneFrontierTarget(src);
+    if (!tg) return;
+    const orb = new FlyingOrb(src, tg, src.owner, COUNTRY_EVENT_CFG.ES.power);
+    orb.isCannon = true;
+    flyingOrbs.push(orb);
+  });
+}
 function updateCountryEvent() {
-  const country = (MAP_CONFIGS[currentMapKey] || {}).country;
+  const country = currentCountryKey();
   updateRevolt();
   updateTank();
+  updateCannons();
   if (!countryEventNext || gameElapsedTime < countryEventNext) return;
   if (country === 'WD') {
     countryEventNext = gameElapsedTime + WORLD_EVENT_EVERY;
@@ -2970,13 +2993,17 @@ function triggerCountryEvent(country) {
   if (country === 'GB') { fogUntil = gameElapsedTime + WORLD_FOG_SEC; return; }
   const c = COUNTRY_EVENT_CFG[country];
   if (!c) return;
+  if (country === 'KR') { resolveUntil = gameElapsedTime + c.duration; return; }
   if (country === 'FR') { revoltUntil = gameElapsedTime + c.duration; revoltNextShot = gameElapsedTime; return; }
   if (country === 'DE') { for (let i = 0; i < (currentCountryKey() === 'WD' ? WORLD_TANKS : 1); i++) startTank(); return; } // 전세계는 전차 3대
   if (country === 'ES') { fireCannons(c); return; }
-  const zones = pickEventZones(c);
+  // 일본 지진·중국 모래폭풍: 모든 완전점령 지역 (본진 제외) / 미국 호황: 무작위 점령 지역
+  const zones = (country === 'JP' || country === 'CN')
+    ? rawZones.filter(z => z.owner !== OWNER.NEUTRAL && !z.isHidden && !isMainZone(z) && isFullyConquered(z))
+    : pickEventZones(c);
   if (zones.length === 0) return;
   zones.forEach(z => {
-    if (country === 'JP') z.orbs = Math.max(1, Math.floor(z.orbs * 0.5));
+    if (country === 'JP') z.stunUntil = gameElapsedTime + c.duration;
     if (country === 'CN') z.slowUntil = gameElapsedTime + c.duration;
     if (country === 'US') z.boostUntil = gameElapsedTime + c.duration;
     flashZone(z, c.color);
@@ -2984,7 +3011,7 @@ function triggerCountryEvent(country) {
   if (country === 'JP') quakeUntilMs = performance.now() + 700;
 }
 // 나라 컨셉 발동 알림: 화면 위쪽에 컨셉 이름 글씨가 딱 떴다가 사라짐. 여러 개면 위아래로 겹치지 않게 쌓임
-const EVENT_BANNER_COLORS = { JP: '#b45309', CN: '#d97706', US: '#ca8a04', FR: '#7c3aed', DE: '#3f6212', ES: '#9a3412', GB: '#334155' };
+const EVENT_BANNER_COLORS = { KR: '#b91c1c', JP: '#b45309', CN: '#d97706', US: '#ca8a04', FR: '#7c3aed', DE: '#3f6212', ES: '#9a3412', GB: '#334155' };
 // 발동한 컨셉 이름은 지도 제목 양옆에 검은 글씨로 잠깐 (첫 번째 왼쪽, 두 번째 오른쪽)
 let eventBanners = [];
 const EVENT_BANNER_MS = 2400;
@@ -3042,6 +3069,7 @@ function drawCountryEventMarks(ctx) {
     if (fogNow && z.owner !== OWNER.PLAYER) continue; // [영국 안개] 가려진 지역의 표시도 숨김
     let color = null;
     if (t < revoltUntil && z.owner === OWNER.NEUTRAL && z.neighbors.some(n => n.owner !== OWNER.NEUTRAL)) color = COUNTRY_EVENT_CFG.FR.color;
+    else if (z.stunUntil && t < z.stunUntil) color = COUNTRY_EVENT_CFG.JP.color;
     else if (z.slowUntil && t < z.slowUntil) color = COUNTRY_EVENT_CFG.CN.color;
     else if (z.boostUntil && t < z.boostUntil) color = COUNTRY_EVENT_CFG.US.color;
     if (!color) continue;
