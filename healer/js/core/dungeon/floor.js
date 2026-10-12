@@ -2,6 +2,7 @@
 // start: 층 맵(DungeonGen) 위에 파티 엔티티와 몬스터 300+ 마리(무리별 spots)·보스를 세우고 Combat 을 만든다.
 // update: 전투 갱신(활성 반경은 Combat 이 처리) + 걸음 집계('steps') + 상자 근접 자동 열기 + 숨김 상자 드러내기
 //         + 보스 처치 → 출구 활성 + 출구 도달 → cleared. 쓰러진 힐러는 전투가 끝나면 파티원이 일으켜 세운다.
+//         + 길이 막혀 대상에 못 가는 몬스터는 포기하고 집으로(evade) — 몬스터·파티원 AI 에 길찾기가 없어 호수 너머로 영원히 제자리걸음을 하기 때문.
 // leave: 피로(걸음·무리·보스·사망)·탑 기록·클리어 보너스 XP·마을 복귀 정리(Party.heal). wipe 면 내구도 -20%.
 // 골드·아이템·경험치의 처치 보상은 Combat(autoLoot) 이 이미 적용하므로 여기서는 상자 보상만 다룬다.
 const Floor = (() => {
@@ -14,6 +15,7 @@ const Floor = (() => {
   const WIPE_DURABILITY = 0.2;
   const STRAGGLER_R = 10 * TILE, STRAGGLER_WAIT = 4;   // 자동 따라가기: 비전투 상태로 이만큼 떨어진 채 4초면 힐러 옆으로 붙는다
   const PLAYER_REVIVE_WAIT = 8, PLAYER_REVIVE_PCT = 0.3;
+  const EVADE_AFTER = 8, EVADE_MOVE = 8;               // 교전 중 8초 동안 대상 사거리 밖에서 거리를 8px 도 못 좁힌 몬스터는 길이 막힌 것
 
   // 브라우저에서 최상위 const 모듈은 window 프로퍼티가 아니므로 typeof 로만 존재를 확인한다
   const Mods = {
@@ -91,7 +93,7 @@ const Floor = (() => {
       visited: new Uint8Array(map.cols * map.rows),
       kills: 0, chestsOpened: 0, playerDeaths: 0, memberDeaths: 0, fatigue: 0, groupsFought: new Set(),
       _kills0: (G.counters && G.counters.kills) || 0, _px: player.x, _py: player.y, _stepAcc: 0, _stepsEmitted: 0, _lastTile: -1,
-      _wasAlive: {}, _straggle: {}, _deadFor: 0,
+      _wasAlive: {}, _straggle: {}, _deadFor: 0, _stuck: {},
     };
     for (const e of battle.party()) fs._wasAlive[e.uid] = true;
     markVisited(fs, player);
@@ -114,6 +116,7 @@ const Floor = (() => {
     if (markVisited(fs, p)) checkChests(fs, G, p);
     const engaged = B.engagedMonsters();
     trackGroups(fs, engaged);
+    evadeStuck(fs, engaged, dt);
     checkBoss(fs);
     checkExit(fs, p);
     followStragglers(fs, G, p, engaged, dt);
@@ -179,6 +182,31 @@ const Floor = (() => {
       if (fs.boss && m.groupId === fs.boss.groupId) continue;
       fs.fatigue += FATIGUE.group;
     }
+  }
+  // 길찾기가 없는 몬스터는 벽·호수 너머의 대상을 향해 제자리걸음(또는 벽을 따라 미끄러지기)을 한다. 그대로 두면 "전투 중" 상태가
+  // 영원히 풀리지 않으므로(버프·휴식·탐험 봇·쓰러진 힐러 구조가 모두 멈춘다) 사거리 밖에서 8초 동안 대상과의 거리를 한 칸(8px)도
+  // 못 좁힌 몬스터는 포기하고 집으로 돌려보낸다(MMO 의 evade). 움직였는지가 아니라 "가까워졌는지"를 보는 이유: 벽을 따라 미끄러지며
+  // 왔다갔다 하는 몬스터도 잡아야 하기 때문. 복귀 중 회복·저주 제거는 AIMonster.leash 와 같은 규칙. 시전 중인 몬스터는 제자리가 정상.
+  function evadeStuck(fs, engaged, dt) {
+    const B = fs.battle, S = fs._stuck;
+    for (const m of engaged) {
+      const tgt = m.target ? B.byUid(m.target) : null;
+      if (m.returning || m.cast || !alive(tgt)) { delete S[m.uid]; continue; }
+      const d = dist(m, tgt);
+      const rec = S[m.uid] && S[m.uid].target === tgt.uid ? S[m.uid] : (S[m.uid] = { target: tgt.uid, best: d, t: 0 });
+      const reach = d <= (m.range || 28) + m.radius + tgt.radius;
+      if (reach || d < rec.best - EVADE_MOVE) { rec.best = Math.min(rec.best, d); rec.t = 0; continue; }
+      rec.t += dt;
+      if (rec.t < EVADE_AFTER) continue;
+      delete S[m.uid];
+      giveUp(fs, m);
+    }
+  }
+  function giveUp(fs, m) {
+    m.aggro = false; m.threat = {}; m.target = null; m.returning = true;
+    m.hp = m.maxHp; m.curses = []; m.state = 'move';
+    fs.battle.logMsg(`${m.name} 이(가) 길을 잃고 돌아간다`);
+    emit('monster_evade', { uid: m.uid, id: m.def && m.def.id, floor: fs.floor, x: m.x, y: m.y });
   }
   function checkBoss(fs) {
     if (fs.bossDefeated || !fs.boss || fs.boss.alive) return;
@@ -311,6 +339,6 @@ const Floor = (() => {
     return summary;
   }
 
-  return { start, update, openChest, leave, CHEST_OPEN_R, HIDDEN_REVEAL_R, EXIT_R, FATIGUE, WIPE_DURABILITY, STRAGGLER_R, PLAYER_REVIVE_WAIT, TILE };
+  return { start, update, openChest, leave, CHEST_OPEN_R, HIDDEN_REVEAL_R, EXIT_R, FATIGUE, WIPE_DURABILITY, STRAGGLER_R, PLAYER_REVIVE_WAIT, EVADE_AFTER, TILE };
 })();
 if (typeof module !== 'undefined') module.exports = Floor;

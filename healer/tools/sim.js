@@ -11,6 +11,7 @@ const ARRIVE = { group: 3 * TILE, miniboss: 3 * TILE, boss: 3 * TILE, chest: 0.5
 const REST = { hp: 0.7, mpLow: 0.35, mpOk: 0.8, max: 45 };
 const STUCK_SECONDS = 2.5, STRAGGLER_WAIT_R = 7 * TILE, STRAGGLER_MAX_WAIT = 6;
 const LOOKOUT_R = 9 * TILE, LEAD_MAX_WAIT = 4;   // 몬스터가 보이면 탱커가 앞설 때까지(최대 4초) 기다린다
+const STALEMATE = 12;                            // "전투 중"인데 12초 동안 아무도 피해를 주고받지 않으면 교착(지형에 걸림) → 탐험을 계속한다
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const alive = (e) => !!e && e.alive;
@@ -63,8 +64,9 @@ function setupMembers(ctx, G, level, floor, o) {
 function makeBot(ctx, fs, G) {
   const { map, battle } = fs, p = battle.player, cols = map.cols, rows = map.rows;
   const S = { target: null, path: [], wp: 0, stuck: 0, rest: 0, resting: false, wait: 0, visited: new Set(), unreachable: new Set(), replans: 0,
-    budget: { dead: 0, cast: 0, combat: 0, rest: 0, stragglers: 0, lead: 0, move: 0 } };   // 시간이 어디에 쓰였는지(진단용)
+    lastHit: 0, stalemates: 0, budget: { dead: 0, cast: 0, combat: 0, rest: 0, stragglers: 0, lead: 0, move: 0 } };   // budget: 시간이 어디에 쓰였는지(진단용)
   const tileOf = (e) => ({ i: Math.floor(e.x / TILE), j: Math.floor(e.y / TILE) });
+  ctx.Events.on('damage', (e) => { if (!e.evaded) S.lastHit = fs.time; });
 
   function bfs(from) {
     const dist = new Int32Array(cols * rows).fill(-1), prev = new Int32Array(cols * rows).fill(-1), q = new Int32Array(cols * rows);
@@ -152,11 +154,17 @@ function makeBot(ctx, fs, G) {
     S.target = null;
   }
   const spend = (k, dt) => { S.budget[k] += dt; };
+  // 교착: 교전 상태인데 한동안 피해가 오가지 않으면(몬스터·파티원이 벽 너머에서 제자리걸음) 전투를 기다리지 않는다
+  function stalemate() {
+    if (fs.time - S.lastHit < STALEMATE) return false;
+    if (S.lastHit > S.lastStalemate) { S.stalemates++; S.lastStalemate = fs.time; }
+    return true;
+  }
   function step(dt) {
     if (fs.result) return;
     if (!alive(p)) return spend('dead', dt);
     if (p.cast) return spend('cast', dt);
-    const inCombat = battle.inCombat();
+    const inCombat = battle.inCombat() && !stalemate();
     if (inCombat) return spend('combat', dt);
     if (needRest(inCombat)) return spend('rest', dt);
     if (waitStragglers()) return spend('stragglers', dt);
