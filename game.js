@@ -3975,7 +3975,6 @@ const COUNTRIES = [
   { key: 'GB', flag: '🇬🇧', name: '영국', open: false, paid: true },
   { key: 'WD', flag: '🌏', name: '전세계', open: false, paid: true }
 ];
-const DEV_UNLOCK_KEY = 'tapwar_dev_unlock_all';
 // [테스트용] 유료 나라(일본·중국·미국·유럽 5개국·전세계)를 구매 없이 열기. 출시는 false (인앱 구매 'all_countries' 하나로 모두 열림)
 const DEV_TEST_COUNTRIES = false;
 function isCountryOpen(c) {
@@ -3991,10 +3990,7 @@ function getCampaignOrder(country) {
 
 // [테스트용] true 면 모든 나라의 모든 맵을 클리어 여부와 관계없이 바로 플레이. 출시 전 false
 const DEV_UNLOCK_ALL_MAPS = false;
-function isDevUnlockAll() {
-  if (DEV_UNLOCK_ALL_MAPS) return true;
-  try { return localStorage.getItem(DEV_UNLOCK_KEY) === '1'; } catch (e) { return false; }
-}
+function isDevUnlockAll() { return DEV_UNLOCK_ALL_MAPS; }
 
 function isStageCleared(key) {
   const r = getBattleRecords()[key];
@@ -4392,25 +4388,6 @@ function buildStageCards() {
   if (sel) requestAnimationFrame(() => { grid.scrollLeft = sel.offsetLeft - (grid.clientWidth - sel.offsetWidth) / 2; });
 }
 
-// 로고 5번 탭: (개발·테스트용) 모든 맵 열기/닫기
-(function setupDevUnlock() {
-  const logo = document.getElementById('start-logo');
-  if (!logo) return;
-  let taps = 0, timer = null;
-  logo.addEventListener('click', () => {
-    taps++;
-    clearTimeout(timer);
-    timer = setTimeout(() => { taps = 0; }, 1500);
-    if (taps >= 5) {
-      taps = 0;
-      const on = !isDevUnlockAll();
-      try { localStorage.setItem(DEV_UNLOCK_KEY, on ? '1' : '0'); } catch (e) {}
-      renderStageThumbs();
-      openSheet('', on ? '테스트: 모든 맵 열림' : '테스트: 잠금 복원',
-        on ? '개발 확인용으로 모든 스테이지를 열었어요.' : '캠페인 잠금을 다시 적용했어요.');
-    }
-  });
-})();
 
 // -------------------------------------------------------------
 // 튜토리얼 (처음 실행 시 자동, 홈의 '튜토리얼'로 다시 보기)
