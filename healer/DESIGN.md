@@ -71,7 +71,8 @@ G = {
   counters: { steps: 0, kills: 0, bossKills: 0, chests: 0, heals: 0 },
   day: 1, playTime: 0,
 }
-memberInst = { uid, name, cls, role: 'tank'|'melee'|'ranged'|'healer', level, xp, stats: {...} (현재 레벨의 1차 스탯 = Classes.statsAt(cls, level)), equipment: { body, main }, hireCost, personality }
+memberInst = { uid, name, cls, role: 'tank'|'melee'|'ranged'|'healer', level, xp, stats: {...} (현재 레벨의 1차 스탯 = Classes.statsAt(cls, level)), equipment: { body, main }, hireCost, personality,
+             gender: 'm'|'f', hp, mp (현재값, Party.heal/Level.addXp 가 채움), buffs: [], curses: [], guildId? (길드 소속이면 길드 id — 해고 시 명부로 돌아감) }
 itemInst   = { uid, id, grade: 'common'|'uncommon'|'rare'|'legendary', affixes: [ { stat, value } ], durability, maxDurability, qty }
 ```
 
@@ -261,24 +262,32 @@ Economy.buyPrice(def|inst|id) = price × Items.GRADES[grade].priceMult(1/1.6/3/8
 Economy.sellPrice(inst) = floor(buyPrice × 0.4 × (0.5 + 0.5×내구도 비율)) × qty (퀘스트 아이템·보석 아이템은 0) ; Economy.repairCost(inst) = ceil(buyPrice × 손상비율 × 0.3)
 Economy.disassemble(inst, rng) -> [itemInst materials]  // 재질별 기본 재료(천 실, 가죽 가죽, 사슬·판금 쇠조각, 지팡이 나무, 책 실, 장신구 쇠조각, 가방 가죽) + 등급별 추가: common 1개, uncommon 1~2, rare 2~3(mid/high), legendary 3 + 용 비늘
 Economy.disassemblePreview(inst) -> [materialId] ; Economy.canCraft(G, recipe) -> { ok, reason?: 'no_recipe'|'gold'|'materials', missing? } (대장간 craft 가 사용)
-Facilities.shop.stock(G) / buy(G, itemId, qty) / sell(G, uid, qty)
-Facilities.auction.listings(G) (현실 시간 1시간마다 `hourIndex = floor(Date.now()/3600000)` 로 재생성, 시드 = hourIndex) / buy(G, uid) / list(G, uid, price) / tick(G) (내 물건이 가격 대비 확률로 팔려 골드 지급) / reset(G) (리셋권 소모 후 즉시 재생성)
-Facilities.bank.deposit(G, uid) / withdraw(G, uid) / depositGold(G, n) / withdrawGold(G, n)
-Facilities.smithy.repair(G, uid) / repairAll(G) / disassemble(G, uid) / craft(G, recipeId) -> { ok, item?, reason? }
-Facilities.inn.menu() / eat(G, foodId) / sleep(G) (골드 50, 피로 0, day+1, 일일 퀘스트 리셋, HP/MP 회복)
-Facilities.engraver.options(G) -> [ { id, name, cost, materials, stat?, value?, special? } ] / engrave(G, id) (최대 각인 수 = 3 + floor(level/10))
-Facilities.temple.cost(G, skillId) / upgrade(G, skillId)
-Facilities.adventurer.candidates(G) (하루 6명, 직업·레벨(플레이어 ±2)·역할·고용비) / hire(G, candUid) (최대 4명) / dismiss(G, uid) / board(G) -> 수주 가능한 마을 의뢰
-Facilities.guild.list(G) -> NPC 길드 3개(고정 파티원 구성, 가입 시 그 파티원들을 영입 가능) / join(G, id) / leave(G) / create(G, name) (골드 1000) / recruit(G, candUid)
+// 모든 시설 함수는 { ok, reason?, ... } 를 돌려준다(UI 토스트용). 실패하면 골드/아이템은 그대로. 가방이 차서 못 받는 결과물(분해 재료·조합품)은 G.bank.items 로 간다(toBank).
+Facilities.shop.stock(G) -> [ { id, name, icon, kind, price, currency, def } ] (포션·기본 재료 5종·기본 사제 장비 9종, 일반 등급) / buy(G, itemId, qty) -> { ok, item, cost } (reason 'not_sold'|'bad_qty'|'gold'|'bag_full') / sell(G, uid, qty?) -> { ok, gold, qty } ('not_found'|'unsellable'|'bad_qty')
+Facilities.auction.listings(G, now?) (현실 시간 1시간마다 `hourIndex = floor(Date.now()/3600000)` 로 재생성, 시드 = hourIndex, 12~20개, 사제용 50%, 층 진행도(highestCleared+1) 반영, 재료 묶음 15%) / buy(G, uid, now?) / list(G, uid, price, now?) (최대 8개) / tick(G, now?, rng?) -> { ok, sold: [entry] } (적정가 Economy.buyPrice×qty 의 1.2배 이하만 분당 15% 확률, 최대 240분) / reset(G, now?) (리셋권 소모 후 즉시 재생성: 같은 시간 안에서 다른 시드) / cancel(G, uid) / mine(G) / history(G) / isFair(entry) / hourIndex(now?)
+  // now 는 ms(생략 시 Date.now()). G.auction 에 resets, generated, sold(최근 20건) 가 추가되고 mine 항목은 { uid, item, price, listedAt, checkedAt, fair } 이다.
+Facilities.bank.deposit(G, uid) / withdraw(G, uid) ('not_found'|'bank_full'|'bag_full') / depositGold(G, n) / withdrawGold(G, n) ('bad_amount'|'gold'|'bank_gold') / items(G) / capacity(G) -> { used, size, gold }
+Facilities.smithy.repair(G, uid) (가방+장착품, 'not_found'|'not_equip'|'not_damaged'|'gold') / repairAll(G) -> { ok, cost, count } / disassemble(G, uid, rng?) -> { ok, materials, toBank } (가방 안 장비만) / craft(G, recipeId, rng?) -> { ok, item?, toBank, cost, reason?: 'no_recipe'|'gold'|'materials', missing? } / recipes(G)
+Facilities.inn.menu() -> [ { id, name, icon, price, fatigue: -20|-35|-50, buff, desc } ] (보리빵/숲 열매 파이/사슴 고기 스튜 — 여관에서 먹는 피로 회복량은 메뉴 값, 가방에서 쓰는 같은 음식은 Items.effect 의 -20) / eat(G, foodId, now?) (G.player.buffs 에 { id, stat, value, until }, 같은 음식은 갱신) / sleep(G) (골드 50, 피로 0, day+1, 일일 퀘스트 리셋, HP/MP 회복 = Party.heal, 'day_passed' { day })
+Facilities.engraver.options(G) -> [ { id, name, cost, materials, stat?, value?, special?, desc, owned, affordable, missing } ] / engrave(G, id) (최대 각인 수 = 3 + floor(level/10); 'unknown'|'slots_full'|'duplicate'|'gold'|'materials') / erase(G, index) (100골드) / maxSlots(G)
+  // 스탯 각인 6종(int/vit/def/heal_power%/cast_speed%/mp_regen, 중복 가능) + 특수 4종(하나씩만). 저장 형식 { id, stat, value } | { id, special: { id, chance, value?, duration? } } — Stats.derive().specials 에 special 객체가 그대로 들어간다:
+  //   guard { chance 0.2, value 0.3, duration 5 } 피격 시 방어 +30% 5초 ; evade { chance 0.2 } 회피 ; heal_crit { chance 0.1, value 1.5 } 힐 1.5배 ; mana_refund { chance 0.1 } 시전 마나 환급 — Combat 이 적용한다.
+Facilities.temple.cost(G, skillId) -> gold|null (사제 스킬만, 해금 전·만렙 null) / upgrade(G, skillId) -> { ok, level, cost } ('unknown'|'locked'|'max_level'|'gold') / skills(G) -> [ { id, name, level, unlocked, unlockLevel, maxLevel, cost, desc } ]
+Facilities.adventurer.candidates(G) (하루 6명, 직업·레벨(플레이어 ±2)·역할·고용비, 시드 RNG.hash('adventurer:'+day) 로 결정적, 탱커·원딜 1명씩 보장) / hire(G, candUid) (최대 4명, 'not_found'|'party_full'|'gold') / dismiss(G, uid) -> { ok, member, returnedToGuild } / board(G) -> 수주 가능한 마을 의뢰(Quests.available 의 type 'village')
+Facilities.guild.list(G) -> NPC 길드 3개 [ { id, name, level, levelReq(1/6/12), desc, members: [memberInst×4], joined } ] (명단은 RNG.hash('guild:'+id) 시드로 고정) / join(G, id) ('in_guild'|'unknown'|'level') / leave(G) (파티의 길드원 전원 제거) / create(G, name) (골드 1000, 이름 1~12자) / recruit(G, memberUid) (명부 → 파티, 무료; 한 사람은 명부·파티 중 한 곳에만 있다) / enlist(G, memberUid) (내 길드에 현재 파티원 등록, 오너만) / current(G) / roster(G)
+Facilities.visit(id) -> 'facility_visit' { id } 이벤트 ; Facilities.IDS ; Facilities.NAMES (한국어)
 ```
+시설 이벤트: 'gold_changed' {gold, delta}, 'shop_bought', 'shop_sold', 'auction_refreshed', 'auction_bought', 'auction_listed', 'auction_sold' {item, price}, 'bank_changed', 'item_repaired', 'item_disassembled', 'item_crafted', 'meal_eaten', 'day_passed' {day}, 'engraved', 'skill_upgraded' {id, level, cost}, 'candidates_refreshed', 'party_changed' {action, member, count} (Party 가 냄), 'party_healed', 'guild_changed' {action, guild}.
 피로: 100걸음당 +1, 몬스터 무리 전투당 +2, 보스 +5, 사망 +10. 피로 ≥ 100 이면 던전 입장 불가.
 내구도: 장비 피격·시전 시 서서히 감소, 0 이면 효과 절반. 수리비 = 가격 × 손상비율 × 0.3.
 
 ## 6. 파티 (core/party.js — `Party`)
 ```js
 Party.generateMember(rng, level, opts?) -> memberInst  // 직업·역할·이름(한국어 2~3글자)·성격 한 줄. stats = Classes.statsAt(cls, level), role = Classes.pickRole(cls, rng)
-Party.members(G) -> [memberInst] ; Party.roles(G) -> { tank: n, melee: n, ranged: n, healer: n }
-Party.heal(G) (마을 복귀 시 전원 회복) ; Party.gainXp(G, xp)
+  // opts: { cls?, role?, name?, gender?, personality? } (길드 고정 파티원용). 장비 = 직업 재질 옷 `{armor}_body_{1|2}` + 직업 무기(1~5층 레벨이면 1티어, 6층부터 2티어), Items.generate 로 생성(등급 일반 70/고급 25/레어 5). hireCost = 100 + level×40. 이름 풀 남녀 각 40명 이상.
+Party.members(G) -> [memberInst] ; Party.roles(G) -> { tank: n, melee: n, ranged: n, healer: n } ; Party.find(G, uid) ; Party.isFull(G) ; Party.MAX = 4
+Party.add(G, memberInst) -> bool (정원·중복 uid 검사, 'party_changed' {action:'add'}) ; Party.remove(G, uid) -> memberInst|null ('party_changed' {action:'remove'}) — 골드 처리는 시설이 한다
+Party.heal(G) (마을 복귀 시 파티원 + 플레이어 HP/MP 전부 회복, 저주 제거, 'party_healed') ; Party.gainXp(G, xp) -> [Level.addXp 결과] (전원 같은 양) ; Party.hireCost(level) ; Party.describe(m) -> '서연 Lv.3 전사(탱커)'
 ```
 
 ## 7. 퀘스트 엔진 (core/quests.js — `Quests`)
@@ -307,51 +316,61 @@ ent = { uid, kind: 'player'|'member'|'monster', name, cls?, role, level, def: mD
         target: uid|null, threat: { [uid]: n } (몬스터), buffs: [ { id, stat, value, until } ], curses: [ { id, until, dps? } ],
         cooldowns: { [skillId]: untilTime }, cast: null | { skillId, t, total, target, x?, y? }, atkTimer, speed, sprite, tags, tier,
         home: {x,y} (몬스터 순찰 기준), groupId, aggroRange, leashRange }
-Combat.create({ map, player, members, monsters, rng }) -> battle
+  // 구현이 더 쓰는 필드: 공통 range/atkInterval/dmgStat(직업·mDef 에서), 몬스터 base(Stats.applyStatus 의 기준 수치)/abilities/aggro/returning/summonedBy/phase/xp/gold/floor/threatMult, 플레이어 skillLevels
+Entities.refresh(ent, G?, now?) -> ent   // 버프/저주가 바뀐 뒤 파생 스탯 재계산(최대 HP/MP·speed 갱신, hp/mp 클램프). Combat 이 상태 변화마다 부른다
+Combat.create({ map, player, members, monsters, rng, G?, floor?, autoLoot?, driveHealer?, ai? }) -> battle
+  // G 생략 시 State.get(), floor 생략 시 monsters[0].floor. autoLoot(기본 true): 처치 시 골드·Inventory.add·Level.addXp 를 Combat 이 직접 적용(Floor 는 다시 적용하지 말 것).
+  // driveHealer(기본 true): battle.update 가 AIHealer.update(player, battle, G, dt) 를 호출한다(Floor/scene 이 또 부르면 안 됨). ai:false 는 AI 전부 끔(테스트용), battle.aiEnabled 로 토글.
 battle.update(dt)            // 모든 로직: 이동·어그로·공격·시전·버프/저주 만료·텔레그래프·장판·사망·루팅 이벤트
 battle.time ; battle.entities ; battle.player ; battle.members ; battle.monsters ; battle.telegraphs ; battle.groundHeals ; battle.log (최근 메시지)
 battle.useSkill(caster, skillId, target?) -> { ok, reason? }   // 시전 시작(캐스팅). 대상 생략 시 AIHealer.pickTarget 로 자동
 battle.moveTo(ent, x, y, dt) ; battle.canStand(x, y) ; battle.inCombat() -> bool ; battle.activeMonsters() (활성 반경 20타일 내)
 battle.damage(src, dst, amount, opts) ; battle.heal(src, dst, amount) ; battle.applyCurse(dst, curseId, dur) ; battle.cleanse(dst)
+  // damage opts: { mult, crit(강제), noEvade, noDef, noCrit, noThreat, type: 'basic'|'magic'|'physical'|'telegraph'|'puddle'|'dot', skillId, abilityId } ; cleanse(dst, n=1) -> [제거한 저주 id]
 battle.result -> null | 'wipe'
+battle.castAbility(mon, abilityId, target?) -> { ok, reason?, telegraph? }   // 몬스터 능력 시전(windup 동안 cast 상태, 범위기는 텔레그래프 생성). AIMonster 가 쓴다
+battle.addMonster(ent) ; battle.engagedMonsters() (aggro 상태) ; battle.allies() (살아 있는 파티) ; battle.party() ; battle.byUid(uid) ; battle.summonCount(owner)
+battle.addBuff(ent, buff) ; battle.revive(ent, pct, src?) ; battle.taunt(src, mon, mult) ; battle.addThreat(mon, src, amount) ; battle.topThreat(mon) ; battle.inTelegraph(tg, ent) ; battle.cancelCast(ent, reason) ; battle.logMsg(text)
 ```
-- 위협(어그로): 피해 ×1(탱커 ×3, 도발 ×5 즉시), 힐 ×0.5 가 피해 받은 몬스터 전원에 분산. 몬스터는 최고 위협 대상을 공격. 1~5층은 탱커 위협 보정 ×4 라 힐러가 거의 안 맞음, 6층부터 ×2.5 로 줄고 'healer' 타겟 능력 등장.
-- 피해 = `max(1, atk × mult − def × 0.5) × (0.9~1.1)`, 회피/크리 적용. 공격 속도·이동속도는 버프/저주 반영.
-- 텔레그래프: `battle.telegraphs: [ { id, type: 'circle'|'puddle', x, y, r, t, windup, owner, dmg?, dps?, duration?, fill: 0~1 } ]` — windup 동안 fill 증가(색 채워짐), 완료 시 circle 은 범위 내 파티에 1회 피해, puddle 은 duration(5s) 동안 안에 있으면 초당 dps. `battle.groundHeals` 도 같은 구조(치유의 성역).
-- 저주 id: `dot`(초당 피해), `def_down`, `atk_down`, `aspd_down`, `spd_down`, `heal_down`(받는 힐 50%), `root`(이동불가). 10~20초.
-- 시전: `ent.cast` 진행 중 이동하면 취소(플레이어). 멤버/몬스터는 시전 중 정지.
-- 사망: hp≤0 → alive=false. 부활 스킬로 HP 30%. 전원 사망 → `battle.result='wipe'`.
-- 벨트 자동 사용: 플레이어 HP<40% → hp 포션, MP<25% → mp 포션, 저주 걸림 → 해독제 (벨트에 등록된 것만, 아이템별 쿨 10s).
-- 이벤트: 'damage','heal','death','revive','curse','cleanse','cast_start','cast_done','cast_cancel','telegraph','summon','monster_killed','boss_killed','loot','level_up'.
+- 위협(어그로): 피해 ×1(탱커는 `Floors.tankThreatMult(floor)` = 1~5층 ×4, 6층부터 ×2.5, 여기에 mDef.threatMult 를 곱함; Floors 없으면 ×3), 도발은 `max(최고 위협, 50) × 5` 로 즉시 1위 + 대상 전환, 힐 ×0.5 가 교전(aggro) 중인 몬스터 전원에 분산. 몬스터는 최고 위협 대상을 공격(현재 대상이 1위의 90% 이상이면 유지). 1~5층은 힐러가 거의 안 맞음, 6층부터 'healer' 타겟 능력 등장.
+- 피해 = `max(1, atk × mult − def × 0.5) × (0.9~1.1)`, 회피(dst.evasion%)/크리(src.crit%, ×1.5) 적용. 공격 속도·이동속도는 버프/저주 반영. 파티원 기본 공격은 직업 dmgStat(atk/matk/hybrid), 간격 = atkInterval/atkSpeed ; 몬스터 간격 = 1/aspd, 적중 시 `Monsters.curseChance` 로 저주.
+- 텔레그래프: `battle.telegraphs: [ { id, type: 'circle'|'puddle'|'cone'|'line', x, y, r, t, windup, owner, abilityId, dmg?, dps?, duration?, fill: 0~1, resolved } ]` — windup 동안 fill 증가(색 채워짐), 완료 시 circle 은 범위 내 파티에 1회 피해, puddle 은 `active` 가 되어 duration(5s) 동안 0.5초마다 dps×0.5 피해(+`curse` 가 있으면 들어온 사람마다 1회), cone 은 `{ angle(도), facing(rad) }` 부채꼴 1회 피해, line(돌진) 은 `{ x2, y2 }` 선분 폭 r 1회 피해 후 시전자가 끝점으로 이동. 범위기 피해는 회피 불가. `battle.groundHeals` 도 같은 구조(치유의 성역: `{ type:'puddle', fill:1, hps, tick }`, 1초마다 반경 안 아군 회복).
+- 저주 id: `dot`(초당 피해 = 최대 HP 2%, `curses[].dps`), `def_down`, `atk_down`, `aspd_down`, `spd_down`, `heal_down`(받는 힐 50%), `root`(이동불가). 10~20초(dur 생략 시). 같은 저주는 시간만 갱신. 죽으면 저주·스킬 버프는 사라지고 음식 버프만 남는다.
+- 시전: `ent.cast` 진행 중 이동하면 취소(플레이어, reason 'moved'). 멤버/몬스터는 시전 중 정지. MP 소모·쿨타임은 **시전 완료 때**(취소되면 손해 없음, 완료 시 MP 부족/대상 소실이면 reason 'mp'/'no_target' 으로 취소). useSkill 거부 reason: 'ended'|'no_skill'|'dead'|'casting'|'cooldown'|'locked'|'not_owner'|'mp'|'no_target'. 세트 proc(instant_basic/instant_aoe → 시전 0, free_mana → MP 0)은 시전 시작 때 굴린다.
+- 광역힐 대상은 useSkill 에 넘어온 대상 목록(`[ents]`, AIHealer.pickTarget 이 고른 **HP 낮은 순 N 명** — 사용자 지정)을 그대로 쓰고(`cast.targets`, 시전 완료 때 죽은 사람은 뺌), 목록이 없거나 모자라면 다친 아군 우선 무작위 N 명으로 채운다. 파티원 공격 스킬의 추가 대상(targets 3)은 사거리 안의 가까운 몬스터만. curse_volley 는 curses 중 count 개를 뽑아 각각 targetRule 로 고른 대상에게 duration 초.
+- 사망: hp≤0 → alive=false. 부활 스킬로 HP 30%. 전원 사망 → `battle.result='wipe'` + 'wipe' 이벤트. 몬스터 처치 시 살아 있는 파티 전원에게 `Level.addXp(src, mDef xp)`, `Loot.roll` 결과를 골드·Inventory.add 로 적용(autoLoot) 하고 `G.counters.kills/bossKills` 증가, 힐은 `G.counters.heals`. 매 update 끝에 `G.player.hp/mp/buffs` 를 동기화.
+- 벨트 자동 사용: 플레이어 HP<40% → hp 포션, MP<25% → mp 포션, 저주 걸림 → 해독제 (벨트에 등록된 것만, 아이템별 쿨 10s, 0.5초마다 검사).
+- 이벤트: 'damage' {src,dst,srcUid,dstUid,amount,evaded,crit,type,skillId?,abilityId?,hp}, 'heal' {src,dst,amount,skillId,hp}, 'heal_done' {amount}(플레이어 힐만, 퀘스트용), 'death' {uid,ent,kind,name,killer}, 'revive', 'curse' {uid,id,until,src}, 'curse_expired', 'cleanse' {uid,removed}, 'cast_start'/'cast_done'/'cast_cancel' {uid,skillId|abilityId,total?,target?,reason?}, 'telegraph' {id,type,x,y,r,windup,owner,abilityId}, 'telegraph_hit', 'ground_heal', 'summon' {owner,monsterId,count,uids}, 'monster_killed' {id,family,tags,tier,floor,uid,x,y,killer}, 'boss_killed' {id,floor,uid}, 'loot' {gold,items,added,lost,uid,monsterId,x,y,applied}, 'wipe', 'boss_phase' {uid,id,hpBelow,abilities}, 'level_up'(Level 이 발행).
 
 ### 8.1 파티원 AI (ai_party.js — `AIParty.update(ent, battle, dt)`)
 - 탱커: 가장 가까운 교전 몬스터(또는 힐러를 노리는 몬스터 우선)에게 접근·공격, 도발 쿨마다 사용, 몬스터가 여러 마리면 가장 위협 낮은 아군을 노리는 놈에게 도발.
-- 근딜: 탱커의 대상 공격(뒤쪽 위치), 스킬 쿨마다 사용. 원딜: 사거리 유지(대상과 150~220px), 너무 가까우면 뒤로.
-- 비전투: 플레이어(힐러)를 따라감(대형: 탱커 앞, 딜러 옆). 탐색 중 몬스터 무리 어그로 범위에 들어오면 교전.
-- 모두 텔레그래프 안에 있으면 2/3 확률로 빠져나옴(1~5층 90%).
+- 근딜: 탱커의 대상 공격(뒤쪽 위치), 스킬 쿨마다 사용. 원딜: 사거리 유지(대상과 150~220px), 너무 가까우면 뒤로 — 단 **나를 쫓는 몬스터에게서는 물러나지 않고**(끝없는 카이팅 방지) 힐러에게서 8타일 이상 멀어지지 않는다.
+- 비전투: 플레이어(힐러)를 따라감(대형: 탱커 앞 48px, 근딜 옆 40px, 원딜 뒤 44px). 탐색 중 몬스터 무리 어그로 범위에 들어오거나 힐러/자신 6타일 안에 몬스터가 보이면 교전. 힐러에게서 15타일 밖의 몬스터는 쫓지 않는다.
+- 모두 텔레그래프 안에 있으면 2/3 확률로 빠져나옴(1~5층 90%). 텔레그래프마다 한 번만 굴리고(`ent.dodge`), 탈출 지점은 `AIParty.exitPoint(tg, ent, battle)`(원/장판은 바깥쪽, 부채꼴은 옆, 돌진 선은 수직). 피해·위협·스킬 효과는 전부 battle 함수로만 일으킨다.
 
 ### 8.2 힐러 자동 로직 (ai_healer.js — `AIHealer`)
 ```js
-AIHealer.decide(player, battle, G) -> null | { skillId, target?: ent, x?, y? }   // 우선순위 규칙(아래)
-AIHealer.pickTarget(skillDef, player, battle) -> ent|null|[ents]
-AIHealer.update(player, battle, G, dt)   // settings.autoHeal 이면 decide → battle.useSkill
-AIHealer.dodge(player, battle) -> { x, y } | null   // 텔레그래프/장판 밖 가장 가까운 안전 지점(autoDodge 또는 UI 표시용)
+AIHealer.decide(player, battle, G) -> null | { skillId, target?: ent | [ents], x?, y? }   // 우선순위 규칙(아래). 광역힐은 target 이 HP 낮은 순 N 명 목록, 바닥힐은 x,y
+AIHealer.pickTarget(skillDef, player, battle) -> ent|null|[ents]   // 모든 스킬 타입: 단일힐 HP% 최저, 광역힐 HP 낮은 순 N 명([ents]), 바닥힐 파티 무게중심 {x,y}(벽이면 가장 아픈 사람 발밑), 버프 역할별(prefer tank/dps/any/self, 없으면 곧 끝나는 버프), 해제 저주 걸린 사람 중 HP 최저, 부활 탱커>근딜>원딜, 일격 가장 가까운 언데드(교전 우선), 필살기 자신
+AIHealer.update(player, battle, G, dt)   // settings.autoDodge 면 dodge → moveTo(시전 취소) ; settings.autoHeal 이면 decide → battle.useSkill. 한 틱(battle.time)에 useSkill 은 최대 1회(같은 틱에 두 번 불려도), 거부된 스킬은 0.5초 동안 재시도하지 않음(AIHealer.RETRY_DELAY). MP<20% 면 벨트 MP 포션(battle.beltCooldowns 공유)
+AIHealer.dodge(player, battle) -> { x, y } | null   // 텔레그래프/장판(발동 중 포함) 밖 가장 가까운 안전 지점(다른 텔레그래프에도 안 걸리는 곳; autoDodge 또는 UI 표시용)
 ```
-우선순위(위에서부터 처음 만족하는 것 실행; 시전 중이면 대기):
-1. 죽은 파티원 + resurrect 사용 가능 + 즉시 위험(누군가 HP<30%) 없음 → 부활(가장 역할 중요한: 탱커 > 딜러).
-2. 파티 평균 HP < 45% 또는 3명 이상 HP<40% → holy_light(쿨 가능 시).
-3. 저주 걸린 아군 중 **HP 가 가장 낮은** 대상 → cleanse (단, `root/heal_down/dot` 은 즉시, 나머지는 HP<70% 이거나 힐 대상이 없을 때).
-4. HP% 가 가장 낮은 아군이 80% 미만이면 단일힐: 대상 HP<35% → heal_instant(가능하면) 아니면 heal_fast; 35~60% → heal_fast(해금 시) 아니면 기본; 60~80% → 기본힐. 단 MP<30% 이면 항상 기본힐(효율). 플레이어가 고른 `active.single` 이 있으면 그 스킬 우선, 긴급(<35%) 때만 즉시힐로 승격.
-5. 2명 이상 HP<70% → 광역힐(`active.aoe`; 3명 이상이고 aoe_3 해금이면 aoe_3; 모두 모여 있으면(반경 2.5타일 안에 3명 이상) aoe_ground 우선).
-6. 언데드 몬스터 교전 중이고 아무도 힐 필요 없으면 → smite.
-7. 버프 유지: 탱커 buff_def, 근딜/원딜 buff_atk, 전원 buff_aspd … 쿨/MP 여유(MP>50%)일 때 가장 오래 비어 있는 버프부터.
-8. 전투 중 아니면 아무것도 안 함(마나 회복). 마나 관리: MP<20% 이면 기본힐 외 금지, 벨트 MP 포션 사용.
-위험 회피: `dodge()` 가 텔레그래프 안에 플레이어가 있으면 밖의 안전 지점을 돌려준다. autoDodge 면 자동 이동(시전 취소), 아니면 UI 가 깜빡여 알려줌.
+우선순위(위에서부터 처음 만족하는 것 실행; 시전 중이면 대기. 쿨/해금/MP/최근 거부로 못 쓰는 스킬은 같은 틱에 다음 순위로):
+1. 죽은 파티원 + resurrect 사용 가능 + 즉시 위험(누군가 HP<30%) 없음 → 부활(가장 역할 중요한: 탱커 > 근딜 > 원딜, 같으면 레벨 높은 쪽).
+2. (전투 중) 파티 평균 HP < 45% 또는 3명 이상 HP<40% → holy_light(쿨 가능 시). 비전투면 300초 쿨을 아낀다.
+3. 저주 걸린 아군 중 **HP 가 가장 낮은** 대상 → cleanse (단, `root/heal_down/dot` 은 즉시, 나머지는 HP<70% 이거나 힐 대상이 없을 때 — 그리고 누군가 긴급(<35%)이면 급하지 않은 저주는 힐 뒤로).
+4. HP% 가 가장 낮은 아군이 80% 미만이면 단일힐: 대상 HP<35% → heal_instant(가능하면) 아니면 heal_fast; 35~60% → heal_fast(해금 시) 아니면 기본; 60~80% → 플레이어가 고른 `active.single`(없으면 기본힐). 단 MP<30% 이면 항상 기본힐(효율). `active.single` 이 빠른/즉시힐이면 35~60% 에도 그것을 먼저, 긴급(<35%) 때는 즉시힐로 승격.
+   **순서**: 긴급(<35%) 단일힐은 5(광역)보다 먼저, 그 외 단일힐은 5 의 조건이 안 될 때(그래야 광역 규칙이 죽은 규칙이 되지 않는다).
+5. 2명 이상 HP<70% → 광역힐(3명 이상이고 aoe_3 해금이면 aoe_3, 아니면 `active.aoe` → aoe_2 → aoe_3 순으로 쓸 수 있는 것; 대상은 HP 낮은 순 N 명). 모여 있으면(파티 무게중심 2.5타일 안에 3명 이상, 그중 다친 사람 2명 이상) aoe_ground 를 무게중심에 우선. MP<30% 면 광역 대신 기본힐.
+6. (전투 중) 언데드 몬스터 교전 중이고 아무도 힐 필요 없으면(최저 HP ≥ 80%) → smite(가장 가까운 교전 언데드). MP ≥ 50% 일 때만.
+7. (전투 중) 버프 유지: 탱커 buff_def/buff_eva, 근딜/원딜 buff_atk, 전원 buff_aspd/buff_spd(탱커부터), 자신 buff_mana … 쿨/MP 여유(MP ≥ 50%)일 때 가장 오래 비어 있는 (버프, 대상)부터(update 가 버프를 마지막으로 본 시각을 기억; 같으면 def > atk > aspd > eva > spd > mana), 5초 안에 끝나는 버프도 갱신 대상. 탱커가 없으면 buff_def 는 딜러에게.
+8. 전투 중 아니면 버프·일격·필살기는 안 함(마나 회복; 힐·해제·부활은 비전투에도 한다). 마나 관리: MP<20% 이면 기본힐·필살기 외 금지 + 벨트 MP 포션 사용, MP<30% 이면 기본힐 외 힐 금지.
+위험 회피: `dodge()` 가 텔레그래프 안에 플레이어가 있으면 밖의 안전 지점을 돌려준다. autoDodge 면 자동 이동(시전 취소), 아니면 UI 가 깜빡여 알려줌. 상태는 전투 엔티티의 `player.healerAI = { failed, seen, last, tick }` 에 둔다.
 
 ### 8.3 몬스터 AI (ai_monster.js — `AIMonster.update(ent, battle, dt)`)
-- 순찰(home 반경 3타일), 어그로 범위(7타일) 안의 파티 발견 → 무리 전체 교전. 리쉬 25타일 넘으면 복귀+회복.
-- 능력은 쿨마다 `targetRule` 로 대상 선택 → 텔레그래프 생성. 보스는 phases 에 따라 능력 세트 전환, summon 은 소환 수 제한(동시 6).
-- 저주: 공격 적중 시 `curses[].chance × Floors.curseMult`.
+- 순찰(home 반경 3타일, 1.5~4초 쉬었다 이동), 어그로 범위(7타일) 안의 파티 발견 → 같은 groupId 무리(10타일 안) 전체 교전(`ent.aggro=true`, 첫 능력은 0.5~2초 뒤부터). 리쉬 25타일 넘거나 대상이 없으면 복귀(`ent.returning`)+HP 회복+저주 제거. 교전 중 같은 무리끼리 겹치면 살짝 밀어낸다.
+- 능력은 쿨마다 `battle.castAbility(ent, id)` 로 → Combat 이 `targetRule` 로 대상 선택·텔레그래프 생성·효과 적용. 대상이 8타일(돌진은 range) 밖이면 쓰지 않고, heal_self 는 HP<70% 일 때만. 보스는 `Monsters.abilitiesFor(def, hp비율)` 로 phases 에 따라 능력 세트 전환('boss_phase' 이벤트), summon 은 소환 수 제한(시전자당 동시 6, Combat 이 강제).
+- 저주: 공격 적중 시 `curses[].chance × Floors.curseMult`(Combat.basicAttack 이 굴림).
 
 ### 8.4 드랍 (loot.js — `Loot`)
 ```js
@@ -380,11 +399,21 @@ DungeonGen.T = { WALL:0, FLOOR:1, WATER:2, DECO:3, BUSH:4 } ; DungeonGen.tileAt(
 - 숨겨진 상자 = 랜드마크 근처(≤ 30타일) 벽 속으로 판 1칸 폭 막다른 길 끝, 둘레는 덤불(4). 상자 자체는 통행 가능 칸이라 BFS 도달 가능. 랜드마크 kind 는 이름 키워드로 정한다(호수/폭포/샘 → 물가, 복도/통로/길 → 주요 경로의 좁은 곳, 바위/나무/기둥 → 구석, 그 외 → 넓은 공터).
 - 생성 시간 < 1초(노드 기준, 실제 60~170ms). 결정적(같은 층 = 같은 맵). `Floors.get` 이 없으면(테스트) 층별 기본 바이옴·랜드마크·풀을 쓴다. 미리보기: `node healer/tools/map_preview.js <floor|all> [--stats]`.
 ```js
-Floor.start(G, floor) -> fs = { floor, map, battle, chests, steps: 0, startedAt, bossDefeated: false, cleared: false, visited: Uint8Array(미니맵용) }
-Floor.update(fs, G, dt)   // 활성 반경 내 엔티티만 갱신, 걸음 수 집계('steps' 이벤트 100걸음마다), 상자 근접 자동 열기('chest_opened'), 보스 처치 → bossDefeated → exit 활성, 출구 도달 → cleared ('floor_cleared')
-Floor.openChest(fs, G, chestId) ; Floor.leave(fs, G, reason: 'cleared'|'escape'|'wipe')  // 마을 복귀 처리(피로·보상·기록)
+Floor.start(G, floor, opts?) -> fs = { floor, map, battle, boss (보스 엔티티), chests: [ { ...map.chests[i], opened, revealed } ], steps: 0, startedAt(ms), time(초, 게임 시간), bossDefeated: false, cleared: false,
+                                    result: null|'cleared'|'wipe'|'escape', visited: Uint8Array(cols×rows, 미니맵용), kills, chestsOpened, playerDeaths, memberDeaths, fatigue(누적 예정), groupsFought: Set }
+  // opts.rng: 전투·상자용 난수(시뮬레이션 재현용, 기본 RNG.global()). 몬스터는 map.groups[].members 를 spots 에 세우고 groupId = 무리 id, 보스는 map.boss 에(groupId 'f{n}_boss'). 파티는 spawn 주변 설 수 있는 칸.
+  // 'floor_started' { floor, name, monsters, chests }
+Floor.update(fs, G, dt)   // battle.update(활성 반경은 Combat), 걸음 집계(1타일 = 1걸음, G.counters.steps, 100걸음마다 'steps' { n: 100, total, floor }), 상자 1.5타일 근접 자동 열기, 숨김 상자 2타일 내 드러남('chest_revealed' { chestId, x, y }),
+                          // 보스 처치 → bossDefeated + 'exit_opened' { floor, x, y } → 출구 1.5타일 도달 → cleared + 'floor_cleared' { floor, time, steps, kills }. battle.result 'wipe' 면 fs.result = 'wipe'. result 가 정해지면 더 갱신하지 않는다(씬이 leave 를 부른다).
+                          // 쓰러진 힐러는 교전이 끝나고 8초 뒤 살아남은 파티원이 일으켜 세운다(battle.revive 30%). settings.autoFollow 면 비전투 상태로 10타일 넘게 떨어진(아무도 노리지 않는) 파티원은 4초 뒤 힐러 옆으로 붙는다(길 잃음 방지).
+Floor.openChest(fs, G, chestId) -> payload|null   // Loot.chest(floor, type, rng, { G, chestId }) → 골드('gold_changed')·Inventory.add(가방이 차면 G.bank.items 로 toBank, 은행도 차면 lost)·G.counters.chests·hidden 이면 G.quests.hiddenFound.
+                                                   // 'chest_opened' { chestId, floor, hidden, type, landmarkId, x, y, gold, items, added, toBank, lost, questScroll }. 이미 열렸으면 null.
+Floor.leave(fs, G, reason: 'cleared'|'escape'|'wipe') -> summary   // 마을 복귀 처리. 피로 = (걸음/100 + 교전 무리×2 + 보스 5 + 플레이어 사망×10) × Stats.derive(G.player).fatigueGainMult 를 G.player.fatigue 에 더함('fatigue_changed').
+  // G.tower.records[floor] = { clears, bestTime, attempts, wipes }, cleared 면 highestCleared 갱신 + 보너스 XP(보스 xp 만큼 플레이어·파티원 전원; 처치 경험치는 Combat 이 이미 줬다). wipe 면 장착 장비(가방·벨트 제외)·파티원 장비 내구도 -20%.
+  // 스킬 버프 제거(음식 버프만 유지) → Party.heal. G.playTime += time. summary = { floor, reason, cleared, time, steps, kills, chests, playerDeaths, memberDeaths, groupsFought, bossDefeated, bossPhase: { reached, max }, fatigueGained, xpBonus, record } ('floor_left'). 두 번 불러도 같은 요약을 돌려주고 기록은 한 번만.
 ```
 숨겨진 상자는 덤불(4) 뒤에 있고 플레이어가 2타일 내 접근하면 드러난다. NPC 힌트는 `landmarkId` 이름으로 위치를 알려준다("3층 '달빛 폭포' 북쪽 덤불 뒤").
+시뮬레이션: `node healer/tools/sim.js <floor|all> [maxSeconds] [partyLevel] [--runs=N] [--seed=N] [--gear=basic|normal|good] [--skill=N] [--json] [--trace]` — 적정 레벨 파티(탱커 전사·근딜 도적·원딜 사냥꾼·마법사 + 힐러)가 탐험 봇(가장 가까운 미방문 무리/상자/중간보스 → 보스 → 출구, BFS 길찾기, 탱커가 앞설 때까지 대기, 비전투 휴식)으로 층을 끝까지 돈다. dt 0.1 고정.
 
 ## 10. 그래픽 모듈 계약 (DOM/canvas)
 ```js
