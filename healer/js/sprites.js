@@ -28,6 +28,11 @@ const Sprites = (() => {
     T: '#e9c978', t: '#b58d3a', z: '#6f8fc0', Z: '#4a6a9a',
   };
 
+  // 직업 전용 문자 기본값 — PLAYER_PAL 에 섞지 않아 기존 kind 팔레트는 그대로
+  const JOB_PAL = {
+    w: '#c08a52', q: '#7d5530', I: '#f4ecd8', V: '#9ff0ff', X: '#3fb6e0', R: '#8a2a2a',
+  };
+
   // ======================================================================
   // 정면 (down)  — 몸 도트맵은 모두 22 열 기준. 머리 16행, 몸통 12행, 다리 6행(+예비 1행)
   // ======================================================================
@@ -588,6 +593,390 @@ const Sprites = (() => {
   ];
 
   // ======================================================================
+  // 파티원 직업 덧그림 — 기존 kind 와 겹치지 않게 새 opts(weapon/shield/quiver/pauldrons/tabard/mail/mask)와
+  // 새 hat(horned/wizard/feather/hood/topknot)으로만 켜진다. 좌표는 몸 도트맵(22열) 기준, 음수 행은 머리 위.
+  // 새 팔레트 문자(기존 kind 는 쓰지 않음): w q 무기 나무(밝음·어둠), I 활시위·룬 반짝, V X 마검 칼날(밝음·어둠), R 진홍(방패·휘장 어둠)
+  // ======================================================================
+  // 전사 뿔 투구(정면/뒷면 공용 돔): 행 0~8, 금 테두리 + 코 가리개(정면만)
+  const HORNED_DOME = [
+    '.......oooooooo.......', // 0
+    '.....oo1111112222oo...', // 1
+    '...o1i11111112222o3o..', // 2
+    '..o1i111111112222233o.', // 3
+    '..o11111111112222233o.', // 4
+    '..o11111111122222333o.', // 5
+    '..o22222222222223333o.', // 6
+    '..onnnnnnnnnnnnnnnnno.', // 7 금 테두리
+    '..o33333333333333333o.', // 8
+  ];
+  // 뿔(왼쪽, 상아색). 행 -2 부터, 몸 -2열부터(5열) — 오른쪽은 좌우 반전해 몸 19열에
+  const HORN_L = [
+    'o....',
+    'oao..',
+    'oao..',
+    'oaao.',
+    '.oaAo',
+    '..oAA',
+    '...oo',
+  ];
+  const HORNED_SIDE = [ // 옆면 돔: 앞쪽(오른쪽)이 이마 위에서 끝난다
+    '......ooooooooo.......',
+    '....oo1111112222o.....',
+    '...o1i111111122223o...',
+    '..o1i11111111222233o..',
+    '..o1111111111222233o..',
+    '..o1111111111222233o..',
+    '..o2222222222223333oo.',
+    '..onnnnnnnnnnnnnnnnnno',
+    '..o333333333333o......',
+  ];
+  const HORN_SIDE = [ // 옆면: 머리 꼭대기 뒤쪽에서 위로 휘는 뿔 하나(몸 4열, 행 -3)
+    '.oo...',
+    'oao...',
+    'oaAo..',
+    '.oaAo.',
+    '..oAAo',
+    '...oo.',
+  ];
+  // 마법사 고깔모자: 행 -4~7, 끝이 오른쪽으로 꺾인다. 띠 n + 별 i
+  const WIZARD_HAT = [
+    '..............ooo.....', // -4
+    '............oozZZo....', // -3
+    '..........oozzzZo.....', // -2
+    '.........ozzzzZZo.....', // -1
+    '........ozzzzzZZo.....', // 0
+    '.......ozzzzzzZZZo....', // 1
+    '.......ozzizzzZZZo....', // 2
+    '......ozzzzzzzzZZZo...', // 3
+    '......onnnnnnnnnnno...', // 4 띠
+    '.....ozzzzzzzzzzZZZo..', // 5
+    'ooooozzzzzzzzzzzzZZZoo', // 6 챙
+    'ozzzzzzzzzzzzzzzzzZZZo', // 7
+    '.oooZZZZZZZZZZZZZZZoo.', // 8
+  ];
+  const WIZARD_HAT_UP = WIZARD_HAT.map((r, i) => (i === 6 ? r.replace('i', 'z') : r));
+  const WIZARD_HAT_SIDE = [
+    '.....ooo..............', // -4 끝이 뒤로 꺾인다
+    '....oZZzoo............',
+    '.....oZzzzoo..........',
+    '.....oZZzzzzo.........',
+    '.....oZZzzzzzo........',
+    '....oZZZzzzzzzo.......',
+    '....oZZZzzzzizo.......',
+    '...oZZZzzzzzzzzo......',
+    '...onnnnnnnnnnno......',
+    '..oZZZzzzzzzzzzzo.....',
+    'ooZZZzzzzzzzzzzzzooooo',
+    'oZZZzzzzzzzzzzzzzzzzzo',
+    '.ooZZZZZZZZZZZZZZZZoo.',
+  ];
+  // 사냥꾼 깃털 모자(초록 펠트, 앞이 뾰족) + 빨간 깃털: 행 -3~6
+  const FEATHER_CAP = [
+    '..................oo..', // -3 깃털 끝
+    '.................oro..', // -2
+    '................orro..', // -1
+    '.......oooooooooorro..', // 0
+    '.....oozzzzzzZZorrZo..', // 1
+    '....ozzzzzzzzzZZorZo..', // 2
+    '...ozzzzzzzzzzzZZoZZo.', // 3
+    '..ozzzzzzzzzzzzzZZZZo.', // 4
+    '..oZZZZZZZZZZZZZZZZZo.', // 5
+    '..obbbbbbbbbbbbbbbbbo.', // 6 가죽 띠
+  ];
+  const FEATHER_CAP_SIDE = [
+    '..oo..................', // -3 깃털이 뒤로
+    '..oro.................',
+    '..orro................',
+    '..orroooooooo.........',
+    '..oZrrozzzzzzoo.......',
+    '..oZZrozzzzzzzzo......',
+    '..oZZZozzzzzzzzzo.....',
+    '..oZZZZzzzzzzzzzzooo..', // 앞챙이 앞으로 뾰족
+    '..oZZZZZZZZZZZZZZZzzoo',
+    '..obbbbbbbbbbbbbbbbbo.',
+  ];
+  // 도적 두건: 머리 전체를 덮고 얼굴 가장자리와 어깨까지 내려온다. 행 0~17
+  const HOOD_DOWN = [
+    '.......oooooooo.......', // 0
+    '.....oozzzzzzZZoo.....', // 1
+    '....ozzzzzzzzzZZZo....', // 2
+    '...ozzzzzzzzzzzzZZo...', // 3
+    '..ozzzzzzzzzzzzzzZZo..', // 4
+    '..ozzzzzzzzzzzzzzZZo..', // 5
+    '..ozzzzzzzzzzzzzzZZo..', // 6
+    '..ozZZZZZZZZZZZZZZZo..', // 7
+    '..ozZoooooooooooozZo..', // 8 얼굴 테두리(그늘)
+    '..ozZo..........ozZo..', // 9
+    '..ozZo..........ozZo..', // 10
+    '..ozZo..........ozZo..', // 11
+    '.ozzZo..........ozZZo.', // 12
+    '.ozzZo..........ozZZo.', // 13
+    '.ozzZZo........oZZZZo.', // 14
+    '..ozzZZo......oZZZZo..', // 15
+  ];
+  // 도적 복면: 입·홍조 행을 덮는다(행 13~15)
+  const MASK_DOWN = [ // 붉은 복면 — 어두운 두건 속에서 도적을 한눈에 구분하게 하는 포인트 색
+    '.....oooooooooooo.....',
+    '.....orrrrrrrrrRo.....',
+    '......oRRRRRRRRo......',
+  ];
+  const HOOD_UP = [
+    '.......oooooooo.......',
+    '.....oozzzzzzZZoo.....',
+    '....ozzzzzzzzzZZZo....',
+    '...ozzzzzzzzzzzzZZo...',
+    '..ozzzzzzzzzzzzzzZZo..',
+    '..ozzzzzzzzzzzzzzZZo..',
+    '..ozzzzzzzzzzzzzzZZo..',
+    '..ozzzzzzzzzzzzzzZZo..',
+    '..ozzzzzzzzzzzzzzZZo..',
+    '..ozzzzzzzzzzzzzzZZo..',
+    '..ozzzzzzzzzzzzzzZZo..',
+    '..oZzzzzzzzzzzzzZZZo..',
+    '.oZZzzzzzzzzzzzzZZZZo.',
+    '.oZZZzzzzzzzzzzZZZZZo.',
+    '.oZZZZZZZZZZZZZZZZZZo.',
+    '..ooZZZZZZZZZZZZZZoo..',
+  ];
+  const HOOD_SIDE = [
+    '......ooooooooo.......',
+    '....oozzzzzzzZZoo.....',
+    '....ozzzzzzzzzzZZo....',
+    '...ozzzzzzzzzzzzzZo...',
+    '..ozzzzzzzzzzzzzzzZo..',
+    '..ozzzzzzzzzzzzzzzZo..',
+    '..ozzzzzzzzzzzzzzzZZo.',
+    '..ozzzzzzzzzzzzZZZZZZo',
+    '..ozzzzzzzzzzZoooooooo', // 8 얼굴 테두리
+    '..ozzzzzzzzzZo........',
+    '..ozzzzzzzzzZo........',
+    '..ozzzzzzzzzZo........',
+    '.oZzzzzzzzzzZo........',
+    '.oZZzzzzzzzzZo........',
+    '.oZZZzzzzzzZZo........',
+    '..ooZZZZZZZZZo........',
+  ];
+  const MASK_SIDE = [
+    '.............ooooooooo',
+    '.............orrrrrrRo',
+    '.............ooRRRRRo.',
+  ];
+  // 무투가 상투(머리 위 쪽진 머리, 행 -3~1) — 붉은 머리띠(HEADBAND)와 함께 쓴다
+  const TOPKNOT = [
+    '.........oooo.........',
+    '........ohhHHo........',
+    '........oHHDDo........',
+    '.........orro.........',
+    '........oohhoo........',
+  ];
+  const TOPKNOT_SIDE = [
+    '.....oooo.............',
+    '....ohhHHo............',
+    '....oHHDDo............',
+    '.....orro.............',
+    '.....oohhoo...........',
+  ];
+
+  // ---------- 몸통 덧그림 ----------
+  // 판금 어깨받이(전사): 행 16~20, 정면 왼쪽(몸 0열부터). 오른쪽은 반전해 몸 16열에
+  const PAULDRON_L = [
+    '.ooooo',
+    'o1i112',
+    'o11122',
+    'o22233',
+    '.onnno',
+  ];
+  const PAULDRON_SIDE = [ // 옆면: 팔 위 둥근 어깨 하나(몸 10열부터) — 가로 금줄이 몸통을 가르지 않게 짧게
+    '...oooo...',
+    '..o1i12o..',
+    '.o111223o.',
+    '.o222233o.',
+    '..onnnno..',
+  ];
+  // 진홍 휘장(전사): 벨트 아래 행 24~29, 다리 사이로 늘어뜨린다
+  const TABARD_DOWN = [
+    '........orrrRo........',
+    '........orrrRo........',
+    '........orrrRo........',
+    '........orrrRo........',
+    '........oRRRRo........',
+    '.........oooo.........',
+  ];
+  const TABARD_SIDE = [
+    '..............orRo....',
+    '..............orRo....',
+    '..............orRo....',
+    '..............orRo....',
+    '..............oRRo....',
+    '...............oo.....',
+  ];
+  // 화살통 멜빵(사냥꾼, 정면): 오른 어깨에서 왼 허리로 비스듬히. 행 16~23
+  const STRAP_DOWN = [
+    '.............obo......',
+    '............obo.......',
+    '...........obo........',
+    '..........obo.........',
+    '.........obo..........',
+    '........obo...........',
+    '.......obo............',
+  ];
+
+  // ---------- 무기 ----------
+  // 장검(8열): 칼끝 행 0, 날밑 행 13, 손잡이 14~15, 폼멜 16. 지팡이와 같은 자리(프레임 x=1)에 세워 쥔다
+  const SWORD = [
+    '...oo...',
+    '..oi2o..',
+    '..o12o..',
+    '..o12o..',
+    '..o12o..',
+    '..o12o..',
+    '..o12o..',
+    '..o12o..',
+    '..o12o..',
+    '..o12o..',
+    '..o12o..',
+    '..o12o..',
+    '.oo12oo.',
+    'oBBBBBBo',
+    '.oobboo.',
+    '..obbo..',
+    '..oBBo..',
+    '...oo...',
+  ];
+  // 마검: 푸른 빛 칼날 + 룬 반짝(I), 날밑은 은색
+  const RUNEBLADE = SWORD.map((r, i) => (i >= 1 && i <= 12 ? r.replace('i', 'I').replace('12', i % 4 === 2 ? 'IX' : 'VX') : i === 13 ? 'o111112o' : r));
+  // 연 모양 방패(9열 x 11행): 진홍 바탕 + 금 십자
+  const SHIELD = [
+    '.ooooooo.',
+    'onnnnnnno',
+    'onrrnrRno',
+    'onrrnrRno',
+    'onnnnnnno',
+    'onrrnrRno',
+    '.onrnRno.',
+    '.onrnRno.',
+    '..onnno..',
+    '...ono...',
+    '....o....',
+  ];
+  const SHIELD_BACK = [ // 뒷면에서 본 방패: 나무 안쪽 + 가죽 끈
+    '.ooooooo.',
+    'onnnnnnno',
+    'onwwwwqno',
+    'onbbbbbno',
+    'onwwwwqno',
+    'onwwwwqno',
+    '.onbbbno.',
+    '.onwwqno.',
+    '..onnno..',
+    '...ono...',
+    '....o....',
+  ];
+  const SHIELD_EDGE = [ // 옆면: 등 뒤로 비스듬히 보이는 방패 가장자리
+    '.oo.',
+    'onRo',
+    'onRo',
+    'onRo',
+    'onRo',
+    'onRo',
+    'onRo',
+    '.onRo'.slice(0, 4),
+    '.ono',
+    '..o.',
+  ];
+  // 활(정면, 8열 x 18행): 손잡이는 몸 18~19열, 시위(I)는 몸 위를 지나간다
+  const BOW_DOWN = [
+    '..oo....',
+    '.Iowo...',
+    '.I.owo..',
+    '.I.owo..',
+    '.I..owo.',
+    '.I..owqo',
+    '.I..owqo',
+    '.I..obbo',
+    '.I..obbo',
+    '.I..obbo',
+    '.I..owqo',
+    '.I..owqo',
+    '.I..owo.',
+    '.I.owo..',
+    '.I.owo..',
+    '.Iowo...',
+    '..oo....',
+  ];
+  // 활(옆면): 앞으로 내민 손에 세워 쥔다(몸 17열부터, 활대가 앞쪽으로 휜다)
+  const BOW_SIDE = [
+    '.oo.....',
+    '.owo..I.'.replace('I', '.'),
+    '..owo.I.',
+    '..owo.I.',
+    '...owoI.',
+    '...owqI.',
+    '...obbI.',
+    '...obbI.',
+    '...obbI.',
+    '...owqI.',
+    '...owoI.',
+    '..owo.I.',
+    '..owo.I.',
+    '.owo..I.',
+    '.oo.....',
+  ].map(r => r.padEnd(8, '.'));
+  // 화살통(뒷면·옆면): 깃털(r/a) + 가죽 통(p/P) + 금 띠(B)
+  const QUIVER = [
+    '.o.o.o.',
+    'oroaoro',
+    'oroaoro',
+    'ooooooo',
+    'opppPPo',
+    'oBBBBBo',
+    'opppPPo',
+    'opppPPo',
+    'opppPPo',
+    'opppPPo',
+    'oBBBBBo',
+    '.ooooo.',
+  ];
+  // 단검(역수로 쥔 칼날이 아래를 향한다, 5열 x 6행) — 손 바로 아래에 둔다
+  const DAGGER = [
+    'oBBBo',
+    '.oi2o',
+    '.o12o',
+    '.o12o',
+    '..o2o',
+    '..oo.',
+  ];
+  // 마법사 지팡이: 금 갈고리가 감싼 보랏빛 보주(j/J/i) + 어두운 나무 자루
+  const MAGE_STAFF = [
+    '..oooo..',
+    '.onjjno.',
+    'ono.jJno'.replace('.', 'j'),
+    'onjjJJno',
+    'onjJJJno',
+    '.onJJno.',
+    '..onno..',
+    '..opPo..',
+    '..opPo..',
+    '.nopPon.',
+    '..opPo..',
+  ].concat(Array.from({ length: 23 }, (_, i) => (i === 12 ? '..oPPo..' : '..opPo..')), ['..oooo..']);
+  // 너클(무투가): 손을 덮는 금속 주먹 덧그림(5열 x 4행)
+  const KNUCKLE = [ // 놋쇠 너클 — 주황 무투복과 대비되게 한 칸 크게
+    '.ooo.',
+    'owiwo',
+    'owwqo',
+    'oqqqo',
+    '.ooo.',
+  ];
+  const KNUCKLE_SIDE = [
+    '.ooo.',
+    'owiwo',
+    'owwqo',
+    'oqqqo',
+    '.ooo.',
+  ];
+
+  // ======================================================================
   // 프레임 규격
   // ======================================================================
   const FW = 32, FH = 40;      // 프레임 캔버스
@@ -623,6 +1012,13 @@ const Sprites = (() => {
   function slant(rows, shiftFn, maxShift) {
     return rows.map((r, i) => { const s = shiftFn(i); return '.'.repeat(s) + r + '.'.repeat(maxShift - s); });
   }
+  // 사슬 갑옷 무늬: 튜닉 면(g/G)을 한 칸 걸러 어둡게 바꿔 고리 격자처럼 보이게 한다(깃·벨트·단은 유지)
+  function mailTexture(rows) {
+    return rows.map((r, j) => (j === 0 || j === rows.length - 1 ? r : r.split('').map((ch, i) => {
+      if ((i + j) % 2) return ch;
+      return ch === 'g' ? 'G' : ch === 'G' ? 'd' : ch;
+    }).join('')));
+  }
   // 특정 행/열 문자 치환
   function setAt(rows, r, c, ch) { const out = rows.slice(); out[r] = out[r].slice(0, c) + ch + out[r].slice(c + 1); return out; }
 
@@ -650,7 +1046,7 @@ const Sprites = (() => {
   // opts: staff, crown, small(아이), cape(기본 true), hat('helmet'|'bandana'|'straw'|'kerchief'|'circlet'|'headband'),
   //       hair('bob'|'long'|'short'), apron, beard, robe(발목 로브)
   function buildCharacter(palette, opts = {}) {
-    const pal = Object.assign({}, PLAYER_PAL, palette || {});
+    const pal = Object.assign({}, PLAYER_PAL, JOB_PAL, palette || {});
     const crown = !!opts.crown;
     const staff = !!opts.staff;
     const small = !!opts.small;
@@ -658,13 +1054,23 @@ const Sprites = (() => {
     const hat = opts.hat || null;
     const hair = opts.hair || 'bob';
     const apron = !!opts.apron, beard = !!opts.beard, robe = !!opts.robe;
+    // 파티원 직업 전용 옵션 — 기존 kind 는 모두 꺼져 있어 그리기 순서·픽셀이 그대로다
+    const weapon = opts.weapon || null; // 'sword' | 'runeblade' | 'bow' | 'daggers' | 'knuckles'
+    const shield = !!opts.shield, quiver = !!opts.quiver, pauldrons = !!opts.pauldrons, tabard = !!opts.tabard, mask = !!opts.mask;
+    const blade = weapon === 'sword' ? SWORD : weapon === 'runeblade' ? RUNEBLADE : null;
+    const staffD = opts.staffMap || STAFF;
+    const staffR = opts.staffMap ? slant(opts.staffMap, (i) => 3 - Math.floor(i / 9), 3) : STAFF_SIDE;
+    const bladeR = blade ? slant(blade, (i) => (i < 6 ? 2 : i < 12 ? 1 : 0), 2) : null;
+    // 뒷면에서 검을 쥔 팔: 정면 팔을 반전하고, 망토가 있으면 어깨 두 줄을 망토색으로
+    const armHoldUp = mirrorRows(ARM_STAFF_DOWN).map((r, i) => (cape && i < 2 ? r.replace(/g/g, 'C').replace(/G/g, 'K') : r));
 
     // 아이: 머리 2행·몸통 2행·다리 2행 줄이기
     const headH = HEAD_H - (small ? 2 : 0);
     const torsoH = TORSO_H - (small ? 2 : 0);
-    const tunicD = small ? dropRows(TUNIC_DOWN, [5, 6]) : TUNIC_DOWN;
-    const tunicU = small ? dropRows(TUNIC_UP, [5, 6]) : TUNIC_UP;
-    const tunicR = small ? dropRows(TUNIC_RIGHT, [5, 6]) : TUNIC_RIGHT;
+    const mailF = opts.mail ? mailTexture : (r) => r; // 사슬 갑옷: 튜닉 면에 체크 무늬
+    const tunicD = mailF(small ? dropRows(TUNIC_DOWN, [5, 6]) : TUNIC_DOWN);
+    const tunicU = mailF(small ? dropRows(TUNIC_UP, [5, 6]) : TUNIC_UP);
+    const tunicR = mailF(small ? dropRows(TUNIC_RIGHT, [5, 6]) : TUNIC_RIGHT);
     const capeU = small ? dropRows(CAPE_UP, [3, 4]) : CAPE_UP;
     const capeR = small ? dropRows(CAPE_RIGHT, [6, 7]) : CAPE_RIGHT;
     const legFix = small ? [2, 3] : [];
@@ -701,13 +1107,28 @@ const Sprites = (() => {
       if (hat === 'kerchief') parts.push([dir === 'down' ? KERCHIEF_DOWN : dir === 'up' ? KERCHIEF_UP : KERCHIEF_RIGHT, BX, y]);
       if (hat === 'circlet') parts.push([CIRCLET, BX, y + 5]);
       if (hat === 'headband') parts.push([dir === 'right' ? HEADBAND_RIGHT : HEADBAND_DOWN, BX, y + 8]);
+      if (hat === 'horned') {
+        if (dir === 'right') { parts.push([HORN_SIDE, BX + 4, y - 3]); parts.push([HORNED_SIDE, BX, y]); }
+        else {
+          parts.push([HORN_L, BX - 2, y - 2]); parts.push([mirrorRows(HORN_L), BX + 19, y - 2]);
+          parts.push([HORNED_DOME, BX, y]);
+        }
+      }
+      if (hat === 'wizard') parts.push([dir === 'down' ? WIZARD_HAT : dir === 'up' ? WIZARD_HAT_UP : WIZARD_HAT_SIDE, BX, y - 4]);
+      if (hat === 'feather') parts.push([dir === 'right' ? FEATHER_CAP_SIDE : FEATHER_CAP, BX, y - 3]);
+      if (hat === 'hood') parts.push([dir === 'down' ? HOOD_DOWN : dir === 'up' ? HOOD_UP : HOOD_SIDE, BX, y]);
+      if (hat === 'topknot') {
+        parts.push([dir === 'right' ? HEADBAND_RIGHT : HEADBAND_DOWN, BX, y + 8]);
+        parts.push([dir === 'right' ? TOPKNOT_SIDE : TOPKNOT, BX, y - 3]);
+      }
       return parts;
     }
 
     function frameDown(legs, bob, armL, armR, hem, tip) {
       const y = by - bob;
       const parts = [];
-      if (staff) parts.push([STAFF, 1, y - 1]);
+      if (staff) parts.push([staffD, 1, y - 1]);
+      if (blade) parts.push([blade, 1, y + 11 + armL]);
       if (!robe) parts.push([legs, BX, y + legY]);
       parts.push([tunicD, BX, y + headH]);
       if (robe) { parts.push([ROBE_DOWN, BX, y + robeY]); if (tip) parts.push([tip, BX, y + robeY + 7]); }
@@ -717,11 +1138,19 @@ const Sprites = (() => {
         if (hem === 'R') parts.push([CAPE_HEM_DOWN_R, BX, y + hemDownY]);
       }
       if (apron) parts.push([APRON_DOWN, BX, y + headH + 2]);
-      if (staff) parts.push([ARM_STAFF_DOWN, BX, y + armY + armL]);
+      if (tabard) parts.push([TABARD_DOWN, BX, y + 24]);
+      if (quiver) parts.push([STRAP_DOWN, BX, y + 16]);
+      if (pauldrons) { parts.push([PAULDRON_L, BX, y + 16]); parts.push([mirrorRows(PAULDRON_L), BX + 16, y + 16]); }
+      if (weapon === 'bow') parts.push([BOW_DOWN, BX + 13, y + 15 + armR]);
+      if (staff || blade) parts.push([ARM_STAFF_DOWN, BX, y + armY + armL]);
       else parts.push([ARM_FRONT, BX + 2, y + armY + armL]);
       parts.push([ARM_FRONT, BX + 17, y + armY + armR]);
+      if (shield) parts.push([SHIELD, BX + 14, y + 19 + armR]);
+      if (weapon === 'daggers') { parts.push([DAGGER, BX + 1, y + 26 + armL]); parts.push([mirrorRows(DAGGER), BX + 16, y + 26 + armR]); }
+      if (weapon === 'knuckles') { parts.push([KNUCKLE, BX + 1, y + 23 + armL]); parts.push([KNUCKLE, BX + 16, y + 23 + armR]); }
       parts.push([headD, hx, y]);
       parts.push(...hairParts('down', y));
+      if (mask) parts.push([MASK_DOWN, BX, y + 13]);
       if (beard) parts.push([BEARD_DOWN, BX, y + 14]);
       if (crown) parts.push([CROWN_DOWN, BX, y + 2]);
       parts.push(...hatParts('down', y));
@@ -730,6 +1159,8 @@ const Sprites = (() => {
     function frameUp(legs, bob, armL, armR, hem, tip) {
       const y = by - bob;
       const parts = [];
+      if (blade) parts.push([blade, BX + 16, y + 11 + armR]);
+      if (weapon === 'bow') parts.push([mirrorRows(BOW_DOWN), BX - 2, y + 16 + armL]);
       if (!robe) parts.push([legs, BX, y + legY]);
       parts.push([tunicU, BX, y + headH]);
       if (robe) { parts.push([ROBE_UP, BX, y + robeY]); if (tip) parts.push([tip, BX, y + robeY + 7]); }
@@ -738,33 +1169,50 @@ const Sprites = (() => {
         if (hem === 'L') parts.push([CAPE_HEM_UP_L, BX, y + hemUpY]);
         if (hem === 'R') parts.push([CAPE_HEM_UP_R, BX, y + hemUpY]);
       }
+      if (tabard) parts.push([TABARD_DOWN.map(r => r.replace(/r/g, 'R')), BX, y + 24]);
+      if (pauldrons) { parts.push([PAULDRON_L, BX, y + 16]); parts.push([mirrorRows(PAULDRON_L), BX + 16, y + 16]); }
       const arm = cape ? ARM_BACK : ARM_BACK_NOCAPE;
       parts.push([arm, BX + 2, y + armY + armL]);
-      parts.push([arm, BX + 17, y + armY + armR]);
+      if (blade) parts.push([armHoldUp, BX + 16, y + armY + armR]);
+      else parts.push([arm, BX + 17, y + armY + armR]);
+      if (shield) parts.push([SHIELD_BACK, BX - 1, y + 19 + armL]);
+      if (weapon === 'daggers') { parts.push([DAGGER, BX + 1, y + 27 + armL]); parts.push([mirrorRows(DAGGER), BX + 16, y + 27 + armR]); }
+      if (weapon === 'knuckles') { parts.push([KNUCKLE, BX + 1, y + 24 + armL]); parts.push([KNUCKLE, BX + 16, y + 24 + armR]); }
       parts.push([headU, hx, y]);
       parts.push(...hairParts('up', y));
       if (crown) parts.push([CROWN_DOWN, BX, y + 2]);
       parts.push(...hatParts('up', y));
-      if (staff) parts.push([STAFF, BX + 18, y - 1]);
+      if (quiver) parts.push([QUIVER, BX + 13, y + 13]);
+      if (staff) parts.push([staffD, BX + 18, y - 1]);
       return compose(parts, pal);
     }
     function frameRight(legs, bob, arm, fly, tip) {
       const y = by - bob;
       const parts = [];
       if (fly && cape) parts.push([CAPE_FLY_RIGHT, BX, y + headH + 3]);
+      if (shield) parts.push([SHIELD_EDGE, BX + 1, y + 18]);
       if (!robe) parts.push([legs, BX, y + legY]);
       parts.push([tunicR, BX, y + headH]);
       if (robe) { parts.push([ROBE_RIGHT, BX, y + robeY]); if (tip) parts.push([tip, BX, y + robeY + 7]); }
       if (cape) parts.push([capeR, BX, y + headH]);
       if (apron) parts.push([APRON_RIGHT, BX, y + headH + 2]);
-      if (!staff) parts.push([ARM_SIDE, BX + 12 + arm, y + armY]);
+      if (tabard) parts.push([TABARD_SIDE, BX, y + 24]);
+      if (quiver) parts.push([QUIVER, BX + 1, y + 13]);
+      if (pauldrons) parts.push([PAULDRON_SIDE, BX + 10, y + 16]);
+      const holdSide = staff || blade || weapon === 'bow';
+      if (!holdSide) parts.push([ARM_SIDE, BX + 12 + arm, y + armY]);
+      if (weapon === 'daggers') parts.push([DAGGER, BX + 12 + arm, y + 26]);
+      if (weapon === 'knuckles') parts.push([KNUCKLE_SIDE, BX + 13 + arm, y + 23]);
       parts.push([headR, hx, y]);
       parts.push(...hairParts('right', y));
+      if (mask) parts.push([MASK_SIDE, BX, y + 13]);
       if (beard) parts.push([BEARD_RIGHT, BX, y + 14]);
       if (crown) parts.push([CROWN_RIGHT, BX, y + 2]);
       parts.push(...hatParts('right', y));
       // 지팡이는 얼굴 앞쪽에, 손이 자루를 덮도록 팔은 지팡이 뒤에 그린다
-      if (staff) { parts.push([STAFF_SIDE, 22, y - 1]); parts.push([ARM_SIDE_STAFF, BX + 14, y + armY]); }
+      if (staff) { parts.push([staffR, 22, y - 1]); parts.push([ARM_SIDE_STAFF, BX + 14, y + armY]); }
+      if (blade) { parts.push([bladeR, 23, y + 10]); parts.push([ARM_SIDE_STAFF, BX + 14, y + armY]); }
+      if (weapon === 'bow') { parts.push([mirrorRows(BOW_SIDE), BX + 19, y + 17]); parts.push([ARM_SIDE_STAFF, BX + 14, y + armY]); }
       return compose(parts, pal);
     }
 
@@ -801,6 +1249,32 @@ const Sprites = (() => {
     knight: { y: '#c3ccd6', h: '#9aa6b5', H: '#6d7886', D: '#4e5661', g: '#7f93c0', G: '#4f6392', d: '#35466c', n: '#d9c56a', c: '#e86a6a', C: '#b84040', K: '#7a2828', u: '#6f6f78', U: '#444450', b: '#3a2e2a', B: '#c8c8c8' },
     priest: { y: '#f3eefb', h: '#c9b6e0', H: '#9d86c2', D: '#6f5a92', e: '#6a9ad8', E: '#3a60a0', f: '#9dc2ee', g: '#ffffff', G: '#ece5d8', d: '#c9bfab', n: '#e2b84a', c: '#e8c46a', C: '#c39a3c', K: '#8e6d25', b: '#c39a3c', B: '#f3dc8a' },
     smith: { y: '#8d6a55', h: '#5f4030', H: '#452c20', D: '#2d1b13', e: '#6b4426', E: '#3b2316', f: '#8a5a3a', g: '#a8744a', G: '#7a4e2c', d: '#553518', n: '#8a6a44', c: '#6a6a6a', C: '#4a4a4a', K: '#303030', a: '#9a9a9a', A: '#5e5e5e', s: '#f0c9a4', S: '#d19d78', r: '#d44a3a' },
+    // ---- 파티원 직업(성별·머리색은 직업마다 고정) ----
+    // 전사: 갈색 짧은 머리 남성, 은빛 판금 + 금 테두리, 진홍 휘장·방패
+    warrior: { y: '#c79a6a', h: '#9a6a3e', H: '#6e4826', D: '#4a2e17', f: '#9cc4ea', e: '#5a8ad0', E: '#2f5a9a',
+      g: '#dfe5ec', G: '#a1adbd', d: '#626e7d', n: '#e0b84e', b: '#5a3a22', B: '#e0b84e', u: '#a7b2bf', U: '#5f6a79',
+      a: '#f5ecd4', A: '#c2ad84', r: '#d94848', R: '#8e2626', w: '#b98552', q: '#7a5230' },
+    // 마법사: 구릿빛 긴 머리 여성, 보라 로브·고깔모자, 보주 지팡이
+    mage: { y: '#ffb38a', h: '#ee7f52', H: '#c1532f', D: '#86331b', f: '#c9a2ff', e: '#9a6ae0', E: '#5e3a9e',
+      g: '#a98be8', G: '#7752c9', d: '#4c3190', n: '#f2cc5a', b: '#4c3190', B: '#f2cc5a',
+      z: '#7d5ad6', Z: '#4a2f99', j: '#ffb8f0', J: '#d75ad0', i: '#ffffff', p: '#6e4a3a', P: '#43291f' },
+    // 사냥꾼: 금발 긴 머리 여성, 가죽 튜닉 + 초록 망토, 깃털 모자, 활·화살통
+    hunter: { y: '#fff0a8', h: '#f4d36a', H: '#c9a23a', D: '#8e6e1e', f: '#8fdc8a', e: '#4caa5a', E: '#2a6e38',
+      g: '#c99a62', G: '#9a6c3c', d: '#674421', n: '#e2c27e', b: '#4a2e17', B: '#e0b84e', u: '#7a5230', U: '#4a2e17',
+      c: '#6fae5a', C: '#46803a', K: '#2c5626', z: '#5f9a4a', Z: '#3a6a30', r: '#e04848', a: '#f5efe0',
+      p: '#9a6a3e', P: '#62401f', w: '#b07a42', q: '#734a22' },
+    // 도적: 두건·복면, 짙은 보라 가죽, 쌍단검(머리는 두건에 가려 거의 안 보임)
+    rogue: { y: '#7a7088', h: '#4e465c', H: '#363044', D: '#221d2c', f: '#ffd36a', e: '#e0a020', E: '#8a5a10',
+      g: '#7d779a', G: '#58527a', d: '#3a3554', n: '#b3a6ea', b: '#2a2234', B: '#d8d8e6', u: '#58527a', U: '#34304a',
+      c: '#5a4a7e', C: '#40345e', K: '#2a2240', z: '#625888', Z: '#3c355a', r: '#d24a5a', R: '#8e2a3a' },
+    // 마검사: 은청색 긴 머리 여성, 사슬 갑옷 + 남색 망토, 푸르게 빛나는 마검
+    spellblade: { y: '#f0f6ff', h: '#c4d6f0', H: '#8ea6cc', D: '#5c7099', f: '#9ff0ff', e: '#3fb6e0', E: '#1f6e90',
+      g: '#c9d1da', G: '#8b96a4', d: '#56606e', n: '#7fd4ff', b: '#3a3550', B: '#7fd4ff', u: '#5a5f78', U: '#363a50',
+      c: '#4f6cc4', C: '#33489a', K: '#212f6a' },
+    // 무투가: 검은 짧은 머리 남성 + 상투·붉은 머리띠, 주황 무투복 + 검은 띠, 쇠 너클
+    monk: { y: '#6a5a5a', h: '#3a2e2e', H: '#261c1c', D: '#140e0e', f: '#c9945a', e: '#8a5a2e', E: '#4a2e14',
+      g: '#ffc46a', G: '#e98a2e', d: '#a85a16', n: '#fff1d0', b: '#262020', B: '#262020', u: '#f1e6cc', U: '#c2ae88',
+      s: '#f2c49a', S: '#d4996c', r: '#d83a3a', w: '#ffd86a', q: '#b8862a', i: '#fff8d8' },
     merchant: { y: '#5a5a5a', h: '#3a3a3a', H: '#262626', D: '#161616', e: '#6b4426', E: '#3b2316', f: '#8a5a3a', g: '#f7f0dc', G: '#d7cbae', d: '#ab9f82', n: '#c9b27a', c: '#c9533f', C: '#95392d', K: '#66261e', a: '#fbf4e2', A: '#cfc3a6' },
   };
   const NPC_OPTS = {
@@ -814,6 +1288,12 @@ const Sprites = (() => {
     priest: { hat: 'circlet', robe: true },
     smith: { hair: 'short', hat: 'headband', apron: true, beard: true, cape: false },
     merchant: { hat: 'bandana', apron: true, cape: false },
+    warrior: { hair: 'short', hat: 'horned', cape: false, pauldrons: true, tabard: true, weapon: 'sword', shield: true },
+    mage: { hair: 'long', hat: 'wizard', robe: true, cape: false, staff: true, staffMap: MAGE_STAFF },
+    hunter: { hair: 'long', hat: 'feather', weapon: 'bow', quiver: true },
+    rogue: { hat: 'hood', mask: true, weapon: 'daggers' },
+    spellblade: { hair: 'long', mail: true, weapon: 'runeblade' },
+    monk: { hair: 'short', hat: 'topknot', cape: false, weapon: 'knuckles' },
   };
 
   const cache = {};

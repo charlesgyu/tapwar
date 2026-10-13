@@ -33,3 +33,93 @@
 #bottom-bar button .badge { position: absolute; top: 4px; right: 8px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #d9534f; color: #fff; font-size: 10px; line-height: 16px; text-align: center; }
 .hidden { display: none !important; }
 @keyframes hud-pop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* ================= 던전 HUD (#dhud) — dungeon_scene.js 가 enter 때 만들고 exit 때 지운다 =================
+   어두운 숲/동굴 위에서도 읽히도록 반투명 짙은 패널 + 크림색 글자. 전부 #dhud 아래로 한정해 마을 HUD 와 충돌하지 않게 한다. */
+#dhud { position: absolute; inset: 0; pointer-events: none; z-index: 10; color: #f6ecd6; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left)); }
+#dhud .hidden { display: none !important; }
+#dhud button { font-family: inherit; -webkit-tap-highlight-color: transparent; }
+#dhud .panel { background: rgba(30, 22, 28, 0.82); border: 1.5px solid #8a6a48; border-radius: 10px; box-shadow: 0 2px 0 rgba(0,0,0,0.45); }
+#dhud .dh-top { display: flex; flex-direction: column; gap: 5px; }
+/* 파티 프레임 5개 */
+#dhud .dh-party { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; pointer-events: auto; }
+#dhud .dh-pf { position: relative; min-height: 44px; padding: 4px 5px 5px; border: 1.5px solid #8a6a48; border-radius: 9px; background: rgba(30, 22, 28, 0.82); text-align: left; color: inherit; overflow: hidden; }
+#dhud .dh-pf.me { border-color: #e2c26a; }
+#dhud .dh-pf.sel { border-color: #7fe07a; box-shadow: 0 0 0 2px rgba(127, 224, 122, 0.55); }
+#dhud .dh-pf .nm { display: flex; align-items: center; gap: 2px; font-size: 10.5px; font-weight: 800; white-space: nowrap; overflow: hidden; }
+#dhud .dh-pf .nm b { flex: none; font-size: 10px; }
+#dhud .dh-pf .nm span { overflow: hidden; text-overflow: ellipsis; }
+#dhud .dh-bar { position: relative; height: 7px; margin-top: 3px; border-radius: 3px; background: #3a2a2e; overflow: hidden; border: 1px solid rgba(0,0,0,0.5); }
+#dhud .dh-bar.mp { height: 4px; margin-top: 2px; }
+#dhud .dh-bar i { display: block; height: 100%; width: 100%; transition: width 0.12s linear; background: linear-gradient(#8af07a, #3fae46); }
+#dhud .dh-bar.low i { background: linear-gradient(#ffd27a, #e0902a); }
+#dhud .dh-bar.crit i { background: linear-gradient(#ff8a7a, #d83a3a); }
+#dhud .dh-bar.mp i { background: linear-gradient(#8ac8ff, #3a86e0); }
+#dhud .dh-pf .cs { position: absolute; right: 3px; top: 3px; display: flex; gap: 1px; font-size: 10px; line-height: 13px; }
+#dhud .dh-pf .cs:empty { display: none; }
+#dhud .dh-pf .hpn { display: block; margin-top: 2px; font-size: 9px; font-weight: 800; color: #c9b89a; line-height: 10px; }
+#dhud .dh-pf .cs em { font-style: normal; background: rgba(150, 70, 200, 0.75); border-radius: 3px; padding: 0 1px; }
+#dhud .dh-pf .dead { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 2px; background: rgba(20, 10, 14, 0.72); font-size: 11px; font-weight: 900; color: #ff9a8a; }
+/* 층 이름 + 카운터 */
+#dhud .dh-info { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 3px 8px; font-size: 11px; font-weight: 800; }
+#dhud .dh-info .fl { color: #f2d35b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#dhud .dh-info .ct { display: flex; gap: 8px; white-space: nowrap; color: #e9dcc5; }
+/* 보스 HP 바 */
+#dhud .dh-boss { padding: 4px 8px 6px; border-color: #c04a3a; }
+#dhud .dh-boss .bn { display: flex; justify-content: space-between; font-size: 12px; font-weight: 900; color: #ffcf9a; }
+#dhud .dh-boss .bn small { color: #ff9a8a; font-weight: 800; }
+#dhud .dh-boss .dh-bar { height: 10px; }
+#dhud .dh-boss .dh-bar i { background: linear-gradient(#ff7a5a, #b8282a); }
+/* 오른쪽 세로 버튼 */
+#dhud .dh-side { position: absolute; right: max(6px, env(safe-area-inset-right)); top: 128px; display: flex; flex-direction: column; gap: 6px; pointer-events: auto; }
+#dhud .dh-side.boss { top: 172px; }
+#dhud .dh-side button { width: 46px; height: 46px; border: 1.5px solid #8a6a48; border-radius: 12px; background: rgba(30, 22, 28, 0.82); color: #f6ecd6; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 18px; line-height: 1; padding: 0; }
+#dhud .dh-side button small { font-size: 9px; font-weight: 800; margin-top: 2px; }
+#dhud .dh-side button.on { border-color: #7fe07a; background: rgba(40, 70, 40, 0.88); }
+#dhud .dh-side button:active, #dhud .dh-sk:active, #dhud .dh-pf:active { transform: translateY(1px); }
+/* 미니맵 */
+#dhud .dh-map { position: absolute; right: 58px; top: 128px; width: 150px; height: 150px; border: 2px solid #8a6a48; border-radius: 10px; background: #120e14; image-rendering: pixelated; pointer-events: auto; box-shadow: 0 3px 10px rgba(0,0,0,0.5); }
+#dhud .dh-map.boss { top: 172px; }
+/* 위험 경고(텔레그래프 안) */
+#dhud .dh-warn { position: absolute; inset: 0; pointer-events: none; opacity: 0; box-shadow: inset 0 0 40px 12px rgba(255, 40, 30, 0.75); transition: opacity 0.15s; }
+#dhud .dh-warn.on { opacity: 1; animation: dh-pulse 0.5s ease-in-out infinite alternate; }
+#dhud .dh-warn-txt { position: absolute; left: 50%; bottom: 200px; transform: translateX(-50%); padding: 4px 10px; border-radius: 8px; background: rgba(160, 20, 20, 0.85); font-size: 13px; font-weight: 900; color: #fff; white-space: nowrap; }
+@keyframes dh-pulse { from { opacity: 0.55; } to { opacity: 1; } }
+/* 하단: 시전 바 + 탐험 상태 + 스킬 바 */
+#dhud .dh-bottom { position: absolute; left: max(6px, env(safe-area-inset-left)); right: max(6px, env(safe-area-inset-right)); bottom: max(6px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; gap: 5px; }
+#dhud .dh-cast { position: relative; width: 62%; height: 18px; border-radius: 9px; background: rgba(30, 22, 28, 0.85); border: 1.5px solid #e2c26a; overflow: hidden; }
+#dhud .dh-cast i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(#fff2b0, #e2b84a); transition: width 0.1s linear; }
+#dhud .dh-cast span { position: absolute; inset: 0; text-align: center; font-size: 11px; font-weight: 900; line-height: 15px; color: #fff; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+#dhud .dh-status { font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 8px; background: rgba(30, 22, 28, 0.75); color: #bfe8a0; }
+#dhud .dh-skills { width: 100%; max-width: 440px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 5px; pointer-events: auto; }
+#dhud .dh-sk { position: relative; min-height: 54px; border: 1.5px solid #6a5040; border-radius: 10px; background: linear-gradient(#4a3a3e, #2e2428); color: #f6ecd6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 2px 1px; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+#dhud .dh-sk .ic { font-size: 19px; line-height: 1.05; }
+#dhud .dh-sk .nm { font-size: 10px; font-weight: 800; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+#dhud .dh-sk .sub { font-size: 9px; color: #9ac8ff; font-weight: 700; white-space: nowrap; }
+#dhud .dh-sk .more { position: absolute; right: 3px; top: 1px; font-size: 9px; color: #e2c26a; }
+#dhud .dh-sk .badge { position: absolute; left: 3px; top: 2px; min-width: 14px; height: 14px; border-radius: 7px; background: #d9534f; font-size: 9px; font-weight: 900; line-height: 14px; text-align: center; padding: 0 3px; }
+#dhud .dh-sk .cd { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0, 0, 0, 0.6); pointer-events: none; }
+#dhud .dh-sk .cdt { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 900; color: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; }
+#dhud .dh-sk.nomp .sub { color: #ff7a6a; }
+#dhud .dh-sk.nomp { border-color: #8a3a3a; }
+#dhud .dh-sk.locked { opacity: 0.5; background: #2a2226; }
+#dhud .dh-sk.locked .sub { color: #c9b89a; }
+#dhud .dh-sk.toggle.on { border-color: #7fe07a; background: linear-gradient(#3f6a3a, #24402a); }
+#dhud .dh-sk.toggle.on .sub { color: #bff0a0; }
+#dhud .dh-sk.ready { border-color: #e2c26a; box-shadow: inset 0 0 8px rgba(226, 194, 106, 0.6); }
+#dhud .dh-sk.casting { border-color: #fff2b0; box-shadow: 0 0 0 2px rgba(255, 242, 176, 0.6); }
+/* 길게 누르기 선택 / 버프 메뉴 */
+#dhud .dh-back { position: absolute; inset: 0; pointer-events: auto; background: rgba(0,0,0,0.25); }
+#dhud .dh-pop { position: absolute; left: 10px; right: 10px; bottom: 150px; max-width: 420px; margin: 0 auto; padding: 8px; pointer-events: auto; display: flex; flex-direction: column; gap: 6px; animation: hud-pop 0.15s ease-out; }
+#dhud .dh-pop .pt { font-size: 12px; font-weight: 900; color: #f2d35b; padding: 0 2px; }
+#dhud .dh-pop button { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 6px 10px; border: 1.5px solid #6a5040; border-radius: 9px; background: #3a2e32; color: #f6ecd6; text-align: left; }
+#dhud .dh-pop button.cur { border-color: #7fe07a; }
+#dhud .dh-pop button:disabled { opacity: 0.45; }
+#dhud .dh-pop button .ic { font-size: 20px; width: 26px; text-align: center; }
+#dhud .dh-pop button .tx { flex: 1; min-width: 0; }
+#dhud .dh-pop button .tx b { display: block; font-size: 13px; }
+#dhud .dh-pop button .tx small { display: block; font-size: 10px; color: #c9b89a; }
+#dhud .dh-pop button .mp { font-size: 11px; color: #9ac8ff; font-weight: 800; white-space: nowrap; }
+/* 던전에선 공통 토스트가 스킬 바를 가리지 않게 시전 바 위로 올린다(ui.css 는 공통이라 여기서만 덮어쓴다) */
+body:has(#dhud) #ui-toast { bottom: calc(max(6px, env(safe-area-inset-bottom)) + 168px); }
