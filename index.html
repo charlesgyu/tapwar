@@ -1003,7 +1003,10 @@
     #speed-group { right: max(16px, env(safe-area-inset-right)); }
     #item-bar[hidden] { display: none; }
     #item-bar, #item-tip { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-    .item-side { display: flex; gap: 6px; padding-left: 9px; position: relative; }
+    .item-side { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; padding-left: 9px; position: relative; max-width: calc(5 * 38px + 4 * 6px + 9px); }
+    .item-chip { position: relative; }
+    .item-count { position: absolute; right: -5px; top: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--navy-800); color: #fff; font-size: 11px; font-weight: 900; line-height: 18px; text-align: center; box-shadow: 0 0 0 2px #fff; }
+    .item-stack { display: inline-block; white-space: nowrap; margin: 2px auto 4px; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--navy-800); font-size: 11px; font-weight: 900; }
     .item-side::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; border-radius: 10px; background: #60a5fa; }
     .item-side.theirs::before { background: #f87171; }
     .item-slot { width: 38px; height: 38px; border-radius: var(--r-xs); border: 1.5px dashed rgba(120, 113, 108, 0.35); box-sizing: border-box; display: inline-block; }
@@ -1027,7 +1030,7 @@
     .item-pick-title { font-size: 22px; font-weight: 900; color: var(--navy-800); }
     #item-round { font-size: 16px; color: var(--faint); margin-left: 4px; vertical-align: middle; }
     /* 몇 번째 카드인지: 점으로 (고른 만큼 남색) */
-    #item-round { display: none; }
+    #item-round { font-size: 14px; font-weight: 800; color: var(--muted); margin-left: 6px; vertical-align: middle; font-variant-numeric: tabular-nums; }
     .round-dots { display: inline-flex; gap: 6px; vertical-align: middle; }
     .round-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); display: block; }
     .round-dots i.on { background: var(--navy-800); }
@@ -1213,7 +1216,7 @@
     <div class="modal-overlay sheet-overlay" id="item-guide" style="display: none;" onclick="if (event.target === this) closeItemGuide()">
       <div class="modal-card sheet-card guide-card">
         <h2 class="sheet-title">아이템 소개</h2>
-        <p class="guide-sub">30초마다 한 장씩 골라요. 고른 카드는 내 모든 지역에 적용되고, 확률은 지역·구슬마다 따로 굴려요.</p>
+        <p class="guide-sub">30초마다 한 장씩, 모두 10번 골라요. 고른 카드는 내 모든 지역에 적용되고, 확률은 지역·구슬마다 따로 굴려요. 같은 카드를 또 고르면 확률이 +10%씩 올라가요(한 카드 최대 3장, 장거리 사격은 1장).</p>
         <div class="guide-list" id="item-guide-list"></div>
         <button class="start-btn" onclick="closeItemGuide()">확인</button>
       </div>
@@ -1276,7 +1279,7 @@
     <div class="end-confetti" id="end-confetti" aria-hidden="true"></div>
   </div>
 
-  <script src="audio.js?v=20261012_items_v66"></script>
-  <script src="game.js?v=20261012_items_v66"></script>
+  <script src="audio.js?v=20261012_items_v67"></script>
+  <script src="game.js?v=20261012_items_v67"></script>
 </body>
 </html>
