@@ -13,7 +13,7 @@
 
 ## 매번 하는 배포 순서 (사용자 요청: 바꿀 때마다 전부)
 1. `node --check game.js`
-2. `index.html`의 `game.js?v=20261012_items_vNN` / `audio.js?v=...` **버전 숫자 +1** (현재 v66). 휴대폰이 새 파일을 받게 하는 용도.
+2. `index.html`의 `game.js?v=20261012_items_vNN` / `audio.js?v=...` **버전 숫자 +1** (현재 v67). 휴대폰이 새 파일을 받게 하는 용도.
 3. `GAME_RULES.md` 갱신(규칙이 바뀐 경우).
 4. 커밋 → `git push -u origin claude/tapwar-review-c45ygv` → PR(base main) 생성 → **바로 머지**(사용자 지시: 매번 머지). PR 본문 끝에 Claude Code 꼬리말.
 5. 아티팩트 갱신: `tools/make_artifact.sh <출력경로>`로 index.html에서 아티팩트용 html을 만들고, Artifact 도구로 **기존 URL** `https://claude.ai/artifact/B7TasT5a1TiX2ihVvpXGV7` 에 publish(`files`에 `game.js`, `audio.js`, 필요 시 `assets/earth.png`). 새 세션이면 먼저 `read`로 그 URL을 읽어야 publish가 허용됨.
@@ -36,7 +36,7 @@
 ## 사용자가 정한 결정(되돌리지 말 것)
 - 영토 색: 내 지역 파랑, 적 빨강, 내 완전점령 초록, 본진 노랑, 적 본진 와인색(한 번 바꿨다가 되돌림).
 - 연결선 없음. 지역 중심 점 + 파문으로 표시. 지역 이름은 점 위에.
-- 카드 5장(모든 맵). 컨셉: 나라 50초마다, 전세계 15초 후 1분마다. 필사즉생 4배.
+- 카드는 한 번에 5장 보여 주고, 판마다 10번 고름(v67, 전엔 5번). 컨셉: 나라 50초마다, 전세계 15초 후 1분마다. 필사즉생 4배.
 - 속사·보급·버프·저주의 "다음 5공격"은 터진 지역에서만.
 - 게임 중 상단 안내문은 전부 띄우지 않음(`statusQuiet`). 적 카드·경보뿐 아니라 "피가 가득"·"충전 중" 같은 짧은 문구도 (v60). 본진 선택 안내만 남김.
 - 배속 버튼은 ×1/×2 두 개, ×2는 유료. 구매 전 나라는 '둘러보기'로 맵을 잠긴 모습으로 구경, 그 화면에서 '구매하기'.
@@ -47,6 +47,7 @@
 - 아이폰 길게 누르기 돋보기: CSS user-select 만으로는 안 막힘. 길게 누르는 UI(아이템 카드 칸)는 `touchstart`에 `preventDefault`(passive:false) 필요 (v63).
 - 시작 연출 지구본(`traceOrthoRing`): 지구 반대편 정중앙이 육지 안에 들어가면(한국 볼 때 남미) 바다가 땅색으로 뒤집힘 → 반대 방향 원으로 상쇄 (v64).
 - 아이템 밸런스(v65): 파워샷 20%, 속사는 발사 간격도 절반, 버프샷·저주샷 10%, 철벽은 완전 차단, 튕기기 1번(v66). 수치는 `ITEM_BAL` 한곳.
+- 아이템 카드 10번 + 겹치기(v67): 같은 카드 2장째부터 확률 +10%p, 최대 3장(장거리 1장). `itemCount/itemStackBonus/itemCanTake`, 카드 칸은 ×n 표시, 고르기 제목 옆 "n/10". 카드 칸은 테두리 상자 없음 유지.
 
 ## 그래픽 구조 (v59, 자세한 설계는 GAME_RULES.md '그래픽' 절)
 - CSS 토큰은 `index.html` `:root`(남색 `--navy-*`, 돌색 `--line/--muted...`, 노랑 `--accent/--accent-ground`, 반지름 `--r-*`). 홈·스플래시는 남색 우주, 지도는 밝은 종이.

@@ -1217,14 +1217,13 @@ class FlyingOrb {
     let pierceDefense = false;
     if (atk) {
       // 공격 쪽 카드 (각 확률, 버프샷이면 효과 2배)
-      if (atk.has('power') && atk.roll(ITEM_BAL.powerChance)) { attack *= 1 + ITEM_BAL.powerBonus * atk.mul; addFx(t, 'power'); } // 파워샷
-      pierceDefense = rivalHit && atk.has('piercing') && atk.roll();                            // 관통샷
+      if (atk.has('power') && atk.roll(ITEM_BAL.powerChance, 'power')) { attack *= 1 + ITEM_BAL.powerBonus * atk.mul; addFx(t, 'power'); } // 파워샷
+      pierceDefense = rivalHit && atk.has('piercing') && atk.roll(undefined, 'piercing');                            // 관통샷
       if (pierceDefense) { flashZone(t, '#7c3aed'); addFx(t, 'piercing'); }
     }
     if (rivalHit && !pierceDefense) {
-      const dp = defenseChance(t);
       // [아이템 반사 방패] 쏜 곳으로 그대로 되돌림 (되돌린 구슬은 다시 반사되지 않음)
-      if (!this.reflected && this.sourceZone && hasItem(t.owner, 'reflect') && Math.random() < dp) {
+      if (!this.reflected && this.sourceZone && hasItem(t.owner, 'reflect') && Math.random() < defenseChance(t, 'reflect')) {
         const back = new FlyingOrb(t, this.sourceZone, t.owner, this.power);
         back.reflected = true;
         addFx(t, 'reflect');
@@ -1233,7 +1232,7 @@ class FlyingOrb {
         return;
       }
       // [아이템 흡수] 막고, 내 피를 상대 공격력의 2배만큼 채움
-      if (hasItem(t.owner, 'absorb') && Math.random() < dp) {
+      if (hasItem(t.owner, 'absorb') && Math.random() < defenseChance(t, 'absorb')) {
         t.orbs = Math.min(t.maxOrbs, t.orbs + attack * ITEM_BAL.absorbHeal);
         addFx(t, 'absorb');
         if (atk) atk.done();
@@ -1244,10 +1243,10 @@ class FlyingOrb {
     let explodeRatio = 0;
     let paralyzeShots = 0;
     if (atk) {
-      if (atk.has('crit') && atk.roll()) { attack *= 1 + ITEM_BAL.critBonus * atk.mul; flashZone(t, '#f59e0b'); addFx(t, 'crit'); } // 크리티컬
-      if (rivalHit && atk.has('paralyze') && atk.roll()) { paralyzeShots = ITEM_BAL.paralyzeShots * atk.mul; t.paralyzedShots = paralyzeShots; flashZone(t, '#0ea5e9'); addFx(t, 'paralyze'); } // 마비
-      if (atk.has('pierce') && atk.roll()) bounceCount = ITEM_BAL.bounceCount * atk.mul;      // 튕기기
-      if (rivalHit && atk.has('explode') && atk.roll()) explodeRatio = ITEM_BAL.explodeRatio * atk.mul; // 폭발
+      if (atk.has('crit') && atk.roll(undefined, 'crit')) { attack *= 1 + ITEM_BAL.critBonus * atk.mul; flashZone(t, '#f59e0b'); addFx(t, 'crit'); } // 크리티컬
+      if (rivalHit && atk.has('paralyze') && atk.roll(undefined, 'paralyze')) { paralyzeShots = ITEM_BAL.paralyzeShots * atk.mul; t.paralyzedShots = paralyzeShots; flashZone(t, '#0ea5e9'); addFx(t, 'paralyze'); } // 마비
+      if (atk.has('pierce') && atk.roll(undefined, 'pierce')) bounceCount = ITEM_BAL.bounceCount * atk.mul;      // 튕기기
+      if (rivalHit && atk.has('explode') && atk.roll(undefined, 'explode')) explodeRatio = ITEM_BAL.explodeRatio * atk.mul; // 폭발
       atk.chain('rapid', ITEM_BAL.chainShots);   // 속사: 다음 공격 구슬 빠르게
       atk.chain('supply', ITEM_BAL.chainShots);  // 보급: 다음 공격 동안 내 카드 확률 +10%
       atk.chain('buff', ITEM_BAL.chainShots, ITEM_BAL.rareChance);  // 버프샷: 다음 공격 동안 효과 2배
@@ -1260,7 +1259,7 @@ class FlyingOrb {
     // [아이템 재건] 내 지역에 쏜 구슬(회복): 10% 확률로 회복량 2배, 그때 30% 확률로 붙어 있는 내 지역들도 같이 회복
     const rbs = this.sourceZone && this.sourceZone.owner === own ? zoneItemState(this.sourceZone) : newItemState();
     if (wasMine && itemMode && hasItem(own, 'rebuild') && !(rbs.cursed > 0) &&
-        Math.random() < itemChance(rbs, ITEM_BAL.baseChance)) {
+        Math.random() < itemChance(rbs, ITEM_BAL.baseChance) + itemStackBonus(own, 'rebuild')) {
       power *= 1 + ITEM_BAL.rebuildBonus * (rbs.buff > 0 ? 2 : 1);
       flashZone(t, ZONE_COLORS.playerFullCharged);
       addFx(t, 'rebuild');
@@ -2909,8 +2908,12 @@ function shakeOffset() {
 const NATIONAL_MAPS = new Set(['KOREA', 'JP_JAPAN', 'CN_CHINA', 'US_USA', 'FR_FRANCE', 'DE_GERMANY', 'IT_ITALY', 'ES_SPAIN', 'GB_UK']);
 // 한 번에 보여 주는 카드 수: 일반 맵 3장, 나라 전국 맵 4장, 전세계 5장
 function itemChoiceCount() { return 5; } // 모든 맵 5장
-function itemRounds() { return 5; } // 모든 맵 5장
+function itemRounds() { return 10; } // 모든 맵 10번 (v67)
 const ITEM_EVERY_SEC = 30;
+// [겹치기] 같은 카드를 또 고르면 확률 +10%p, 한 카드 최대 3장 (장거리 사격은 1장)
+const ITEM_STACK_MAX = 3;
+const ITEM_STACK_BONUS = 0.1;
+function itemStackMax(key) { return key === 'longrange' ? 1 : ITEM_STACK_MAX; }
 // 아이템 수치 (밸런스 조절은 여기서)
 const ITEM_BAL = {
   baseChance: 0.1,     // 카드 발동 확률
@@ -3195,10 +3198,10 @@ function itemChance(st, base) {
   return base + (st && st.supply > 0 && !(st.cursed > 0) ? ITEM_BAL.supplyBonus : 0);
 }
 // 맞는 지역의 방어 확률 (그 지역에 보급이 켜져 있으면 +10%p)
-function defenseChance(t) { return itemChance(zoneItemState(t), ITEM_BAL.baseChance); }
+function defenseChance(t, key) { return itemChance(zoneItemState(t), ITEM_BAL.baseChance) + (key ? itemStackBonus(t.owner, key) : 0); }
 // [아이템 철벽] 확률로 상대 공격을 완전히 막음
 function defenseTake(power, t) {
-  if (hasItem(t.owner, 'fortress') && Math.random() < defenseChance(t)) { addFx(t, 'fortress'); return power * ITEM_BAL.fortressTake; }
+  if (hasItem(t.owner, 'fortress') && Math.random() < defenseChance(t, 'fortress')) { addFx(t, 'fortress'); return power * ITEM_BAL.fortressTake; }
   return power;
 }
 // 공격 한 번의 카드 상태: 저주면 카드 없음, 버프샷이면 효과 2배, 보급이면 확률 +10%
@@ -3210,9 +3213,9 @@ function itemAttackState(own, src, tgt) {
   const o = {
     mul,
     has: k => !cursed && hasItem(own, k),
-    roll: (base = ITEM_BAL.baseChance) => Math.random() < itemChance(st, base),
+    roll: (base = ITEM_BAL.baseChance, k) => Math.random() < itemChance(st, base) + (k ? itemStackBonus(own, k) : 0),
     chain(k, shots, base) {
-      if (!o.has(k) || !o.roll(base)) return;
+      if (!o.has(k) || !o.roll(base, k)) return;
       const n = shots * mul;
       addFx(src && src.owner === own ? src : null, k); // 속사·보급·버프샷·저주샷: 쏜 지역에 고리
       if (k === 'rapid') st.rapid = n;
@@ -3237,6 +3240,10 @@ function isRivalMarked(t, attacker) {
   return !!t.claimant && t.claimant !== attacker && t.orbs > 0;
 }
 function hasItem(owner, key) { return itemMode && !!itemsOf[owner] && itemsOf[owner].includes(key); }
+// 같은 카드 장수, 겹친 만큼 더해지는 확률 (2장째부터 +10%p씩)
+function itemCount(owner, key) { return itemsOf[owner] ? itemsOf[owner].filter(k => k === key).length : 0; }
+function itemStackBonus(owner, key) { return Math.max(0, itemCount(owner, key) - 1) * ITEM_STACK_BONUS; }
+function itemCanTake(owner, key) { return itemCount(owner, key) < itemStackMax(key); }
 function itemRival(owner) { return owner === OWNER.PLAYER ? OWNER.ENEMY : OWNER.PLAYER; }
 function itemIconSvg(key, size = 28, sw = 2) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ITEM_ICON[key]}</svg>`;
@@ -3266,17 +3273,18 @@ function openItemPick() {
   currentState = GAME_STATE.PAUSED;
   const toast = document.getElementById('center-toast');
   if (toast) toast.classList.remove('show');
-  itemChoices = shuffled(ITEMS.filter(it => !itemsOf.player.includes(it.key))).slice(0, itemChoiceCount());
+  itemChoices = shuffled(ITEMS.filter(it => itemCanTake(OWNER.PLAYER, it.key))).slice(0, itemChoiceCount());
+  if (!itemChoices.length) { itemRound = itemRounds(); currentState = GAME_STATE.PLAYING; return; } // 모든 카드가 최대 장수
   const m = document.getElementById('item-modal');
   const list = document.getElementById('item-choices');
   // 라운드 표시: 점 n개, 지난·지금 라운드는 켜짐
-  document.getElementById('item-round').innerHTML = `<span class="round-dots">${Array.from({ length: itemRounds() }, (_, i) => `<i class="${i <= itemRound ? 'on' : ''}"></i>`).join('')}</span>`;
+  document.getElementById('item-round').textContent = `${itemRound + 1}/${itemRounds()}`; // 몇 번째 카드인지
   list.innerHTML = '';
   list.dataset.count = itemChoices.length; // 4장은 2×2, 5장은 3+2
   itemChoices.forEach(it => {
     const b = document.createElement('button');
     b.className = 'item-card';
-    b.innerHTML = itemCardHtml(it);
+    b.innerHTML = itemCardHtml(it, itemCount(OWNER.PLAYER, it.key));
     b.onclick = () => chooseItem(it.key);
     list.appendChild(b);
   });
@@ -3287,8 +3295,11 @@ function openItemPick() {
 }
 
 // 카드 모양 (고르기 화면·고른 카드 크게 보기 공통)
-function itemCardHtml(it) {
-  return `<span class="item-icon">${itemIconSvg(it.key, 30)}</span><span class="item-cat">${ITEM_CAT[it.key] || ''}</span><span class="item-name">${it.name}</span><span class="item-desc">${it.desc}</span>`;
+// owned: 이미 가진 장수 (고르기 화면에서 '2장째 · 확률 +10%' 표시), held: 가진 카드 크게 보기에서 현재 장수
+function itemCardHtml(it, owned, held) {
+  const stack = owned > 0 ? `<span class="item-stack">${owned + 1}장째 +${Math.round(owned * ITEM_STACK_BONUS * 100)}%</span>`
+    : held > 1 ? `<span class="item-stack">${held}장 +${Math.round((held - 1) * ITEM_STACK_BONUS * 100)}%</span>` : '';
+  return `<span class="item-icon">${itemIconSvg(it.key, 30)}</span><span class="item-cat">${ITEM_CAT[it.key] || ''}</span><span class="item-name">${it.name}</span>${stack}<span class="item-desc">${it.desc}</span>`;
 }
 function gainItem(owner, key) {
   itemsOf[owner].push(key);
@@ -3298,15 +3309,15 @@ function chooseItem(key) {
   if (currentState !== GAME_STATE.PAUSED) return;
   gainItem(OWNER.PLAYER, key);
   if (window.Sound) Sound.sfx('pick');
-  const pool = ITEMS.filter(it => !itemsOf.enemy.includes(it.key));
-  const ek = pool[Math.floor(Math.random() * pool.length)].key;
-  gainItem(OWNER.ENEMY, ek);
+  const pool = ITEMS.filter(it => itemCanTake(OWNER.ENEMY, it.key));
+  const ek = pool.length ? pool[Math.floor(Math.random() * pool.length)].key : null;
+  if (ek) gainItem(OWNER.ENEMY, ek);
   itemRound++;
   nextItemAt = gameElapsedTime + ITEM_EVERY_SEC;
   document.getElementById('item-modal').style.display = 'none';
   currentState = GAME_STATE.PLAYING;
   renderItemBar();
-  const mine = ITEMS.find(it => it.key === key).name, theirs = ITEMS.find(it => it.key === ek).name;
+  const mine = ITEMS.find(it => it.key === key).name, theirs = ek ? ITEMS.find(it => it.key === ek).name : '-';
   statusQuiet(`[${mine}] 선택! 적은 [${theirs}]을(를) 골랐습니다.`);
 
 }
@@ -3320,14 +3331,14 @@ function renderItemBar() {
   const show = itemMode && rawZones.length > 0 && currentState !== GAME_STATE.SELECT_START;
   bar.hidden = !show;
   if (!show) return;
-  const n = itemRounds();
+  // 같은 카드는 한 칸에 모으고 ×2·×3 표시. 한 줄 5칸, 넘치면 다음 줄
   const row = (owner, cls) => {
-    let h = '';
-    for (let i = 0; i < n; i++) {
-      const k = itemsOf[owner][i];
-      h += k ? `<span class="item-chip ${cls}" data-key="${k}" data-owner="${owner}">${itemIconSvg(k, 24, 2.2)}</span>`
-             : `<span class="item-slot ${cls}"></span>`;
-    }
+    const keys = [...new Set(itemsOf[owner])];
+    if (!keys.length) return `<div class="item-side ${cls}"><span class="item-slot ${cls}"></span></div>`;
+    const h = keys.map(k => {
+      const c = itemCount(owner, k);
+      return `<span class="item-chip ${cls}" data-key="${k}" data-owner="${owner}">${itemIconSvg(k, 24, 2.2)}${c > 1 ? `<b class="item-count">×${c}</b>` : ''}</span>`;
+    }).join('');
     return `<div class="item-side ${cls}">${h}</div>`;
   };
   bar.innerHTML = row(OWNER.PLAYER, 'mine') + row(OWNER.ENEMY, 'theirs');
@@ -3361,7 +3372,7 @@ function showItemInfo(key, owner) {
   const toast = document.getElementById('center-toast');
   if (toast) toast.classList.remove('show');
   tip.innerHTML = `<div class="item-tip-owner ${owner === OWNER.PLAYER ? 'mine' : 'theirs'}">${owner === OWNER.PLAYER ? '내 카드' : '적 카드'}</div>` +
-    `<div class="item-card ${owner === OWNER.PLAYER ? 'mine' : 'theirs'}">${itemCardHtml(it)}</div>`;
+    `<div class="item-card ${owner === OWNER.PLAYER ? 'mine' : 'theirs'}">${itemCardHtml(it, 0, itemCount(owner, key))}</div>`;
   tip.hidden = false;
 }
 window.showItemInfo = showItemInfo;
