@@ -3328,6 +3328,10 @@ function renderItemBar() {
     return `<div class="item-side ${cls}">${h}</div>`;
   };
   bar.innerHTML = row(OWNER.PLAYER, 'mine') + row(OWNER.ENEMY, 'theirs');
+  if (!bar.dataset.noLoupe) { // 빈칸·카드 사이를 길게 눌러도 돋보기가 안 뜨게 (한 번만 등록)
+    bar.dataset.noLoupe = '1';
+    bar.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+  }
   // 카드를 누르고 있는 동안만 화면 가운데에 카드 (손을 떼면 바로 사라짐)
   bar.querySelectorAll('.item-chip').forEach(ch => {
     const show = e => { e.preventDefault(); showItemInfo(ch.dataset.key, ch.dataset.owner); };
@@ -3335,6 +3339,9 @@ function renderItemBar() {
     ch.addEventListener('pointerup', () => hideItemInfo(0));
     ch.addEventListener('pointerleave', () => hideItemInfo(0));
     ch.addEventListener('pointercancel', () => hideItemInfo(0));
+    // iOS: 길게 누르면 뜨는 돋보기(글자 선택 확대경)는 pointerdown 으로는 안 막힘 → touchstart 기본 동작을 막음
+    ch.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+    ch.addEventListener('touchend', () => hideItemInfo(0));
   });
 }
 let itemTipTimer = null;
