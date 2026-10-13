@@ -2,7 +2,7 @@
 // Monsters: 일반 26종 + 중간보스 30(층당 3, 엘리트 변형) + 층 보스 10, 능력 정의 30종.
 // Floors: 1~5층 숲, 6~10층 동굴. 난이도 배수(mult)·저주 배수(curseMult)·몬스터 수·랜드마크.
 // 모든 수치는 "1층 기준값"이고 실제 전투값은 Monsters.statsAt(def, floor) 가 층 배수를 곱해 만든다
-// (보스도 같은 공식이라 6층 보스 base 가 5층 보다 작아 보일 수 있다 — mult 가 1.35→1.8 로 뛰기 때문).
+// (보스도 같은 공식이라 6층 보스 base 가 5층 보다 작아 보일 수 있다 — mult 가 1.35→2.4 로 뛰기 때문).
 const Monsters = (() => {
   const TILE = 32;
   const r1 = (v) => Math.round(v * 10) / 10;
@@ -79,12 +79,12 @@ const Monsters = (() => {
     N('zombie', '좀비', 'zombie', ['forest'], { hp: 150, atk: 19, def: 3, spd: 60, aspd: 0.7 }, { tags: ['undead'], curses: [{ id: 'dot', chance: 0.2 }, { id: 'aspd_down', chance: 0.1 }], xp: 1.4, gold: [1, 5], loot: 'undead', desc: '느리지만 질기다. 성스러운 일격이 잘 먹힌다.' }),
     N('skeleton', '해골', 'skeleton', ['forest', 'cave'], { hp: 95, atk: 21, def: 6, spd: 90, aspd: 1.0 }, { tags: ['undead'], xp: 1.4, gold: [2, 6], loot: 'undead', desc: '뼈만 남은 병사. 방어가 단단하다.' }),
     N('sprite', '숲 정령', 'sprite', ['forest'], { hp: 90, atk: 21, def: 2, spd: 130, aspd: 0.9, range: 150 }, { tags: ['spirit', 'caster'], curses: [{ id: 'root', chance: 0.15 }], xp: 1.6, gold: [2, 7], desc: '탑에 물든 정령. 덩굴로 발을 묶는다.' }),
-    N('werewolf', '늑대인간', 'werewolf', ['forest'], { hp: 150, atk: 26, def: 4, spd: 160, aspd: 1.3 }, { tags: ['beast', 'humanoid'], abilities: ['charge'], curses: [{ id: 'dot', chance: 0.15 }], xp: 2.2, gold: [3, 9], loot: 'beast', desc: '달빛 아래 울부짖는다. 빠르고 세다.' }),
+    N('werewolf', '늑대인간', 'werewolf', ['forest'], { hp: 140, atk: 23, def: 4, spd: 150, aspd: 1.15 }, { tags: ['beast', 'humanoid'], abilities: ['charge'], curses: [{ id: 'dot', chance: 0.15 }], xp: 2.2, gold: [3, 9], loot: 'beast', desc: '달빛 아래 울부짖는다. 빠르고 세다.' }),
     N('siren', '세이렌', 'siren', ['forest'], { hp: 110, atk: 23, def: 3, spd: 100, aspd: 0.8, range: 170 }, { tags: ['caster'], abilities: ['curse_volley'], curses: [{ id: 'heal_down', chance: 0.2 }, { id: 'spd_down', chance: 0.15 }], xp: 2.0, gold: [4, 10], desc: '호수의 노래. 치유를 막고 발을 느리게 한다.' }),
     N('orc', '오크', 'orc', ['forest', 'cave'], { hp: 140, atk: 24, def: 5, spd: 100, aspd: 0.9 }, { tags: ['humanoid'], xp: 2.0, gold: [4, 10], desc: '탑에 고용된 약탈자.' }),
-    N('orc_berserker', '오크 광전사', 'orc', ['forest', 'cave'], { hp: 160, atk: 28, def: 3, spd: 110, aspd: 1.1 }, { tags: ['humanoid'], abilities: ['enrage'], xp: 2.4, gold: [4, 11], desc: 'HP 가 낮을수록 세진다. 먼저 끝내라.' }),
-    N('troll', '트롤', 'troll', ['forest'], { hp: 220, atk: 27, def: 6, spd: 85, aspd: 0.6, range: 36 }, { tags: ['giant'], abilities: ['aoe_small', 'heal_self'], xp: 2.6, gold: [5, 12], size: 2, desc: '오래 싸운다. 재생을 끊어야 한다.' }),
-    N('treant', '타락한 나무 정령', 'sprite', ['forest'], { hp: 260, atk: 24, def: 10, spd: 60, aspd: 0.6, range: 40 }, { tags: ['spirit', 'plant'], abilities: ['aoe_small'], curses: [{ id: 'root', chance: 0.25 }], xp: 2.6, gold: [4, 10], size: 2, loot: 'sprite', desc: '숲의 수호자였던 것. 뿌리로 묶는다.' }),
+    N('orc_berserker', '오크 광전사', 'orc', ['forest', 'cave'], { hp: 160, atk: 26, def: 3, spd: 110, aspd: 1.05 }, { tags: ['humanoid'], abilities: ['enrage'], xp: 2.4, gold: [4, 11], desc: 'HP 가 낮을수록 세진다. 먼저 끝내라.' }),
+    N('troll', '트롤', 'troll', ['forest'], { hp: 200, atk: 26, def: 6, spd: 85, aspd: 0.6, range: 36 }, { tags: ['giant'], abilities: ['aoe_small', 'heal_self'], xp: 2.6, gold: [5, 12], size: 2, desc: '오래 싸운다. 재생을 끊어야 한다.' }),
+    N('treant', '타락한 나무 정령', 'sprite', ['forest'], { hp: 240, atk: 24, def: 10, spd: 60, aspd: 0.6, range: 40 }, { tags: ['spirit', 'plant'], abilities: ['aoe_small'], curses: [{ id: 'root', chance: 0.25 }], xp: 2.6, gold: [4, 10], size: 2, loot: 'sprite', desc: '숲의 수호자였던 것. 뿌리로 묶는다.' }),
     // ---- 동굴(6~10층) ----
     N('bat', '동굴 박쥐', 'bat', ['cave'], { hp: 55, atk: 22, def: 2, spd: 170, aspd: 1.4 }, { tags: ['beast', 'flying'], curses: [{ id: 'aspd_down', chance: 0.15 }], xp: 1.2, gold: [2, 6], loot: 'beast', desc: '떼로 날아든다. 날개짓이 공격을 둔하게 한다.' }),
     N('cave_spider', '동굴 거미', 'spider', ['cave'], { hp: 80, atk: 24, def: 4, spd: 130, aspd: 1.0 }, { tags: ['beast'], abilities: ['puddle_poison_small', 'aoe_healer_small'], curses: [{ id: 'dot', chance: 0.3 }], xp: 1.6, gold: [2, 7], loot: 'spider', threatMult: 0.7, desc: '동굴 거미는 힐러를 노린다. 탱커 옆에 붙어 있을 것.' }),
@@ -106,7 +106,7 @@ const Monsters = (() => {
   // ---------------------------------------------------------------------------
   function elite(baseId, id, name, o) {
     const b = BY_ID[baseId];
-    const hpM = o.hp || 4.5, atkM = o.atk || 1.4, defM = o.def || 1.3;
+    const hpM = o.hp || 4.5, atkM = o.atk || 1.3, defM = o.def || 1.3;
     const base = Object.assign({}, b.base, { hp: Math.round(b.base.hp * hpM), atk: Math.round(b.base.atk * atkM), def: Math.round(b.base.def * defM) });
     const m = {
       id, name, family: b.family, biome: b.biome.slice(), tags: b.tags.slice(), tier: 'miniboss', base, floorBase: b.floorBase,
@@ -304,7 +304,7 @@ const Monsters = (() => {
 })();
 
 // ---------------------------------------------------------------------------
-// 층 데이터. mult 는 1~5층 완만(1.0→1.35), 6층부터 급증(1.8→3.6). 저주 배수도 6층부터 2배.
+// 층 데이터. mult 는 1~5층 완만(1.0→1.35), 6층부터 급증(HP 2.4→4.0, 공격 1.65→2.6). 저주 배수도 6층부터 2배.
 // xpMult/goldMult 는 Monsters.statsAt 이 xp·gold 에 곱한다(레벨 범위에 맞춘 경험치 곡선).
 // landmarks 는 던전 생성기가 같은 이름으로 지형 기준점을 만들고 NPC 상자 힌트가 그 이름을 말한다
 // (Dialogue.FALLBACK_PLACES 의 이름을 각 층 앞 두 개에 그대로 둔다).
@@ -315,11 +315,13 @@ const Floors = (() => {
   const pool = (...pairs) => pairs.map(([id, weight]) => ({ id, weight }));
   // 랜드마크: [영어 id, 한국어 이름, 종류]. kind 는 생성기 힌트('rock'|'tree'|'water'|'camp'|'ruin'|'crystal'|'path'|'boss').
   const L = (id, name, kind) => ({ id, name, kind });
+  // mult 는 숫자(hp·atk 공통) 또는 { hp, atk, def? }. 동굴은 HP 는 크게(전투가 길어져 힐러 저격·장판이 실제로 발동), 공격력은 완만하게
+  // (탱커가 첫 3초 안에 녹지 않게) 따로 둔다. def 생략 시 1 + (hp−1)×0.7.
   const F = (floor, o) => {
-    const m = o.mult;
+    const m = typeof o.mult === 'number' ? { hp: o.mult, atk: o.mult } : o.mult;
     return {
       floor, biome: o.biome, name: o.name, levelRange: o.levelRange, pool: o.pool, minibosses: o.minibosses, boss: o.boss,
-      mult: { hp: m, atk: m, def: r2(1 + (m - 1) * 0.7) }, curseMult: o.curseMult, xpMult: o.xpMult, goldMult: o.goldMult,
+      mult: { hp: m.hp, atk: m.atk, def: m.def != null ? m.def : r2(1 + (m.hp - 1) * 0.7) }, curseMult: o.curseMult, xpMult: o.xpMult, goldMult: o.goldMult,
       monsterCount: o.monsterCount, chapter: floor, landmarkDefs: o.landmarks, landmarks: o.landmarks.map((l) => l.name), desc: o.desc,
     };
   };
@@ -340,27 +342,27 @@ const Floors = (() => {
       pool: pool(['siren', 35], ['sprite', 25], ['orc', 20], ['skeleton', 10], ['spider', 10]), minibosses: ['siren_songstress', 'sprite_corrupted', 'orc_raider'], boss: 'boss_siren_queen',
       landmarks: [L('mist_lake', '안개 호수', 'water'), L('broken_pier', '부서진 부두', 'ruin'), L('sunken_boat', '가라앉은 배', 'water'), L('singing_reeds', '노래하는 갈대밭', 'water'), L('orc_camp_trace', '오크 야영 흔적', 'camp'), L('lantern_path', '정령 등불 길', 'path'), L('queen_isle', '여왕의 섬', 'boss')],
       desc: '안개 위로 노래가 흐른다. 노래를 따라가면 가라앉는다.' }),
-    F(5, { biome: 'forest', name: '쓰러진 거목의 숲', levelRange: [9, 11], mult: 1.35, curseMult: 1.2, xpMult: 7.5, goldMult: 2.8, monsterCount: 324,
+    F(5, { biome: 'forest', name: '쓰러진 거목의 숲', levelRange: [9, 11], mult: { hp: 1.35, atk: 1.28 }, curseMult: 1.2, xpMult: 7.5, goldMult: 2.8, monsterCount: 324,
       pool: pool(['troll', 30], ['orc', 25], ['orc_berserker', 20], ['treant', 15], ['werewolf', 10]), minibosses: ['troll_warlord', 'orc_berserker_champ', 'treant_guardian'], boss: 'boss_troll_chief',
       landmarks: [L('troll_camp', '트롤 야영지', 'camp'), L('fallen_giant', '쓰러진 거목', 'tree'), L('orc_spoils', '오크 전리품 더미', 'camp'), L('guardian_roots', '수호자의 뿌리', 'tree'), L('wolfman_den', '늑대인간 동굴 입구', 'rock'), L('elda_trace', '엘다의 흔적', 'ruin'), L('chief_fire', '족장의 모닥불', 'boss')],
       desc: '트롤들의 야영지. 엘다의 목소리가 끊긴 곳.' }),
-    F(6, { biome: 'cave', name: '돌 파수꾼의 동굴', levelRange: [11, 13], mult: 1.8, curseMult: 2.0, xpMult: 10, goldMult: 3.6, monsterCount: 330,
+    F(6, { biome: 'cave', name: '돌 파수꾼의 동굴', levelRange: [11, 13], mult: { hp: 2.4, atk: 1.65 }, curseMult: 2.0, xpMult: 10, goldMult: 3.6, monsterCount: 330,
       pool: pool(['bat', 35], ['cave_spider', 25], ['golem_stone', 25], ['skeleton_knight', 15]), minibosses: ['golem_sentinel', 'bat_matriarch', 'cave_spider_lurker'], boss: 'boss_golem_lord',
       landmarks: [L('first_fork', '첫 번째 갈림길', 'path'), L('stalactite_hall', '종유석 홀', 'crystal'), L('bat_ceiling', '박쥐 둥지 천장', 'rock'), L('mine_rail', '무너진 광산 레일', 'ruin'), L('spider_pit', '거미 알 구덩이', 'rock'), L('golem_row', '골렘 조각상 열', 'ruin'), L('lord_throne', '군주의 돌 왕좌', 'boss')],
       desc: '숲이 끝나고 돌이 시작된다. 여기부터 괴물들이 힐러를 노린다.' }),
-    F(7, { biome: 'cave', name: '깊은 물의 제단', levelRange: [13, 15], mult: 2.1, curseMult: 2.2, xpMult: 12, goldMult: 4.4, monsterCount: 336,
+    F(7, { biome: 'cave', name: '깊은 물의 제단', levelRange: [13, 15], mult: { hp: 2.8, atk: 1.85 }, curseMult: 2.2, xpMult: 12, goldMult: 4.4, monsterCount: 336,
       pool: pool(['naga', 35], ['naga_priest', 20], ['golem_crystal', 20], ['bat', 15], ['cave_spider', 10]), minibosses: ['naga_oracle', 'naga_guard_captain', 'golem_crystal_core'], boss: 'boss_naga_priestess',
       landmarks: [L('under_lake', '지하 호수', 'water'), L('naga_altar', '나가 제단', 'ruin'), L('crystal_cluster', '빛나는 수정 군락', 'crystal'), L('flooded_stairs', '물에 잠긴 계단', 'water'), L('prophecy_mural', '예언의 벽화', 'ruin'), L('pearl_rock', '진주 조개 바위', 'rock'), L('priestess_sanctum', '여사제의 성소', 'boss')],
       desc: '지하 호수에 나가들이 산다. 그들은 리프가 올 것을 알고 있었다.' }),
-    F(8, { biome: 'cave', name: '오크 전초 요새', levelRange: [15, 17], mult: 2.5, curseMult: 2.5, xpMult: 16, goldMult: 5.2, monsterCount: 342,
+    F(8, { biome: 'cave', name: '오크 전초 요새', levelRange: [15, 17], mult: { hp: 3.2, atk: 2.1 }, curseMult: 2.5, xpMult: 16, goldMult: 5.2, monsterCount: 342,
       pool: pool(['orc', 30], ['orc_berserker', 20], ['orc_warlord', 15], ['troll_shaman', 20], ['skeleton_knight', 15]), minibosses: ['orc_warlord_krog', 'troll_shaman_elder', 'skeleton_knight_commander'], boss: 'boss_orc_warchief',
       landmarks: [L('orc_outpost', '오크 전초기지', 'camp'), L('skull_tower', '해골 탑', 'ruin'), L('drum_square', '북소리 광장', 'camp'), L('shaman_tent', '트롤 주술 천막', 'camp'), L('loot_store', '약탈품 창고', 'ruin'), L('blood_arena', '피의 투기장', 'rock'), L('warchief_gate', '대족장의 요새 문', 'boss')],
       desc: '망령 왕에게 고용된 오크들의 요새. 북소리가 나는 쪽은 무리가 크다.' }),
-    F(9, { biome: 'cave', name: '잊힌 신전', levelRange: [17, 19], mult: 3.0, curseMult: 2.8, xpMult: 20, goldMult: 6.2, monsterCount: 351,
+    F(9, { biome: 'cave', name: '잊힌 신전', levelRange: [17, 19], mult: { hp: 3.6, atk: 2.35 }, curseMult: 2.8, xpMult: 20, goldMult: 6.2, monsterCount: 351,
       pool: pool(['wraith', 35], ['skeleton_knight', 25], ['skeleton', 15], ['naga_priest', 10], ['bat', 15]), minibosses: ['wraith_bishop', 'wraith_banshee', 'skeleton_knight_death'], boss: 'boss_wraith_king',
       landmarks: [L('forgotten_temple', '잊힌 신전', 'ruin'), L('wraith_corridor', '망령의 복도', 'path'), L('pillar_hall', '무너진 기둥 홀', 'ruin'), L('asel_altar', '아셀의 제단', 'ruin'), L('white_library', '하얀 사제의 서고', 'ruin'), L('knight_crypt', '기사단 묘실', 'ruin'), L('king_throne', '망령 왕의 옥좌', 'boss')],
       desc: '백 년 전 아셀을 따르던 사제들의 망령이 떠돈다. 성스러운 일격의 층.' }),
-    F(10, { biome: 'cave', name: '용의 둥지', levelRange: [18, 22], mult: 3.6, curseMult: 3.2, xpMult: 23, goldMult: 7.5, monsterCount: 360,
+    F(10, { biome: 'cave', name: '용의 둥지', levelRange: [18, 22], mult: { hp: 4.0, atk: 2.6 }, curseMult: 3.2, xpMult: 23, goldMult: 7.5, monsterCount: 360,
       pool: pool(['drake', 35], ['golem_crystal', 25], ['naga', 15], ['wraith', 10], ['orc_warlord', 15]), minibosses: ['drake_elder', 'golem_crystal_red', 'naga_dragon_priest'], boss: 'boss_dragon',
       landmarks: [L('dragon_nest', '용의 둥지', 'crystal'), L('burning_rock', '불타는 바위', 'rock'), L('red_crystal_cave', '붉은 수정 동굴', 'crystal'), L('scale_graveyard', '용 비늘 무덤', 'ruin'), L('drake_nests', '새끼 용 둥지', 'rock'), L('heart_stairs', '탑의 심장 계단', 'path'), L('varga_lair', '바르가의 둥지', 'boss')],
       desc: '동굴 끝, 잿빛 드래곤 바르가의 둥지. 1부의 끝.' }),

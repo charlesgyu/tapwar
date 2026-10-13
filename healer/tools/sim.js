@@ -7,11 +7,14 @@ const load = require('./load');
 const TILE = 32, DT = 0.1;
 const GEAR_GRADE = { basic: 'common', normal: 'uncommon', good: 'rare' };
 const SET_FOR_FLOOR = (f) => (f >= 6 ? 'cave_crystal' : f >= 3 ? 'forest_leaf' : 'novice_cloth');
-const ARRIVE = { group: 3 * TILE, miniboss: 3 * TILE, boss: 3 * TILE, chest: 0.5 * TILE, exit: 0.5 * TILE };
+const ARRIVE = { group: 3 * TILE, miniboss: 3 * TILE, boss: 3 * TILE, chest: 0.5 * TILE, exit: 0.5 * TILE, regroup: 2 * TILE, retreat: 1 * TILE };
+const RETREAT_RANGE = [6, 12];                   // 물러날 때 고르는 칸의 BFS 거리(타일)
 const REST = { hp: 0.7, mpLow: 0.35, mpOk: 0.8, max: 45 };
 const STUCK_SECONDS = 2.5, STRAGGLER_WAIT_R = 7 * TILE, STRAGGLER_MAX_WAIT = 6;
 const LOOKOUT_R = 9 * TILE, LEAD_MAX_WAIT = 4;   // 몬스터가 보이면 탱커가 앞설 때까지(최대 4초) 기다린다
 const STALEMATE = 12;                            // "전투 중"인데 12초 동안 아무도 피해를 주고받지 않으면 교착(지형에 걸림) → 탐험을 계속한다
+const REGROUP_AFTER = 6;                         // 전투 중 파티원이 6초 동안 아무 피해도 못 주면(지형에 걸림) 힐러가 탱커 쪽으로 걸어가 몬스터를 끌고 간다
+                                                 // 탱커 옆인데도 그러면(원거리 몬스터가 물 건너에서 쏜다) 사거리 밖으로 물러나 따라오게 하거나 포기하게 만든다
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const alive = (e) => !!e && e.alive;
@@ -64,9 +67,13 @@ function setupMembers(ctx, G, level, floor, o) {
 function makeBot(ctx, fs, G) {
   const { map, battle } = fs, p = battle.player, cols = map.cols, rows = map.rows;
   const S = { target: null, path: [], wp: 0, stuck: 0, rest: 0, resting: false, wait: 0, visited: new Set(), unreachable: new Set(), replans: 0,
-    lastHit: 0, stalemates: 0, budget: { dead: 0, cast: 0, combat: 0, rest: 0, stragglers: 0, lead: 0, move: 0 } };   // budget: 시간이 어디에 쓰였는지(진단용)
+    lastHit: 0, lastPartyHit: 0, stalemates: 0, regroups: 0, retreats: 0, budget: { dead: 0, cast: 0, combat: 0, rest: 0, stragglers: 0, lead: 0, move: 0, regroup: 0 } };   // budget: 시간이 어디에 쓰였는지(진단용)
   const tileOf = (e) => ({ i: Math.floor(e.x / TILE), j: Math.floor(e.y / TILE) });
-  ctx.Events.on('damage', (e) => { if (!e.evaded) S.lastHit = fs.time; });
+  ctx.Events.on('damage', (e) => {
+    if (e.evaded) return;
+    S.lastHit = fs.time;
+    if (e.src && e.src.kind === 'member') S.lastPartyHit = fs.time;
+  });
 
   function bfs(from) {
     const dist = new Int32Array(cols * rows).fill(-1), prev = new Int32Array(cols * rows).fill(-1), q = new Int32Array(cols * rows);
@@ -110,6 +117,7 @@ function makeBot(ctx, fs, G) {
   }
   function arrive() {
     const t = S.target; S.target = null;
+    if (t.kind === 'regroup' || t.kind === 'retreat') return;
     if (t.kind === 'group' || t.kind === 'miniboss') S.visited.add(t.id);
     else if (t.kind === 'chest') { const c = fs.chests.find((x) => x.id === t.id); if (c && !c.opened) S.unreachable.add(t.id); }
   }
@@ -154,6 +162,46 @@ function makeBot(ctx, fs, G) {
     S.target = null;
   }
   const spend = (k, dt) => { S.budget[k] += dt; };
+  // 파티원이 지형에 걸려 아무도 못 때리는데 힐러만 맞고 있으면(혼자 회복하며 영원히 버틴다) 탱커에게 걸어가 몬스터를 끌고 간다.
+  // 사람이라면 당연히 그렇게 한다: 탱커 옆에 서야 도발(4타일)이 닿는다.
+  function partyStuck() { return fs.time - S.lastPartyHit >= REGROUP_AFTER && fs.time - S.lastHit < REGROUP_AFTER; }
+  function pathTo(from, cell, prev) {
+    const path = [];
+    for (let c = cell; c >= 0 && c !== from.j * cols + from.i; c = prev[c]) path.push({ x: (c % cols + 0.5) * TILE, y: (((c / cols) | 0) + 0.5) * TILE });
+    return path.reverse();
+  }
+  function setSpecial(kind, cell, path) {
+    if (!S.target || S.target.kind !== kind) S[kind === 'regroup' ? 'regroups' : 'retreats']++;
+    S.target = { kind, id: kind, x: (cell % cols + 0.5) * TILE, y: (((cell / cols) | 0) + 0.5) * TILE, at: fs.time }; S.path = path; S.wp = 0; S.stuck = 0;
+  }
+  function regroup(dt) {
+    const anchor = battle.members.find((m) => alive(m) && m.role === 'tank') || battle.allies().find((e) => e !== p);
+    if (!anchor) return;
+    if (dist(anchor, p) <= ARRIVE.regroup) return retreat(dt);
+    if (!S.target || S.target.kind !== 'regroup' || fs.time - S.target.at > 2) {
+      const from = tileOf(p), to = tileOf(anchor), { dist: d, prev } = bfs(from), cell = to.j * cols + to.i;
+      if (d[cell] < 0) return;
+      setSpecial('regroup', cell, pathTo(from, cell, prev));
+    }
+    follow(dt);
+  }
+  // 탱커 옆인데도 파티가 못 때린다 = 원거리 몬스터가 지형 너머에서 쏘는 중. 6~12타일 떨어진 갈 수 있는 칸 중 몬스터에서 가장 먼 곳으로 물러난다.
+  function retreat(dt) {
+    if (!S.target || S.target.kind !== 'retreat' || fs.time - S.target.at > 4) {
+      const foes = battle.engagedMonsters(); if (!foes.length) return;
+      const from = tileOf(p), { dist: d, prev } = bfs(from);
+      let best = null;
+      for (let cell = 0; cell < cols * rows; cell++) {
+        if (d[cell] < RETREAT_RANGE[0] || d[cell] > RETREAT_RANGE[1]) continue;
+        const x = (cell % cols + 0.5) * TILE, y = (((cell / cols) | 0) + 0.5) * TILE;
+        const sep = foes.reduce((m, f) => Math.min(m, Math.hypot(f.x - x, f.y - y)), Infinity);
+        if (!best || sep > best.sep) best = { cell, sep };
+      }
+      if (!best) return;
+      setSpecial('retreat', best.cell, pathTo(from, best.cell, prev));
+    }
+    follow(dt);
+  }
   // 교착: 교전 상태인데 한동안 피해가 오가지 않으면(몬스터·파티원이 벽 너머에서 제자리걸음) 전투를 기다리지 않는다
   function stalemate() {
     if (fs.time - S.lastHit < STALEMATE) return false;
@@ -165,6 +213,8 @@ function makeBot(ctx, fs, G) {
     if (!alive(p)) return spend('dead', dt);
     if (p.cast) return spend('cast', dt);
     const inCombat = battle.inCombat() && !stalemate();
+    if (inCombat && partyStuck()) { spend('regroup', dt); return regroup(dt); }
+    if (S.target && (S.target.kind === 'regroup' || S.target.kind === 'retreat')) S.target = null;   // 합류·후퇴가 끝났으면 탐험으로
     if (inCombat) return spend('combat', dt);
     if (needRest(inCombat)) return spend('rest', dt);
     if (waitStragglers()) return spend('stragglers', dt);

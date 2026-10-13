@@ -9,18 +9,18 @@ const Town = (() => {
   // 건물: x,y,w,h = 발자국(충돌 영역). 문은 아래쪽 중앙. roof: 지붕색, wall: 벽색
   const BUILDINGS = [
     { key: 'tower', name: '탑 입구', kind: 'gate', x: 7, y: 1, w: 10, h: 6 },
-    { key: 'temple', name: '신전', kind: 'temple', x: 1, y: 7, w: 7, h: 6, roof: '#d9a93e', wall: '#f6f0e4' },
-    { key: 'guild', name: '길드', kind: 'house', x: 16, y: 7, w: 7, h: 6, roof: '#4b6a95', wall: '#efe4cb', banner: '#c24a46', icon: 'shield', gable: true },
-    { key: 'adventurer', name: '모험가 사무소', kind: 'house', x: 1, y: 16, w: 7, h: 5, roof: '#bd4f46', wall: '#f1e5cb', icon: 'sword', awning: '#c8d8e2' },
-    { key: 'engraver', name: '각인사', kind: 'house', x: 17, y: 16, w: 6, h: 5, roof: '#7a5f9c', wall: '#ece1d3', icon: 'rune', gable: true },
-    { key: 'smithy', name: '대장간', kind: 'house', x: 1, y: 24, w: 6, h: 5, roof: '#6c7482', wall: '#dccdb4', chimney: true, icon: 'hammer', shop: true },
-    { key: 'bank', name: '은행', kind: 'house', x: 17, y: 24, w: 6, h: 5, roof: '#5d867a', wall: '#e8e1d2', stone: true, icon: 'coin', shop: true },
-    { key: 'inn', name: '여관', kind: 'house', x: 1, y: 36, w: 8, h: 6, roof: '#cf7a3a', wall: '#f1e4c8', icon: 'mug', awning: '#d9b48a', awningWide: true },
-    { key: 'auction', name: '경매장', kind: 'house', x: 15, y: 36, w: 8, h: 6, roof: '#bd4f46', wall: '#efe3c8', banner: '#4b6a95', icon: 'gavel', gable: true },
-    { key: 'shop', name: '잡화상', kind: 'house', x: 1, y: 48, w: 6, h: 5, roof: '#4b6a95', wall: '#f1e4c8', icon: 'bag', awning: '#c9a06a', shop: true },
-    { key: 'houseA', name: '', kind: 'house', x: 17, y: 48, w: 6, h: 5, roof: '#bd4f46', wall: '#efe3c8', gable: true },
-    { key: 'houseB', name: '', kind: 'house', x: 2, y: 57, w: 6, h: 5, roof: '#6c7482', wall: '#f1e4c8' },
-    { key: 'houseC', name: '', kind: 'house', x: 16, y: 57, w: 6, h: 5, roof: '#4b6a95', wall: '#efe3c8' },
+    { key: 'temple', name: '신전', kind: 'temple', x: 1, y: 7, w: 7, h: 6, roof: '#cfae6c', wall: '#f6f0e4' },
+    { key: 'guild', name: '길드', kind: 'house', x: 16, y: 7, w: 7, h: 6, roof: '#6f7f98', wall: '#efe4cb', banner: '#b8706a', icon: 'shield', gable: true },
+    { key: 'adventurer', name: '모험가 사무소', kind: 'house', x: 1, y: 16, w: 7, h: 5, roof: '#b4756c', wall: '#f1e5cb', icon: 'sword', awning: '#c8d8e2' },
+    { key: 'engraver', name: '각인사', kind: 'house', x: 17, y: 16, w: 6, h: 5, roof: '#8f7f9f', wall: '#ece1d3', icon: 'rune', gable: true },
+    { key: 'smithy', name: '대장간', kind: 'house', x: 1, y: 24, w: 6, h: 5, roof: '#8b8f94', wall: '#dccdb4', chimney: true, icon: 'hammer', shop: true },
+    { key: 'bank', name: '은행', kind: 'house', x: 17, y: 24, w: 6, h: 5, roof: '#7e9a8c', wall: '#e8e1d2', stone: true, icon: 'coin', shop: true },
+    { key: 'inn', name: '여관', kind: 'house', x: 1, y: 36, w: 8, h: 6, roof: '#c48a66', wall: '#f1e4c8', icon: 'mug', awning: '#d9b48a', awningWide: true },
+    { key: 'auction', name: '경매장', kind: 'house', x: 15, y: 36, w: 8, h: 6, roof: '#b4756c', wall: '#efe3c8', banner: '#6f7f98', icon: 'gavel', gable: true },
+    { key: 'shop', name: '잡화상', kind: 'house', x: 1, y: 48, w: 6, h: 5, roof: '#6f7f98', wall: '#f1e4c8', icon: 'bag', awning: '#c9a06a', shop: true },
+    { key: 'houseA', name: '', kind: 'house', x: 17, y: 48, w: 6, h: 5, roof: '#b4756c', wall: '#efe3c8', gable: true },
+    { key: 'houseB', name: '', kind: 'house', x: 2, y: 57, w: 6, h: 5, roof: '#8b8f94', wall: '#f1e4c8' },
+    { key: 'houseC', name: '', kind: 'house', x: 16, y: 57, w: 6, h: 5, roof: '#6f7f98', wall: '#efe3c8' },
   ];
   // 성벽 (충돌만, 바닥 레이어에 그림)
   const WALLS = [
@@ -30,8 +30,8 @@ const Town = (() => {
   // 큰 소품(깊이 정렬 대상): type, x,y = 발 기준(타일, 소수 가능)
   const PROPS = [
     { type: 'well', x: 12, y: 32 },
-    { type: 'stall', x: 9.5, y: 48, color: '#c24a46' },
-    { type: 'stall', x: 14.5, y: 48, color: '#4f8a5a' },
+    { type: 'stall', x: 9.5, y: 48, color: '#b8706a' },
+    { type: 'stall', x: 14.5, y: 48, color: '#6f9a7a' },
     { type: 'tree', x: 8.5, y: 12.5, size: 'big' },
     { type: 'tree', x: 14.5, y: 12.5, size: 'big' },
     { type: 'tree', x: 8.5, y: 23.5, size: 'small' },
@@ -76,7 +76,7 @@ const Town = (() => {
     { type: 'planter', x: 2.4, y: 53.4 },
     { type: 'planter', x: 20.4, y: 13.4 },
     { type: 'cratestack', x: 16.5, y: 43.2 },
-    { type: 'cratestack', x: 7.5, y: 44.0 },
+    { type: 'cratestack', x: 8.3, y: 44.0 },
     { type: 'barrel', x: 20.5, y: 42.6 },
     { type: 'barrel', x: 21.4, y: 43.2 },
     { type: 'clothesline', x: 5, y: 56.4 },
@@ -91,8 +91,11 @@ const Town = (() => {
     { type: 'board', x: 12.5, y: 26.4 },
     { type: 'crate', x: 11.6, y: 49.6 },
     { type: 'barrel', x: 12.7, y: 49.4 },
-    { type: 'planter', x: 10.6, y: 36.5 },
-    { type: 'planter', x: 13.4, y: 36.5 },
+    { type: 'planter', x: 10.6, y: 37.5 },
+    { type: 'planter', x: 13.4, y: 37.5 },
+    // 만국기 줄 끝 기둥(깊이 정렬 대상) — BUNTING 과 좌표를 맞춘다
+    { type: 'buntingpole', x: 7.4, y: 21.0 }, { type: 'buntingpole', x: 16.6, y: 21.0 },
+    { type: 'buntingpole', x: 6.9, y: 44.4 }, { type: 'buntingpole', x: 17.1, y: 44.4 },
   ];
   // 잔디밭 (fence: 울타리, 울타리가 있으면 통행 불가)
   const GRASS = [
@@ -102,8 +105,8 @@ const Town = (() => {
     { x: 21, y: 13, w: 3, h: 2, fence: false },
     { x: 8, y: 11, w: 2, h: 3, fence: false },
     { x: 14, y: 11, w: 2, h: 3, fence: false },
-    { x: 9, y: 34, w: 2, h: 2, fence: false },
-    { x: 13, y: 34, w: 2, h: 2, fence: false },
+    { x: 9, y: 35, w: 2, h: 2, fence: false },
+    { x: 13, y: 35, w: 2, h: 2, fence: false },
     { x: 0, y: 44, w: 3, h: 3, fence: false, flowers: true },
     { x: 21, y: 43, w: 3, h: 3, fence: false, flowers: true },
     { x: 8, y: 55, w: 2, h: 3, fence: false },
@@ -116,8 +119,8 @@ const Town = (() => {
   const MARKET = { x: 7, y: 45, w: 10, h: 5 };
   // 만국기 (y: 타일, x0~x1)
   const BUNTING = [
-    { y: 22.3, x0: 7.5, x1: 16.5, colors: ['#e05a5a', '#f2d35b', '#5aa0d8', '#6fbf73'] },
-    { y: 44.4, x0: 7.5, x1: 16.5, colors: ['#f2d35b', '#e05a5a', '#9b7bd3', '#5aa0d8'] },
+    { y: 21.0, x0: 7.4, x1: 16.6, colors: ['#d98a7a', '#e3c46a', '#7d94b8', '#ede3cc'] },
+    { y: 44.4, x0: 6.9, x1: 17.1, colors: ['#e3c46a', '#d98a7a', '#7d94b8', '#ede3cc'] },
   ];
 
   // ---------- 충돌 격자 ----------
@@ -143,15 +146,16 @@ const Town = (() => {
 
   // 소품 발자국 (타일 단위, 발 기준 오프셋)
   const PROP_FOOT = {
-    well: { w: 2, h: 1, ox: -1, oy: -1 },
-    cart: { w: 2, h: 1, ox: -1, oy: -1 },
+    well: { w: 3, h: 2, ox: -1.5, oy: -2 },
+    cart: { w: 3, h: 1, ox: -1.5, oy: -1 },
     board: { w: 1, h: 1, ox: -0.5, oy: -1 },
-    stall: { w: 3, h: 1, ox: -1.5, oy: -1 },
+    stall: { w: 4, h: 2, ox: -2, oy: -2 },
+    buntingpole: { w: 1, h: 1, ox: -0.5, oy: -1 },
     tree: { w: 1, h: 1, ox: -0.5, oy: -1 },
     barrel: { w: 1, h: 1, ox: -0.5, oy: -1 },
     crate: { w: 1, h: 1, ox: -0.5, oy: -1 },
-    bench: { w: 1, h: 1, ox: -0.5, oy: -1 },
-    cratestack: { w: 1, h: 1, ox: -0.5, oy: -1 },
+    bench: { w: 2, h: 1, ox: -1, oy: -1 },
+    cratestack: { w: 2, h: 1, ox: -1, oy: -1 },
     flowerbed: { w: 2, h: 1, ox: -1, oy: -1 },
     haybale: { w: 1, h: 1, ox: -0.5, oy: -1 },
     lamp: { w: 1, h: 1, ox: -0.5, oy: -1 },     // 기둥 밑단 타일
@@ -182,8 +186,8 @@ const Town = (() => {
   // ---------- 팔레트 & 헬퍼 ----------
   const OL = '#3b2a2a'; // 외곽선(따뜻한 갈색)
   const C = {
-    cobble: ['#e9dfcb', '#e4d8c2', '#eee5d3'],
-    cobbleHi: '#f0e8d6', grout: '#d9ccb3', groutLo: '#c2b196',
+    cobble: ['#e8d9c8', '#e2d2bf', '#ecdfcf'],
+    cobbleHi: '#f2e9da', grout: '#d3c1ad', groutLo: '#bba791',
     plaza: ['#e8dbc3', '#e2d4b9', '#ecdfca'], plazaHi: '#f4ead7', plazaLo: '#c9b797',
     curb: '#d2c8b4', curbHi: '#e6ddc9', curbLo: '#b3a88f',
     dirt: '#d6bb8f', dirtHi: '#e3cba3', dirtLo: '#bba076',
@@ -227,9 +231,8 @@ const Town = (() => {
   }
 
   // ---------- 바닥 그리기 ----------
-  // 포석: 돌마다 색 변화, 좌상단 하이라이트 1px, 우하단 줄눈, 간혹 반으로 쪼개진 돌·마모 점
-  // 포석: 돌마다 폭(±cw/4)과 색이 조금씩 다르고, 좌상단 1px 하이라이트, 우하단 1px 줄눈. 간혹 반으로 쪼개진 돌·2px 깎인 모서리·마모 점
-  function drawCobble(ctx, x, y, w, h, rnd, cw = 24, ch = 14, pal = C.cobble, hi = C.cobbleHi, grout = C.grout, groutLo = C.groutLo) {
+  // 돌블록(성벽·벽 기초·탑 몸통용): 폭(±cw/4)이 조금씩 다른 running-bond 격자, 좌상단 1px 하이라이트, 우하단 1px 줄눈
+  function drawBlocks(ctx, x, y, w, h, rnd, cw = 24, ch = 14, pal = C.cobble, hi = C.cobbleHi, grout = C.grout, groutLo = C.groutLo) {
     R(ctx, x, y, w, h, grout);
     const q = Math.max(2, Math.floor(cw / 4));
     for (let yy = y; yy < y + h; yy += ch) {
@@ -240,22 +243,75 @@ const Town = (() => {
         const sx = Math.max(x, xx), ex = Math.min(x + w, xx + ww - 1); // ex 열은 줄눈
         xx += ww;
         if (ex <= sx) continue;
-        const split = rnd() < 0.12 && ex - sx >= cw;
-        const parts = split ? [[sx, sx + Math.floor((ex - sx) / 2)], [sx + Math.floor((ex - sx) / 2) + 1, ex]] : [[sx, ex]];
-        for (const [a, b] of parts) {
-          const col = pal[Math.floor(rnd() * pal.length)];
-          const sw = b - a, shh = hh - 1;
-          if (sw <= 0 || shh <= 0) continue;
-          R(ctx, a, yy, sw, shh, col);
-          R(ctx, a, yy, sw, 1, hi);         // 상단 하이라이트
-          R(ctx, a, yy, 1, shh, hi);        // 좌측 하이라이트
-          R(ctx, a + 1, yy + shh - 1, sw - 1, 1, sh(col, -0.06)); // 하단 그늘
-          if (rnd() < 0.15 && sw > 6 && shh > 6) R(ctx, rnd() < 0.5 ? a : b - 2, rnd() < 0.5 ? yy : yy + shh - 2, 2, 2, grout); // 모서리 2px 계단
-          if (rnd() < 0.2 && sw > 6 && shh > 5) R(ctx, a + 2 + Math.floor(rnd() * (sw - 5)), yy + 2 + Math.floor(rnd() * (shh - 4)), 2, 1, sh(col, -0.1)); // 마모 점
-          if (rnd() < 0.1) px(ctx, b, yy + Math.floor(rnd() * hh), groutLo);
-        }
+        const col = pal[Math.floor(rnd() * pal.length)];
+        const sw = ex - sx, shh = hh - 1;
+        if (sw <= 0 || shh <= 0) continue;
+        R(ctx, sx, yy, sw, shh, col);
+        R(ctx, sx, yy, sw, 1, hi); R(ctx, sx, yy, 1, shh, hi);
+        R(ctx, sx + 1, yy + shh - 1, sw - 1, 1, sh(col, -0.06));
+        if (rnd() < 0.1) px(ctx, ex, yy + Math.floor(rnd() * hh), groutLo);
       }
     }
+  }
+
+  const hexRgb = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+
+  // 판석(바닥용): cw×ch 격자의 각 셀 중심을 흔든 뒤 가장 가까운 중심으로 돌을 정하는 지터 보로노이.
+  // → 크기·모양이 제각각인 불규칙 다각형 판석, 1px 줄눈, 세 돌이 만나는 모서리는 둥글게 깎임.
+  // 돌마다 3톤 중 하나 + 좌상단 1px 하이라이트 + 우하단 1px 그늘, 마모 점 0.2 확률. ImageData 로 한 번에 찍는다.
+  function drawFlagstones(ctx, x, y, w, h, rnd, cw = 32, ch = 22, pal = C.cobble, hi = C.cobbleHi, grout = C.grout, groutLo = C.groutLo) {
+    const gx = Math.ceil(w / cw) + 2, gy = Math.ceil(h / ch) + 2;
+    const sx = new Float32Array(gx * gy), sy = new Float32Array(gx * gy), tone = new Uint8Array(gx * gy), wear = new Uint8Array(gx * gy);
+    const jx = Math.floor(cw * 0.3), jy = Math.floor(ch * 0.3);
+    for (let j = 0; j < gy; j++) {
+      const rowOff = (j % 2) * (cw / 2) + Math.floor(rnd() * 6) - 3; // 행마다 반 칸 엇갈림 + 흔들림
+      for (let i = 0; i < gx; i++) {
+        const k = j * gx + i;
+        sx[k] = (i - 1) * cw + cw / 2 + rowOff + Math.floor(rnd() * (jx * 2 + 1)) - jx;
+        sy[k] = (j - 1) * ch + ch / 2 + Math.floor(rnd() * (jy * 2 + 1)) - jy;
+        tone[k] = Math.floor(rnd() * pal.length);
+        wear[k] = rnd() < 0.2 ? 1 : 0;
+      }
+    }
+    // 1차: 픽셀마다 돌 id + 줄눈 여부
+    const id = new Int32Array(w * h), isGrout = new Uint8Array(w * h);
+    for (let py = 0; py < h; py++) {
+      const cj = Math.floor(py / ch) + 1;
+      for (let pxx = 0; pxx < w; pxx++) {
+        const ci = Math.floor(pxx / cw) + 1;
+        let d1 = 1e9, d2 = 1e9, d3 = 1e9, best = 0;
+        for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+          const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= gx || j >= gy) continue;
+          const k = j * gx + i, ddx = pxx - sx[k], ddy = (py - sy[k]) * (cw / ch);
+          const d = Math.sqrt(ddx * ddx + ddy * ddy);
+          if (d < d1) { d3 = d2; d2 = d1; d1 = d; best = k; } else if (d < d2) { d3 = d2; d2 = d; } else if (d < d3) d3 = d;
+        }
+        const o = py * w + pxx;
+        id[o] = best;
+        if (d2 - d1 < 1.1 || d3 - d1 < 2.6) isGrout[o] = 1; // 줄눈 1px + 모서리 둥글게
+      }
+    }
+    // 2차: 색 결정
+    const img = ctx.createImageData(w, h), data = img.data;
+    const palRgb = pal.map(hexRgb), hiRgb = hexRgb(hi), grRgb = hexRgb(grout), grLo = hexRgb(groutLo);
+    const shRgb = palRgb.map(([r, g, b]) => [Math.round(r * 0.94), Math.round(g * 0.94), Math.round(b * 0.94)]);
+    const wearRgb = palRgb.map(([r, g, b]) => [Math.round(r * 0.9), Math.round(g * 0.9), Math.round(b * 0.9)]);
+    for (let py = 0; py < h; py++) for (let pxx = 0; pxx < w; pxx++) {
+      const o = py * w + pxx, k = id[o];
+      let c;
+      if (isGrout[o]) c = ((pxx * 7 + py * 13) % 11 === 0) ? grLo : grRgb;
+      else {
+        const t = tone[k];
+        const up = py > 0 ? isGrout[o - w] : 1, left = pxx > 0 ? isGrout[o - 1] : 1;
+        const down = py < h - 1 ? isGrout[o + w] : 1, right = pxx < w - 1 ? isGrout[o + 1] : 1;
+        if (up || left) c = hiRgb;
+        else if (down || right) c = shRgb[t];
+        else if (wear[k] && Math.abs(pxx - sx[k] - 3) < 1 && Math.abs(py - sy[k] + 2) < 0.6) c = wearRgb[t];
+        else c = palRgb[t];
+      }
+      data[o * 4] = c[0]; data[o * 4 + 1] = c[1]; data[o * 4 + 2] = c[2]; data[o * 4 + 3] = 255;
+    }
+    ctx.putImageData(img, x, y);
   }
 
   // 타원 테두리(두께 1~2px) — 광장 방사 무늬용
@@ -274,35 +330,22 @@ const Town = (() => {
 
   function drawPlaza(ctx, rnd) {
     const x = PLAZA.x * TILE, y = PLAZA.y * TILE, w = PLAZA.w * TILE, h = PLAZA.h * TILE;
-    drawCobble(ctx, x, y, w, h, rnd, 36, 20, C.plaza, C.plazaHi, C.plazaLo, sh(C.plazaLo, -0.15));
+    drawFlagstones(ctx, x, y, w, h, rnd, 40, 28, C.plaza, C.plazaHi, '#cbbda6', sh('#cbbda6', -0.12));
     // 연석(테두리) — 바깥 어두운 선 + 안쪽 밝은 선
     Pixel.outline(ctx, x - 1, y - 1, w + 2, h + 2, C.plazaLo);
     Pixel.outline(ctx, x - 2, y - 2, w + 4, h + 4, sh(C.plazaLo, 0.25));
-    // 동심원 방사 포석(우물 중심): 링 폭 14, 부채꼴 16, 돌마다 2톤 교대, 줄눈 2px, 링 안쪽 위 가장자리 1px 하이라이트
-    const cx = (PLAZA.x + PLAZA.w / 2) * TILE, cy = (PLAZA.y + PLAZA.h / 2) * TILE + 24;
-    const R0 = 38, STEP = 14, RMAX = 150, K = 0.6, N = 16, SEC = (Math.PI * 2) / N;
-    const base = '#d6c9b0', light = '#ece2cd', groutR = '#baa88c', hiR = '#f4ecda';
-    const wear = sh(base, -0.07);
-    const ryMax = Math.round(RMAX * K) + 2;
-    for (let dy = -ryMax; dy <= ryMax; dy++) {
-      for (let dx = -RMAX - 2; dx <= RMAX + 2; dx++) {
-        const ny = dy / K;
-        const rr = Math.sqrt(dx * dx + ny * ny);
-        if (rr > RMAX + 1) continue;
-        let col;
-        if (rr >= RMAX - 1) col = groutR;
-        else if (rr < R0 - 1) col = light;
-        else {
-          const t = rr - R0, i = Math.floor(t / STEP), m = t - i * STEP;
-          const sec = (Math.atan2(ny, dx) + Math.PI) / SEC;
-          const j = Math.floor(sec), fm = (sec - j) * SEC * rr;
-          if (m < 2 || fm < 2) col = groutR;
-          else if (m < 3 && dy < 0) col = hiR;
-          else { col = ((i + j) % 2) ? base : light; if (((dx * 7 + dy * 13 + i * 3) % 37) === 0) col = wear; }
-        }
-        px(ctx, cx + dx, cy + dy, col);
-      }
+    // 우물 중심의 동심 연석 링 3개(2px, 위쪽 1px 하이라이트) — 안쪽은 보통 판석
+    const cx = (PLAZA.x + PLAZA.w / 2) * TILE, cy = (PLAZA.y + PLAZA.h / 2) * TILE + 24, K = 0.6;
+    for (const rr of [60, 108, 150]) {
+      ellipseRing(ctx, cx, cy, rr, Math.round(rr * K), '#cbbda6', 2);
+      ellipseRing(ctx, cx, cy - 1, rr, Math.round(rr * K), '#f0e6d4', 1);
+      ellipseRing(ctx, cx, cy, rr, Math.round(rr * K), '#cbbda6', 2);
     }
+    // 우물 발 밑 원판: 밝은 단색 + 1px 링
+    const R0 = 38;
+    Pixel.ellipse(ctx, cx, cy, R0, Math.round(R0 * K), '#baa88c');
+    Pixel.ellipse(ctx, cx, cy, R0 - 1, Math.round(R0 * K) - 1, '#ece2cd');
+    Pixel.ellipse(ctx, cx - 1, cy - 1, R0 - 4, Math.round(R0 * K) - 3, '#f4ecda');
   }
 
   function drawMarket(ctx, rnd) {
@@ -328,34 +371,50 @@ const Town = (() => {
 
   function drawGrass(ctx, g, rnd) {
     const x = g.x * TILE, y = g.y * TILE, w = g.w * TILE, h = g.h * TILE;
-    // 연석(2px): 잔디를 바닥에 앉혀 스티커 느낌을 없앤다
-    R(ctx, x - 3, y - 3, w + 6, h + 6, C.curb);
-    R(ctx, x - 3, y - 3, w + 6, 1, C.curbHi); R(ctx, x - 3, y - 3, 1, h + 6, C.curbHi);
-    R(ctx, x - 3, y + h + 2, w + 6, 1, C.curbLo); R(ctx, x + w + 2, y - 3, 1, h + 6, C.curbLo);
-    R(ctx, x - 1, y - 1, w + 2, h + 2, C.grassEdge);
-    R(ctx, x, y, w, h, C.grass);
+    // 임시 캔버스에 그린 뒤 모서리(3,2,1 계단)를 지워 둥글게 → 바닥에 합성
+    const M = 4, tc = Pixel.make(w + M * 2, h + M * 2), t = tc.getContext('2d');
+    const X = M, Y = M;
+    // 연석 2px 돌 + 바깥 1px 외곽선(우/하만)
+    R(t, X - 2, Y - 2, w + 4, h + 4, C.curb);
+    R(t, X - 2, Y - 2, w + 4, 1, C.curbHi); R(t, X - 2, Y - 2, 1, h + 4, C.curbHi);
+    R(t, X - 2, Y + h + 1, w + 4, 1, C.curbLo); R(t, X + w + 1, Y - 2, 1, h + 4, C.curbLo);
+    R(t, X - 2, Y + h + 2, w + 5, 1, sh(C.curbLo, -0.25)); R(t, X + w + 2, Y - 2, 1, h + 5, sh(C.curbLo, -0.25));
+    R(t, X, Y, w, h, C.grass);
     // 밝은 풀 얼룩
     for (let i = 0; i < (w * h) / 900; i++) {
-      const ex = x + 8 + Math.floor(rnd() * (w - 16)), ey = y + 6 + Math.floor(rnd() * (h - 12));
-      Pixel.ellipse(ctx, ex, ey, 5 + Math.floor(rnd() * 8), 2 + Math.floor(rnd() * 3), C.grassHi);
+      const ex = X + 8 + Math.floor(rnd() * (w - 16)), ey = Y + 6 + Math.floor(rnd() * (h - 12));
+      Pixel.ellipse(t, ex, ey, 5 + Math.floor(rnd() * 8), 2 + Math.floor(rnd() * 3), C.grassHi);
     }
     // 풀 뭉치(V자) — 어두운/밝은
     for (let i = 0; i < (w * h) / 110; i++) {
-      const pxx = x + 2 + Math.floor(rnd() * (w - 6)), pyy = y + 2 + Math.floor(rnd() * (h - 6));
+      const pxx = X + 2 + Math.floor(rnd() * (w - 6)), pyy = Y + 2 + Math.floor(rnd() * (h - 6));
       const col = rnd() < 0.55 ? C.grassLo : C.grassHi;
-      px(ctx, pxx, pyy, col); px(ctx, pxx + 2, pyy, col); px(ctx, pxx + 1, pyy + 1, col);
-      if (rnd() < 0.5) px(ctx, pxx + 1, pyy - 1, col);
+      px(t, pxx, pyy, col); px(t, pxx + 2, pyy, col); px(t, pxx + 1, pyy + 1, col);
+      if (rnd() < 0.5) px(t, pxx + 1, pyy - 1, col);
     }
-    R(ctx, x, y + h - 1, w, 1, C.grassLo); R(ctx, x + w - 1, y, 1, h, C.grassLo); R(ctx, x, y, w, 1, C.grassHi);
+    // 안쪽 우/하 2px 어두운 띠, 상/좌 1px 밝은 선
+    R(t, X, Y + h - 2, w, 2, '#9fbd66'); R(t, X + w - 2, Y, 2, h, '#9fbd66'); R(t, X, Y, w, 1, '#d1e49c'); R(t, X, Y, 1, h, '#d1e49c');
     if (g.flowers) {
       const cols = ['#f06a6a', '#f7d35b', '#ffffff', '#f49ac1', '#8ab7f0'];
       for (let i = 0; i < (w * h) / 260; i++) {
-        const pxx = x + 3 + Math.floor(rnd() * (w - 8)), pyy = y + 3 + Math.floor(rnd() * (h - 8));
+        const pxx = X + 3 + Math.floor(rnd() * (w - 8)), pyy = Y + 3 + Math.floor(rnd() * (h - 8));
         const col = cols[Math.floor(rnd() * cols.length)];
-        px(ctx, pxx, pyy - 1, col); px(ctx, pxx - 1, pyy, col); px(ctx, pxx + 1, pyy, col); px(ctx, pxx, pyy + 1, col);
-        px(ctx, pxx, pyy, sh(col, -0.35)); px(ctx, pxx, pyy + 2, C.grassLo);
+        px(t, pxx, pyy - 1, col); px(t, pxx - 1, pyy, col); px(t, pxx + 1, pyy, col); px(t, pxx, pyy + 1, col);
+        px(t, pxx, pyy, sh(col, -0.35)); px(t, pxx, pyy + 2, C.grassLo);
       }
     }
+    // 모서리 깎기(연석 포함): 3,2,1 계단
+    for (let k = 0; k < 3; k++) {
+      const n = 3 - k;
+      t.clearRect(X - 2, Y - 2 + k, n, 1); t.clearRect(X + w + 2 - n, Y - 2 + k, n, 1);
+      t.clearRect(X - 2, Y + h + 1 - k, n, 1); t.clearRect(X + w + 2 - n, Y + h + 1 - k, n, 1);
+    }
+    ctx.drawImage(tc, x - M, y - M);
+    // 가장자리 바깥 풀 뭉치(3px V) — 변마다 10~14개
+    const tuft = (tx, ty) => { px(ctx, tx, ty, '#97b560'); px(ctx, tx + 2, ty, '#97b560'); px(ctx, tx + 1, ty + 1, '#97b560'); };
+    const nT = 10 + Math.floor(rnd() * 5);
+    for (let i = 0; i < nT; i++) { tuft(x + 2 + Math.floor(rnd() * (w - 6)), y - 5 - Math.floor(rnd() * 2)); tuft(x + 2 + Math.floor(rnd() * (w - 6)), y + h + 3 + Math.floor(rnd() * 2)); }
+    for (let i = 0; i < Math.max(3, nT * h / w); i++) { tuft(x - 6 - Math.floor(rnd() * 2), y + 2 + Math.floor(rnd() * (h - 6))); tuft(x + w + 3 + Math.floor(rnd() * 2), y + 2 + Math.floor(rnd() * (h - 6))); }
     if (g.fence) drawFence(ctx, x, y, w, h);
   }
 
@@ -395,7 +454,7 @@ const Town = (() => {
     for (let yy = y + 7; yy < y + 22; yy += 7) R(ctx, x, yy, w, 1, sh(C.stoneHi, -0.12));
     R(ctx, x, y, w, 1, C.stoneOl); R(ctx, x, y + 21, w, 1, C.stoneOl);
     // 앞면 돌블록
-    drawCobble(ctx, x, y + 22, w, h - 22, rnd, 20, 10, [C.stone, sh(C.stone, -0.07), sh(C.stone, 0.06)], C.stoneHi, C.stoneLo, C.stoneOl);
+    drawBlocks(ctx, x, y + 22, w, h - 22, rnd, 20, 10, [C.stone, sh(C.stone, -0.07), sh(C.stone, 0.06)], C.stoneHi, C.stoneLo, C.stoneOl);
     R(ctx, x, y + 22, w, 2, 'rgba(0,0,0,0.18)');
     R(ctx, x, y + h - 1, w, 1, C.stoneOl);
     R(ctx, x, y + h, w, 3, C.shadow);
@@ -453,19 +512,32 @@ const Town = (() => {
     R(ctx, 0, 95, W, 1, OL);
   }
 
-  // 경계 생울타리: 둥근 덤불을 겹쳐 그림 (맵 가장자리 통행불가 열/행 표시)
-  function drawHedge(ctx, x, y, w, h, rnd) {
-    const G = { lo: '#5b9668', mid: '#82c08c', hi: '#a9dcae', ol: '#3f6b4a' };
-    const horiz = w >= h;
-    const n = horiz ? Math.ceil(w / 14) + 1 : Math.ceil(h / 14) + 1;
-    const pts = [];
-    for (let k = 0; k < n; k++) pts.push(horiz ? [x + k * 14 + 2, y + h - 11 + Math.floor(rnd() * 3), 10 + Math.floor(rnd() * 3)] : [x + 14 + Math.floor(rnd() * 3), y + k * 14 + 2, 10 + Math.floor(rnd() * 3)]);
-    for (const [cx, cy, r] of pts) Pixel.ellipse(ctx, cx + 2, cy + 4, r + 1, Math.round(r * 0.6), 'rgba(40,25,20,0.18)');
-    for (const [cx, cy, r] of pts) Pixel.circle(ctx, cx, cy, r + 1, G.ol);
-    for (const [cx, cy, r] of pts) Pixel.circle(ctx, cx, cy, r, G.lo);
-    for (const [cx, cy, r] of pts) Pixel.circle(ctx, cx - 2, cy - 2, r - 3, G.mid);
-    for (const [cx, cy, r] of pts) Pixel.circle(ctx, cx - 4, cy - 4, Math.max(1, r - 7), G.hi);
-    for (const [cx, cy, r] of pts) { if (rnd() < 0.35) { const col = ['#f06a6a', '#f7d35b', '#ffffff'][Math.floor(rnd() * 3)]; R(ctx, cx + Math.floor(rnd() * 6) - 3, cy + Math.floor(rnd() * 6) - 3, 2, 2, col); } }
+  // 경계 돌담: 성벽과 같은 stone 팔레트의 낮은 돌담(바깥 20px) + 안쪽 12px 잔디 띠. 좌/우 열은 세로, 하단 행은 가로
+  function drawBoundaryWall(ctx, x, y, w, h, side, rnd) {
+    const pal = [C.stone, sh(C.stone, -0.07), sh(C.stone, 0.06)];
+    const tuft = (tx, ty) => { const col = rnd() < 0.5 ? C.grassLo : C.grassHi; px(ctx, tx, ty, col); px(ctx, tx + 2, ty, col); px(ctx, tx + 1, ty + 1, col); };
+    if (side === 'bottom') {
+      // 윗면(캡) 8px + 앞면 돌블록
+      R(ctx, x, y, w, h, C.stoneOl);
+      drawBlocks(ctx, x, y + 8, w, h - 9, rnd, 20, 10, pal, C.stoneHi, C.stoneLo, C.stoneOl);
+      R(ctx, x, y, w, 8, C.stoneHi); R(ctx, x, y, w, 1, C.stoneOl); R(ctx, x, y + 7, w, 1, sh(C.stoneHi, -0.12)); R(ctx, x, y + 8, w, 1, C.stoneOl);
+      for (let xx = x + 10; xx < x + w; xx += 20) R(ctx, xx, y + 1, 1, 6, sh(C.stoneHi, -0.12));
+      // 담 앞(위쪽) 잔디 띠 + 그림자
+      R(ctx, x, y - 12, w, 12, C.grass); R(ctx, x, y - 12, w, 1, C.grassHi); R(ctx, x, y - 1, w, 1, C.grassLo);
+      for (let i = 0; i < w / 6; i++) tuft(x + Math.floor(rnd() * (w - 3)), y - 11 + Math.floor(rnd() * 9));
+      R(ctx, x, y - 3, w, 3, 'rgba(40,25,20,0.12)');
+      return;
+    }
+    // 세로 열: 바깥 20px 돌담(윗면), 안쪽 12px 잔디
+    const wx = side === 'left' ? x : x + w - 20, gxx = side === 'left' ? x + 20 : x;
+    R(ctx, wx, y, 20, h, C.stoneOl);
+    drawBlocks(ctx, wx + 1, y, 18, h, rnd, 10, 10, pal, C.stoneHi, C.stoneLo, C.stoneOl);
+    R(ctx, wx, y, 1, h, side === 'left' ? C.stoneHi : C.stoneOl); R(ctx, wx + 19, y, 1, h, side === 'left' ? C.stoneOl : C.stoneHi);
+    R(ctx, gxx, y, 12, h, C.grass); R(ctx, gxx, y, 1, h, C.grassHi); R(ctx, gxx + 11, y, 1, h, C.grassLo);
+    for (let i = 0; i < h / 6; i++) tuft(gxx + 1 + Math.floor(rnd() * 8), y + Math.floor(rnd() * (h - 3)));
+    if (side === 'left') R(ctx, x + 20, y, 3, h, 'rgba(40,25,20,0.12)');
+    // 꽃(1px 꽃색 + 위 1px 밝은색) 잔디 위에만
+    for (let i = 0; i < h / 40; i++) { const col = ['#e05a5a', '#f2d35b', '#f4f4f4'][Math.floor(rnd() * 3)]; const fx = gxx + 2 + Math.floor(rnd() * 8), fy = y + 2 + Math.floor(rnd() * (h - 4)); px(ctx, fx, fy, col); px(ctx, fx, fy - 1, sh(col, 0.4)); }
   }
 
   function drawDrain(ctx, cx, cy) {
@@ -479,7 +551,7 @@ const Town = (() => {
     const c = Pixel.make(W, H);
     const ctx = c.getContext('2d');
     const rnd = Pixel.rng(7);
-    drawCobble(ctx, 0, 0, W, H, rnd, 24, 14);
+    drawFlagstones(ctx, 0, 0, W, H, rnd, 32, 22);
     // 포석 위 은은한 색 얼룩(마모·햇빛) — 격자의 단조로움을 깸
     for (let i = 0; i < 70; i++) {
       const ex = Math.floor(rnd() * W), ey = 120 + Math.floor(rnd() * (H - 160));
@@ -488,10 +560,10 @@ const Town = (() => {
     drawPlaza(ctx, rnd);
     drawMarket(ctx, rnd);
     for (const g of GRASS) drawGrass(ctx, g, rnd);
-    // 맵 가장자리 생울타리(좌/우 열, 하단 행)
-    drawHedge(ctx, 0, 5 * TILE, TILE, H - 5 * TILE, rnd);
-    drawHedge(ctx, W - TILE, 5 * TILE, TILE, H - 5 * TILE, rnd);
-    drawHedge(ctx, 0, H - TILE, W, TILE, rnd);
+    // 맵 가장자리 돌담(좌/우 열, 하단 행)
+    drawBoundaryWall(ctx, 0, 5 * TILE, TILE, H - 5 * TILE, 'left', rnd);
+    drawBoundaryWall(ctx, W - TILE, 5 * TILE, TILE, H - 5 * TILE, 'right', rnd);
+    drawBoundaryWall(ctx, 0, H - TILE, W, TILE, 'bottom', rnd);
     drawMountains(ctx, rnd);
     for (const w of WALLS) drawWall(ctx, w, rnd);
     for (const [mx, my] of [[10, 18], [13, 41], [11, 52], [12, 9]]) drawDrain(ctx, mx * TILE + 16, my * TILE + 16);
@@ -608,15 +680,15 @@ const Town = (() => {
     }
   }
 
-  // 지붕: 뒷면(용마루 뒤, 짧고 어두움) + 앞면(기와 줄, 위쪽 밝음) + 처마 + 박공 테두리
+  // 지붕: 좁은 뒷면 띠 + 용마루 캡 + 앞면(용마루→처마 3단 그라데이션, 세로 이음선 16px) + 우측 hip 띠 + 처마. 수평 기와줄 없음
+  const ROOF_BACK = 6;
   function drawRoof(ctx, x, y, w, h, color, opts = {}) {
-    const back = Math.max(10, Math.round(h * 0.2));
+    const back = ROOF_BACK;
     const dark = sh(color, -0.32), mid = sh(color, -0.12), light = sh(color, 0.16), lighter = sh(color, 0.3);
-    // 뒷면
-    R(ctx, x, y, w, back, mid);
-    for (let xx = x + 6; xx < x + w; xx += 12) R(ctx, xx, y + 1, 1, back - 1, dark);
+    // 뒷면(단색, 얇게)
+    R(ctx, x, y, w, back, sh(color, -0.22));
     R(ctx, x, y, w, 1, OL);
-    // 용마루
+    // 용마루 캡
     const ry = y + back;
     R(ctx, x - 2, ry - 1, w + 4, 1, OL); R(ctx, x - 2, ry, w + 4, 2, lighter); R(ctx, x - 2, ry + 2, w + 4, 1, dark);
     R(ctx, x - 3, ry - 2, 3, 5, OL); R(ctx, x + w, ry - 2, 3, 5, OL); R(ctx, x - 2, ry - 1, 1, 3, lighter); R(ctx, x + w + 1, ry - 1, 1, 3, mid);
@@ -625,25 +697,23 @@ const Town = (() => {
     const b1 = fy + Math.floor(fh * 0.35), b2 = fy + Math.floor(fh * 0.72);
     R(ctx, x, fy, w, b1 - fy, light); R(ctx, x, b1, w, b2 - b1, color); R(ctx, x, b2, w, y + h - 3 - b2, mid);
     dither(ctx, x, b1 - 3, w, 3, color, 0); dither(ctx, x, b2 - 3, w, 3, mid, 1);
-    // 기와 줄(6px): 줄 아래 1px 어둠 + 그 위 1px 반톤, 줄 바로 아래 1px 밝음. 세로 이음은 24px 간격으로 줄마다 엇갈림
+    R(ctx, x, fy, w, 2, sh(color, 0.3)); // 용마루 바로 아래 하이라이트
+    // 세로 이음선(standing seam): 16px 간격, 어두운 1px + 오른쪽 밝은 1px
     const rnd = Pixel.rng(x * 13 + w * 7 + h);
-    let r = 0;
-    for (let yy = fy + 5; yy < y + h - 4; yy += 6, r++) {
-      const tone = yy < b1 ? light : (yy < b2 ? color : mid);
-      R(ctx, x, yy - 1, w, 1, sh(tone, -0.08));
-      R(ctx, x, yy, w, 1, dark);
-      R(ctx, x, yy + 1, w, 1, sh(tone, 0.1));
-      const off = (r % 2) ? 12 : 0;
-      for (let xx = x + 4 + off; xx < x + w - 2; xx += 24) { R(ctx, xx, yy - 5, 1, 4, sh(tone, -0.14)); px(ctx, xx + 1, yy - 5, sh(tone, 0.08)); }
+    for (let xx = x + 8; xx < x + w - 10; xx += 16) {
+      for (let yy = fy; yy < y + h - 3; yy++) { const tone = yy < b1 ? light : (yy < b2 ? color : mid); px(ctx, xx, yy, sh(tone, -0.2)); px(ctx, xx + 1, yy, sh(tone, 0.12)); }
     }
-    // 마모 점(2px, 약 220px² 당 1개)
-    for (let i = 0; i < (w * fh) / 220; i++) { const wx = x + 3 + Math.floor(rnd() * (w - 8)), wy = fy + 2 + Math.floor(rnd() * (fh - 6)); R(ctx, wx, wy, 2, 1, sh(color, 0.24)); }
+    // 마모 점(2px)
+    for (let i = 0; i < (w * fh) / 260; i++) { const wx = x + 3 + Math.floor(rnd() * (w - 14)), wy = fy + 3 + Math.floor(rnd() * (fh - 6)); R(ctx, wx, wy, 2, 1, sh(color, 0.24)); }
+    // 우측 hip 띠(옆벽 SIDE 띠와 맞춤)
+    R(ctx, x + w - 10, fy, 8, y + h - 3 - fy, sh(color, -0.3)); R(ctx, x + w - 11, fy, 1, y + h - 3 - fy, dark);
+    for (let yy = fy + 4; yy < y + h - 4; yy += 8) px(ctx, x + w - 7, yy, sh(color, -0.42));
     // 처마(하단): 그늘 띠 + 판자 + 외곽선
     R(ctx, x, y + h - 3, w, 1, dark); R(ctx, x, y + h - 2, w, 1, C.woodLo); R(ctx, x, y + h - 1, w, 1, OL);
     // 박공 테두리(좌/우)
     R(ctx, x, y, 2, h, OL); R(ctx, x + w - 2, y, 2, h, OL);
-    R(ctx, x + 2, ry + 3, 1, h - back - 4, light); R(ctx, x + w - 3, ry + 3, 1, h - back - 4, dark);
-    // 지붕창(박공형): 외곽선 삼각 → 어두운 삼각 → 기본 삼각, 좌측 사면 밝은 선, 회벽 + 창문
+    R(ctx, x + 2, ry + 3, 1, h - back - 4, light);
+    // 지붕창(박공형)
     for (const f of (opts.dormers || [])) {
       const dw = 30, dh = 28, dx = x + Math.round(w * f) - 15, dy = ry + 6;
       tri(ctx, dx + 15, dy - 2, 11, 19, OL);
@@ -655,7 +725,7 @@ const Town = (() => {
       R(ctx, dx + 4, dy + 9, dw - 8, 2, 'rgba(0,0,0,0.2)');
       R(ctx, dx + dw - 6, dy + 9, 2, dh - 10, sh('#f1e5cb', -0.25));
       drawWindow(ctx, dx + 9, dy + 13, 12, 12, { flowers: false });
-      R(ctx, dx + 2, dy + dh - 2, dw - 4, 1, dark); // 지붕창 아래 그림자
+      R(ctx, dx + 2, dy + dh - 2, dw - 4, 1, dark);
     }
   }
 
@@ -697,7 +767,7 @@ const Town = (() => {
     for (let i = 0; i < (fw * h) / 90; i++) px(ctx, x + Math.floor(rnd() * fw), y + Math.floor(rnd() * h), sh(wallColor, rnd() < 0.5 ? -0.05 : 0.05));
     const baseH = 10;
     if (stone) {
-      drawCobble(ctx, x, y, fw, h, rnd, 18, 8, [wallColor, sh(wallColor, -0.06), sh(wallColor, 0.04)], sh(wallColor, 0.12), sh(wallColor, -0.22), sh(wallColor, -0.32));
+      drawBlocks(ctx, x, y, fw, h, rnd, 18, 8, [wallColor, sh(wallColor, -0.06), sh(wallColor, 0.04)], sh(wallColor, 0.12), sh(wallColor, -0.22), sh(wallColor, -0.32));
       // 모서리 돌(퀴인)
       for (let yy = y; yy < y + h; yy += 8) { const big = ((yy - y) / 8) % 2 === 0; R(ctx, x, yy, big ? 10 : 7, 7, sh(wallColor, -0.1)); R(ctx, x, yy, big ? 10 : 7, 1, sh(wallColor, 0.1)); }
       // 처마 아래 코니스
@@ -721,10 +791,10 @@ const Town = (() => {
       }
     }
     // 하단 석재 기초
-    drawCobble(ctx, x, y + h - baseH, fw, baseH, rnd, 14, 5, ['#b8b2a6', '#aba496', '#c2bcb0'], '#d3cec4', '#8f8879', '#6f6a5f');
+    drawBlocks(ctx, x, y + h - baseH, fw, baseH, rnd, 14, 5, ['#b8b2a6', '#aba496', '#c2bcb0'], '#d3cec4', '#8f8879', '#6f6a5f');
     R(ctx, x, y + h - baseH, fw, 1, OL);
     // 처마 그림자
-    R(ctx, x, y, fw, 6, 'rgba(40,25,20,0.20)'); R(ctx, x, y + 6, fw, 2, 'rgba(40,25,20,0.08)');
+    R(ctx, x, y, fw, 1, OL); R(ctx, x, y + 1, fw, 8, 'rgba(40,25,20,0.28)'); R(ctx, x, y + 9, fw, 2, 'rgba(40,25,20,0.10)');
     // 우측 옆벽 띠(어두운 톤)
     if (side > 0) {
       const sc = sh(wallColor, -0.3);
@@ -794,7 +864,7 @@ const Town = (() => {
     const dormers = b.gable ? (b.w >= 7 ? [0.16, 0.84] : []) : (b.w >= 7 ? [0.28, 0.72] : (twoStory ? [0.5] : []));
     drawRoof(ctx, rx, rtop, rw, rh, b.roof, { dormers });
     if (b.gable) {
-      const back = Math.max(10, Math.round(rh * 0.2)), ry = rtop + back, eave = rtop + rh - 3;
+      const back = ROOF_BACK, ry = rtop + back, eave = rtop + rh - 3;
       drawFrontGable(ctx, rx + Math.floor(rw / 2), ry, Math.floor(fw * 0.3), eave - ry, b.roof, b.wall);
     }
     if (b.chimney) drawChimney(ctx, ox + w - 44, oy - 2, 14, 26);
@@ -887,7 +957,7 @@ const Town = (() => {
     };
     // 지붕 중앙 금테 정면 박공(폭 48, 높이 28) 안에 장미창
     const rcx = ox + Math.floor(w / 2);
-    { const gTop = oy - 6 + Math.max(10, Math.round((roofH + 6) * 0.2)) + 4, gh = 28, hb = 24;
+    { const gTop = oy - 6 + ROOF_BACK + 4, gh = 28, hb = 24;
       for (let r = 0; r < gh; r++) { const hw = Math.round((r / gh) * hb); R(ctx, rcx - hw - 1, gTop + r, hw * 2 + 3, 1, OL); }
       for (let r = 2; r < gh; r++) { const hw = Math.round((r / gh) * hb) - 2; if (hw >= 0) R(ctx, rcx - hw, gTop + r, hw * 2 + 1, 1, '#d9b24a'); }
       for (let r = 4; r < gh - 1; r++) { const hw = Math.round((r / gh) * hb) - 4; if (hw >= 0) R(ctx, rcx - hw, gTop + r, hw * 2 + 1, 1, marble); }
@@ -895,7 +965,7 @@ const Town = (() => {
       rose(rcx, gTop + 18, 7);
     }
     // 종탑(용마루 위)
-    const back = Math.max(10, Math.round((roofH + 6) * 0.2));
+    const back = ROOF_BACK;
     const ry = oy - 6 + back, tw = 40, th = 46, tx = rcx - tw / 2, ty = ry - th + 2;
     R(ctx, tx - 1, ty - 1, tw + 2, th + 2, OL);
     R(ctx, tx, ty, tw, th, marble); R(ctx, tx + tw - 8, ty, 8, th, sh(marble, -0.3)); R(ctx, tx, ty, 2, th, mHi);
@@ -907,7 +977,7 @@ const Town = (() => {
     R(ctx, bcx - 5, ty + 12, 10, 8, '#e0b43c'); R(ctx, bcx - 6, ty + 19, 12, 3, '#c9992e'); R(ctx, bcx - 2, ty + 9, 4, 3, '#e0b43c'); px(ctx, bcx - 4, ty + 13, '#fff1b0'); R(ctx, bcx - 1, ty + 22, 2, 2, '#f0c64a');
     // 종탑 지붕(사각뿔) + 장식
     tri(ctx, tx + tw / 2, ty - 24, 24, tw / 2 + 4, OL);
-    tri(ctx, tx + tw / 2, ty - 23, 22, tw / 2 + 2, sh(b.roof, -0.2));
+    tri(ctx, tx + tw / 2, ty - 23, 22, tw / 2 + 2, '#a3844c');
     for (let k = 0; k < 22; k++) { const hw = Math.round(((tw / 2 + 2) * (k + 1)) / 22); R(ctx, tx + tw / 2 - hw, ty - 23 + k, hw, 1, k % 3 === 2 ? sh(b.roof, -0.1) : sh(b.roof, 0.12)); }
     R(ctx, tx + tw / 2 - 1, ty - 34, 2, 11, '#f0c64a'); R(ctx, tx + tw / 2 - 4, ty - 31, 8, 2, '#f0c64a'); px(ctx, tx + tw / 2 - 1, ty - 35, '#fff1b0');
     // 문(큰 아치 쌍문) + 계단
@@ -926,7 +996,7 @@ const Town = (() => {
   // 돌 탑(원기둥): x = 좌측, y = 상단, w, h. 원뿔 지붕은 위로 뻗음
   function drawRoundTower(ctx, x, y, w, h, rnd) {
     const pal = [C.stone, sh(C.stone, -0.07), sh(C.stone, 0.06)];
-    drawCobble(ctx, x, y, w, h, rnd, 20, 10, pal, C.stoneHi, C.stoneLo, C.stoneOl);
+    drawBlocks(ctx, x, y, w, h, rnd, 20, 10, pal, C.stoneHi, C.stoneLo, C.stoneOl);
     // 원기둥 명암: 좌 밝은 띠, 우 어두운 띠
     R(ctx, x, y, 6, h, 'rgba(255,255,255,0.18)'); R(ctx, x + w - 12, y, 12, h, 'rgba(0,0,0,0.14)'); R(ctx, x + w - 5, y, 5, h, 'rgba(0,0,0,0.12)');
     Pixel.outline(ctx, x - 1, y - 1, w + 2, h + 2, C.stoneOl);
@@ -934,11 +1004,12 @@ const Town = (() => {
     for (let pxx = x + 1; pxx < x + w - 6; pxx += 16) { R(ctx, pxx - 1, y - 11, 12, 12, C.stoneOl); R(ctx, pxx, y - 10, 10, 10, C.stone); R(ctx, pxx, y - 10, 10, 2, C.stoneHi); R(ctx, pxx + 8, y - 8, 2, 8, C.stoneLo); }
     R(ctx, x - 1, y - 2, w + 2, 3, C.stoneOl); R(ctx, x, y - 1, w, 1, C.stoneHi);
     // 원뿔 지붕
-    const cx = x + Math.floor(w / 2), top = y - 12 - 46;
-    tri(ctx, cx, top - 1, 48, Math.floor(w / 2) + 6, OL);
-    tri(ctx, cx, top, 46, Math.floor(w / 2) + 4, '#4b6a95');
-    for (let k = 0; k < 46; k++) { const hw = Math.round(((Math.floor(w / 2) + 4) * (k + 1)) / 46); R(ctx, cx - hw + 1, top + k, Math.max(1, Math.floor(hw * 0.55)), 1, k % 4 === 3 ? '#4b6a95' : '#6485b0'); R(ctx, cx + Math.floor(hw * 0.45), top + k, Math.max(1, hw - Math.floor(hw * 0.45)), 1, k % 4 === 3 ? '#2f4a6e' : '#3b5680'); }
-    for (let yy = top + 8; yy < top + 46; yy += 8) { const hw = Math.round(((Math.floor(w / 2) + 4) * (yy - top + 1)) / 46); R(ctx, cx - hw, yy, hw * 2 + 1, 1, '#2f4a6e'); }
+    const CH = 30, cx = x + Math.floor(w / 2), top = y - 12 - CH;
+    const cone = '#6f7f98', coneHi = '#8d9bb2', coneLo = '#4f5e78', coneOl = '#3a475c';
+    tri(ctx, cx, top - 1, CH + 2, Math.floor(w / 2) + 6, OL);
+    tri(ctx, cx, top, CH, Math.floor(w / 2) + 4, cone);
+    for (let k = 0; k < CH; k++) { const hw = Math.round(((Math.floor(w / 2) + 4) * (k + 1)) / CH); R(ctx, cx - hw + 1, top + k, Math.max(1, Math.floor(hw * 0.55)), 1, k % 4 === 3 ? cone : coneHi); R(ctx, cx + Math.floor(hw * 0.45), top + k, Math.max(1, hw - Math.floor(hw * 0.45)), 1, k % 4 === 3 ? coneOl : coneLo); }
+    for (let yy = top + 8; yy < top + CH; yy += 8) { const hw = Math.round(((Math.floor(w / 2) + 4) * (yy - top + 1)) / CH); R(ctx, cx - hw, yy, hw * 2 + 1, 1, coneOl); }
     R(ctx, cx - 1, top - 8, 2, 8, '#f0c64a'); R(ctx, cx - 3, top - 6, 6, 1, '#f0c64a'); px(ctx, cx - 1, top - 9, '#fff1b0');
     // 화살창 + 아치창
     R(ctx, cx - 2, y + 14, 4, 14, C.stoneOl); R(ctx, cx - 1, y + 15, 2, 12, '#2b2a38');
@@ -947,7 +1018,7 @@ const Town = (() => {
 
   function renderGate(b) {
     const w = b.w * TILE, h = b.h * TILE;
-    const TOP = 76;
+    const TOP = 32;
     const c = Pixel.make(w + 16, h + TOP + 4);
     const ctx = c.getContext('2d');
     const ox = 8, oy = TOP;
@@ -959,7 +1030,7 @@ const Town = (() => {
     for (let pxx = mx + 4; pxx < mx + mw - 10; pxx += 20) { R(ctx, pxx - 1, my - 13, 14, 14, C.stoneOl); R(ctx, pxx, my - 12, 12, 12, C.stone); R(ctx, pxx, my - 12, 12, 2, C.stoneHi); R(ctx, pxx + 10, my - 10, 2, 10, C.stoneLo); }
     R(ctx, mx, my, mw, 18, C.stoneHi); for (let xx = mx; xx < mx + mw; xx += 16) R(ctx, xx, my + 1, 1, 16, sh(C.stoneHi, -0.12)); R(ctx, mx, my + 8, mw, 1, sh(C.stoneHi, -0.12));
     R(ctx, mx, my, mw, 1, C.stoneOl); R(ctx, mx, my + 17, mw, 1, C.stoneOl);
-    drawCobble(ctx, mx, my + 18, mw, h - 30 - 18, rnd, 20, 10, pal, C.stoneHi, C.stoneLo, C.stoneOl);
+    drawBlocks(ctx, mx, my + 18, mw, h - 30 - 18, rnd, 20, 10, pal, C.stoneHi, C.stoneLo, C.stoneOl);
     R(ctx, mx, my + 18, mw, 3, 'rgba(0,0,0,0.18)');
     R(ctx, mx, oy + 58, mw, 2, sh(C.stone, -0.2)); R(ctx, mx, oy + 57, mw, 1, C.stoneHi); // 탑 창문 높이의 돌림띠
     Pixel.outline(ctx, mx - 1, my - 1, mw + 2, h - 30 + 2, C.stoneOl);
@@ -991,8 +1062,9 @@ const Town = (() => {
     glyph(ctx, ['...gg...', '..gggg..', '..g..g..', '.gggggg.', '.g.gg.g.', '.gggggg.', 'gggggggg', 'g.g..g.g'], { g: '#f0c64a' }, cx - 4, by + 10);
     R(ctx, bx + 6, by + 24, 24, 1, '#f0c64a'); R(ctx, bx + 10, by + 28, 16, 1, '#f0c64a');
     // 양쪽 둥근 탑(앞)
-    drawRoundTower(ctx, ox - 4, oy - 8, 80, h + 8, rnd);
-    drawRoundTower(ctx, ox + w - 76, oy - 8, 80, h + 8, rnd);
+    // 탑 몸통은 성벽 윗선과 비슷한 높이에서 시작(원뿔 꼭지가 월드 y>=4 안에 들어오게)
+    drawRoundTower(ctx, ox - 4, oy + 24, 80, h - 24, rnd);
+    drawRoundTower(ctx, ox + w - 76, oy + 24, 80, h - 24, rnd);
     return { canvas: c, ox, oy, labelY: ay - 8 };
   }
 
@@ -1001,41 +1073,38 @@ const Town = (() => {
 
   function renderTree(size) {
     const big = size === 'big';
-    const w = big ? 68 : 48, h = big ? 82 : 58;
+    const w = big ? 68 : 48, h = big ? 86 : 62;
     const c = Pixel.make(w, h);
     const ctx = c.getContext('2d');
     const cx = Math.floor(w / 2);
-    Pixel.ellipse(ctx, cx + 1, h - 3, big ? 12 : 8, big ? 4 : 3, 'rgba(40,25,20,0.25)');
-    // 줄기 (뿌리 벌어짐)
-    const tw = big ? 10 : 7, th = big ? 24 : 16, ty = h - 2 - th;
+    Pixel.ellipse(ctx, cx + 1, h - 3, (big ? 12 : 8) + 4, big ? 4 : 3, 'rgba(40,25,20,0.22)');
+    // 밑동 돌 테두리(타원) + 줄기(3톤 + 껍질 눈금)
+    const tw = big ? 10 : 7, th = big ? 26 : 18, ty = h - 4 - th;
+    Pixel.ellipse(ctx, cx, h - 4, Math.floor(tw / 2) + 8, 4, OL); Pixel.ellipse(ctx, cx, h - 4, Math.floor(tw / 2) + 7, 3, C.curb); Pixel.ellipse(ctx, cx, h - 5, Math.floor(tw / 2) + 5, 2, C.curbHi);
     R(ctx, cx - Math.floor(tw / 2) - 1, ty, tw + 2, th + 1, OL);
     R(ctx, cx - Math.floor(tw / 2), ty, tw, th, C.wood); R(ctx, cx - Math.floor(tw / 2), ty, 2, th, C.woodHi); R(ctx, cx + Math.floor(tw / 2) - 3, ty, 3, th, C.woodLo);
-    for (let k = 0; k < 4; k++) { R(ctx, cx - Math.floor(tw / 2) - 1 - k, h - 3 - k, 1, k + 1, OL); R(ctx, cx + Math.floor(tw / 2) + k, h - 3 - k, 1, k + 1, OL); R(ctx, cx - Math.floor(tw / 2) - k, h - 3 - k, 1, k + 1, C.woodHi); R(ctx, cx + Math.floor(tw / 2) - 1 + k, h - 3 - k, 1, k + 1, C.woodLo); }
-    px(ctx, cx + 1, ty + 6, C.woodLo); px(ctx, cx + 1, ty + 7, C.woodLo);
-    // 수관: 덩어리 6개(외곽선 → 어두운 → 중간 → 밝은 → 하이라이트). 좌우 작은 덩어리로 외곽에 굴곡을 만든다
+    for (let k = 0; k < 3; k++) { R(ctx, cx - Math.floor(tw / 2) - 1 - k, h - 5 - k, 1, k + 1, OL); R(ctx, cx + Math.floor(tw / 2) + k, h - 5 - k, 1, k + 1, OL); R(ctx, cx - Math.floor(tw / 2) - k, h - 5 - k, 1, k + 1, C.woodHi); R(ctx, cx + Math.floor(tw / 2) - 1 + k, h - 5 - k, 1, k + 1, C.woodLo); }
+    R(ctx, cx, ty + 5, 2, 1, C.woodLo); R(ctx, cx - 1, ty + Math.floor(th * 0.55), 2, 1, C.woodLo);
+    // 수관: 덩어리 6개(외곽선 → 어두운 → 중간 → 밝은 → 하이라이트). 외곽선은 4px 마다 1px 안쪽으로 들여 깃털 모양
     const s = big ? 1 : 0.68;
     const blobs = [[0, -27, 19], [-15, -16, 14], [15, -16, 14], [0, -12, 16], [-19, -5, 10], [19, -5, 10]].map(([bx, by, r]) => [cx + Math.round(bx * s), Math.round(ty + 2 + by * s), Math.max(5, Math.round(r * s))]);
-    const G = { ol: '#3f6b4a', lo: '#5b9668', mid: '#82c08c', hi: '#a9dcae', top: '#d3f0cf', rim: '#e4f7df' };
-    for (const [bx, by, r] of blobs) Pixel.circle(ctx, bx, by, r + 1, G.ol);
-    for (const [bx, by, r] of blobs) Pixel.circle(ctx, bx, by, r, G.lo);
-    for (const [bx, by, r] of blobs) Pixel.circle(ctx, bx - 2, by - 2, r - 3, G.mid);
-    for (const [bx, by, r] of blobs) Pixel.circle(ctx, bx - 4, by - 4, Math.max(2, r - 7), G.hi);
-    for (const [bx, by, r] of blobs) Pixel.circle(ctx, bx - 5, by - 6, Math.max(1, r - 11), G.top);
-    // 맨 위 덩어리 좌상단 1px 림 하이라이트
-    { const [bx, by, r] = blobs[0]; for (let a = Math.PI * 1.02; a < Math.PI * 1.55; a += 0.08) px(ctx, bx + Math.round(Math.cos(a) * (r - 1)), by + Math.round(Math.sin(a) * (r - 1)), G.rim); }
-    // 우측/하단 외곽선을 따라 6px 간격 2px 어두운 잎 뭉치(깃털 같은 가장자리)
-    for (const [bx, by, r] of blobs) { const circ = Math.PI * 2 * r; for (let a = -0.35 * Math.PI; a < 0.85 * Math.PI; a += 6 / circ * Math.PI * 2) { R(ctx, bx + Math.round(Math.cos(a) * (r - 2)) - 1, by + Math.round(Math.sin(a) * (r - 2)) - 1, 2, 2, G.ol); } }
-    // 잎 질감: 어두운 'v' 와 밝은 점
-    const rnd = Pixel.rng(big ? 5 : 9);
-    for (let i = 0; i < (big ? 26 : 12); i++) {
-      const [bx, by, r] = blobs[Math.floor(rnd() * 4)];
-      const a = rnd() * Math.PI * 2, d = rnd() * (r - 4);
-      const lx = bx + Math.round(Math.cos(a) * d), ly = by + Math.round(Math.sin(a) * d);
-      const col = (lx < bx && ly < by) ? G.top : (rnd() < 0.5 ? G.lo : G.mid);
-      px(ctx, lx, ly, col); px(ctx, lx + 2, ly, col); px(ctx, lx + 1, ly + 1, col);
+    const G = { ol: '#3f6b4a', lo: '#6f9f78', mid: '#9fcf9e', hi: '#c3e4bd', top: '#e0f3d9', rim: '#eefae8' };
+    for (const [bx, by, r] of blobs) { Pixel.circle(ctx, bx, by, r + 1, G.ol); for (let a = 0; a < Math.PI * 2; a += 0.05) { if ((Math.round((a * r) / 4) % 2) === 0) px(ctx, bx + Math.round(Math.cos(a) * (r + 1)), by + Math.round(Math.sin(a) * (r + 1)), 'rgba(0,0,0,0)'); } }
+    // 깃털 외곽: 반지름 r+1 외곽선을 4px 마다 지운다(투명)
+    for (const [bx, by, r] of blobs) for (let a = 0; a < Math.PI * 2; a += 1 / (r + 1)) { const step = Math.floor((a * (r + 1)) / 4); if (step % 2 === 1) ctx.clearRect(bx + Math.round(Math.cos(a) * (r + 1)), by + Math.round(Math.sin(a) * (r + 1)), 1, 1); }
+    for (const [bx, by, r] of blobs) Pixel.circle(ctx, bx, by, r, G.ol);
+    for (const [bx, by, r] of blobs) Pixel.circle(ctx, bx, by, r - 1, G.lo);
+    for (const [bx, by, r] of blobs) Pixel.circle(ctx, bx - 2, by - 2, r - 4, G.mid);
+    for (const [bx, by, r] of blobs) Pixel.circle(ctx, bx - 4, by - 4, Math.max(2, r - 8), G.hi);
+    for (const [bx, by, r] of blobs) Pixel.circle(ctx, bx - 5, by - 6, Math.max(1, r - 12), G.top);
+    { const [bx, by, r] = blobs[0]; for (let a = Math.PI * 1.02; a < Math.PI * 1.55; a += 0.08) px(ctx, bx + Math.round(Math.cos(a) * (r - 2)), by + Math.round(Math.sin(a) * (r - 2)), G.rim); }
+    // 잎: 덩어리마다 우하단 1/4 에 정렬된 3px V 3개(어두움), 좌상단에 밝은 점 2개
+    for (const [bx, by, r] of blobs) {
+      for (let k = 0; k < 3; k++) { const lx = bx + Math.round(r * 0.15) + k * 4 - 2, ly = by + Math.round(r * 0.3) + (k % 2) * 3; if (lx + 2 < bx + r - 2) { px(ctx, lx, ly, G.lo); px(ctx, lx + 2, ly, G.lo); px(ctx, lx + 1, ly + 1, G.lo); } }
+      px(ctx, bx - Math.round(r * 0.45), by - Math.round(r * 0.35), G.top); px(ctx, bx - Math.round(r * 0.2), by - Math.round(r * 0.55), G.top);
     }
-    // 수관 밑면 4px 어둠
-    for (const [bx, by, r] of blobs) for (let k = 0; k < 4; k++) { const yy = by + r - 1 - k; const dx = Math.floor(Math.sqrt(Math.max(0, r * r - (yy - by) * (yy - by)))); if (dx > k + 1) R(ctx, bx - dx + 1 + k, yy, dx * 2 - 1 - k * 2, 1, G.lo); }
+    // 수관 밑면 3px 어둠
+    for (const [bx, by, r] of blobs) for (let k = 0; k < 3; k++) { const yy = by + r - 2 - k; const dx = Math.floor(Math.sqrt(Math.max(0, (r - 1) * (r - 1) - (yy - by) * (yy - by)))); if (dx > k + 1) R(ctx, bx - dx + 1 + k, yy, dx * 2 - 1 - k * 2, 1, G.lo); }
     return { canvas: c, ox: cx, oy: h - 2 };
   }
 
@@ -1138,33 +1207,47 @@ const Town = (() => {
     return { canvas: c, ox: cx, oy: 82 };
   }
 
+  // 좌판: 뒤(차양+뒷천+기둥 윗부분)와 앞(바구니+카운터)을 두 캔버스로 나눠 상인이 그 사이에 서게 한다.
+  // 캔버스 104×100, 발 기준 oy 96. 차양 y2~34(스캘럽 30~34), 뒷천 34~59, 기둥 14~70, 바구니 62, 카운터 66~95
   function renderStall(color) {
-    const c = Pixel.make(104, 84);
-    const ctx = c.getContext('2d');
-    shadowEllipse(ctx, 52, 81, 48, 5);
-    // 기둥
-    for (const pxx of [4, 94]) { R(ctx, pxx - 1, 14, 7, 54, OL); R(ctx, pxx, 14, 5, 54, C.wood); R(ctx, pxx, 14, 1, 54, C.woodHi); R(ctx, pxx + 4, 14, 1, 54, C.woodLo); }
-    // 좌판(상자)
-    R(ctx, 1, 50, 102, 30, OL);
-    R(ctx, 2, 51, 100, 28, C.wood); R(ctx, 2, 51, 100, 7, C.woodHi); R(ctx, 2, 58, 100, 1, OL);
-    for (let xx = 8; xx < 100; xx += 10) R(ctx, xx, 60, 1, 18, C.woodLo); R(ctx, 2, 70, 100, 1, C.woodLo); R(ctx, 96, 59, 6, 20, sh(C.wood, -0.2));
+    const back = Pixel.make(104, 100), front = Pixel.make(104, 100);
+    const b = back.getContext('2d'), f = front.getContext('2d');
+    shadowEllipse(f, 52, 97, 48, 4);
+    // --- 뒤: 뒷천(어두운 색천 + 10px 세로 줄) ---
+    R(b, 1, 34, 102, 26, sh(color, -0.55)); for (let xx = 10; xx < 102; xx += 10) R(b, xx, 34, 1, 26, sh(color, -0.65)); R(b, 1, 34, 102, 1, sh(color, -0.7));
+    // 기둥(뒤쪽 캔버스에 전체 높이)
+    for (const pxx of [4, 94]) { R(b, pxx - 1, 14, 7, 56, OL); R(b, pxx, 14, 5, 56, C.wood); R(b, pxx, 14, 1, 56, C.woodHi); R(b, pxx + 4, 14, 1, 56, C.woodLo); }
+    // 차양(뒤 띠 + 앞면 줄무늬 + 스캘럽)
+    R(b, 0, 2, 104, 8, OL); R(b, 1, 3, 102, 6, sh(color, -0.35));
+    R(b, 0, 9, 104, 22, OL);
+    for (let xx = 0; xx < 102; xx += 10) { const c2 = (xx / 10) % 2 ? '#f6f0e4' : color; R(b, 1 + xx, 10, Math.min(10, 102 - xx), 20, c2); R(b, 1 + xx, 26, Math.min(10, 102 - xx), 4, sh(c2, -0.12)); }
+    R(b, 1, 10, 102, 1, 'rgba(255,255,255,0.5)');
+    for (let xx = 0; xx < 102; xx += 10) { const c2 = (xx / 10) % 2 ? '#f6f0e4' : color; R(b, 2 + xx, 31, 8, 1, OL); R(b, 3 + xx, 32, 6, 1, OL); R(b, 4 + xx, 33, 4, 1, OL); R(b, 2 + xx, 30, 8, 1, sh(c2, -0.12)); R(b, 3 + xx, 31, 6, 1, sh(c2, -0.12)); R(b, 4 + xx, 32, 4, 1, sh(c2, -0.12)); }
+    R(b, 1, 34, 102, 2, 'rgba(0,0,0,0.18)');
+    // --- 앞: 카운터(상자) ---
+    R(f, 1, 66, 102, 30, OL);
+    R(f, 2, 67, 100, 28, C.wood); R(f, 2, 67, 100, 7, C.woodHi); R(f, 2, 74, 100, 1, OL);
+    for (let xx = 8; xx < 100; xx += 10) R(f, xx, 76, 1, 18, C.woodLo); R(f, 2, 86, 100, 1, C.woodLo); R(f, 96, 75, 6, 20, sh(C.wood, -0.2));
     // 천 덮개(색)
-    R(ctx, 2, 51, 100, 5, color); R(ctx, 2, 51, 100, 1, sh(color, 0.35)); for (let xx = 4; xx < 100; xx += 8) R(ctx, xx, 56, 4, 2, color);
+    R(f, 2, 67, 100, 5, color); R(f, 2, 67, 100, 1, sh(color, 0.35)); for (let xx = 4; xx < 100; xx += 8) R(f, xx, 72, 4, 2, color);
     // 상품: 바구니 3개 + 과일, 빵
     const basket = (bx, by, fruit) => {
-      R(ctx, bx - 1, by - 1, 26, 12, OL); R(ctx, bx, by, 24, 10, '#b07a44'); for (let xx = bx + 2; xx < bx + 24; xx += 4) R(ctx, xx, by + 1, 1, 8, '#8b5a2b'); R(ctx, bx, by, 24, 1, '#d9a56a');
-      for (let k = 0; k < 5; k++) { const fx = bx + 3 + k * 4 + (k % 2) * 1, fy = by - 3 + (k % 2) * 2; Pixel.circle(ctx, fx, fy, 2, OL); Pixel.circle(ctx, fx, fy, 1, fruit); px(ctx, fx - 1, fy - 1, sh(fruit, 0.45)); }
+      R(f, bx - 1, by - 1, 26, 12, OL); R(f, bx, by, 24, 10, '#b07a44'); for (let xx = bx + 2; xx < bx + 24; xx += 4) R(f, xx, by + 1, 1, 8, '#8b5a2b'); R(f, bx, by, 24, 1, '#d9a56a');
+      for (let k = 0; k < 5; k++) { const fx = bx + 3 + k * 4 + (k % 2) * 1, fy = by - 3 + (k % 2) * 2; Pixel.circle(f, fx, fy, 2, OL); Pixel.circle(f, fx, fy, 1, fruit); px(f, fx - 1, fy - 1, sh(fruit, 0.45)); }
     };
-    basket(8, 42, '#e0463f'); basket(40, 42, '#f2c84b'); basket(72, 42, '#6fbf5a');
-    // 빵 (중앙 앞)
-    R(ctx, 46, 36, 12, 6, OL); R(ctx, 47, 37, 10, 4, '#d9a05a'); R(ctx, 47, 37, 10, 1, '#f0c88a'); px(ctx, 50, 38, '#a86d35'); px(ctx, 53, 38, '#a86d35');
-    // 차양(뒤 띠 + 앞면 줄무늬 + 스캘럽)
-    R(ctx, 0, 2, 104, 8, OL); R(ctx, 1, 3, 102, 6, sh(color, -0.35));
-    R(ctx, 0, 9, 104, 18, OL);
-    for (let xx = 0; xx < 102; xx += 10) { const c2 = (xx / 10) % 2 ? '#f6f0e4' : color; R(ctx, 1 + xx, 10, Math.min(10, 102 - xx), 16, c2); R(ctx, 1 + xx, 22, Math.min(10, 102 - xx), 4, sh(c2, -0.12)); }
-    R(ctx, 1, 10, 102, 1, 'rgba(255,255,255,0.5)');
-    for (let xx = 0; xx < 102; xx += 10) { const c2 = (xx / 10) % 2 ? '#f6f0e4' : color; R(ctx, 2 + xx, 27, 8, 1, OL); R(ctx, 3 + xx, 28, 6, 1, OL); R(ctx, 2 + xx, 26, 8, 1, sh(c2, -0.12)); R(ctx, 3 + xx, 27, 6, 1, sh(c2, -0.12)); }
-    return { canvas: c, ox: 52, oy: 80 };
+    basket(8, 60, '#d9534c'); basket(40, 60, '#e6c25a'); basket(72, 60, '#7fb86a');
+    R(f, 46, 54, 12, 6, OL); R(f, 47, 55, 10, 4, '#d9a05a'); R(f, 47, 55, 10, 1, '#f0c88a'); px(f, 50, 56, '#a86d35'); px(f, 53, 56, '#a86d35');
+    return { back: { canvas: back, ox: 52, oy: 96 }, front: { canvas: front, ox: 52, oy: 96 } };
+  }
+
+  // 만국기 기둥(소품): 밑단 기준
+  function renderBuntingPole() {
+    const c = Pixel.make(12, 30);
+    const ctx = c.getContext('2d');
+    shadowEllipse(ctx, 6, 28, 5, 2);
+    R(ctx, 3, 7, 6, 21, OL); R(ctx, 4, 8, 4, 19, C.wood); R(ctx, 4, 8, 1, 19, C.woodHi); R(ctx, 7, 8, 1, 19, C.woodLo);
+    R(ctx, 2, 4, 8, 4, OL); R(ctx, 3, 5, 6, 2, C.woodHi); px(ctx, 5, 3, OL);
+    return { canvas: c, ox: 6, oy: 28 };
   }
 
   function renderSignPost() {
@@ -1294,7 +1377,7 @@ const Town = (() => {
     const c = Pixel.make(W, H);
     const ctx = c.getContext('2d');
     for (const b of BUNTING) {
-      const x0 = Math.round(b.x0 * TILE), x1 = Math.round(b.x1 * TILE), y = Math.round(b.y * TILE);
+      const x0 = Math.round(b.x0 * TILE), x1 = Math.round(b.x1 * TILE), y = Math.round(b.y * TILE) - 22; // 줄은 기둥 머리(밑단 -22px) 높이
       const len = x1 - x0;
       const sagAt = (x) => Math.round(Math.sin(((x - x0) / len) * Math.PI) * 12);
       // 줄(2px: 어두운 선 + 밝은 선)
@@ -1308,8 +1391,6 @@ const Town = (() => {
         for (let r = 0; r < 9; r++) { const hw = 5 - Math.floor((r + 1) / 2); R(ctx, x + 5 - hw, y + s + r, hw * 2 + 1, 1, col); }
         R(ctx, x + 5 - 4, y + s + 1, 2, 3, sh(col, 0.35)); R(ctx, x + 8, y + s + 1, 2, 5, sh(col, -0.25));
       }
-      // 줄 끝 기둥
-      for (const ex of [x0, x1]) { R(ctx, ex - 3, y - 14, 6, 20, OL); R(ctx, ex - 2, y - 13, 4, 18, C.wood); R(ctx, ex - 2, y - 13, 1, 18, C.woodHi); R(ctx, ex - 4, y - 16, 8, 3, OL); R(ctx, ex - 3, y - 15, 6, 1, C.woodHi); }
     }
     return c;
   }
@@ -1342,7 +1423,14 @@ const Town = (() => {
         case 'crate': r = get('crate', renderCrate); break;
         case 'cratestack': r = get('cratestack', renderCrateStack); break;
         case 'well': r = get('well', renderWell); break;
-        case 'stall': r = get('stall_' + p.color, () => renderStall(p.color)); break;
+        case 'stall': {
+          const st = get('stall_' + p.color, () => renderStall(p.color));
+          const sx = Math.round(p.x * TILE), sy = Math.round(p.y * TILE);
+          objects.push({ kind: 'prop', ref: p, canvas: st.back.canvas, x: sx - st.back.ox, y: sy - st.back.oy, sortY: sy - 40 });
+          objects.push({ kind: 'prop', ref: p, canvas: st.front.canvas, x: sx - st.front.ox, y: sy - st.front.oy, sortY: sy });
+          continue;
+        }
+        case 'buntingpole': r = get('buntingpole', renderBuntingPole); break;
         case 'sign': r = get('sign', renderSignPost); break;
         case 'bench': r = get('bench', renderBench); break;
         case 'planter': r = get('planter', renderPlanter); break;
