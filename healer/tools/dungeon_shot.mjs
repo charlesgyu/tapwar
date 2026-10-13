@@ -16,7 +16,7 @@ const ORDER = [
   'js/core/rng.js', 'js/core/events.js', 'js/core/data_classes.js', 'js/core/data_skills.js', 'js/core/data_items.js', 'js/core/data_monsters.js',
   'js/core/data_dialogue.js', 'js/core/data_quests.js', 'js/core/data_story.js', 'js/core/state.js', 'js/core/stats.js', 'js/core/level.js',
   'js/core/inventory.js', 'js/core/economy.js', 'js/core/facilities.js', 'js/core/party.js', 'js/core/recruit.js', 'js/core/quests.js',
-  'js/core/combat/entities.js', 'js/core/combat/combat.js', 'js/core/combat/ai_party.js', 'js/core/combat/ai_healer.js', 'js/core/combat/ai_monster.js', 'js/core/combat/loot.js',
+  'js/core/combat/entities.js', 'js/core/combat/combat.js', 'js/core/combat/ai_party.js', 'js/core/combat/chatter.js', 'js/core/combat/ai_healer.js', 'js/core/combat/ai_monster.js', 'js/core/combat/loot.js',
   'js/core/dungeon/gen.js', 'js/core/dungeon/floor.js',
   'js/sprites_monsters.js', 'js/sprites_monsters_forest.js', 'js/sprites_monsters_cave.js', 'js/tiles_dungeon.js', 'js/tiles_forest.js', 'js/tiles_cave.js', 'js/fx.js',
   'js/ui/ui.js',

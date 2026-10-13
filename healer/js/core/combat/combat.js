@@ -37,6 +37,7 @@ const Combat = (() => {
     get RNG() { return typeof RNG !== 'undefined' ? RNG : null; },
     get State() { return typeof State !== 'undefined' ? State : null; },
     get Classes() { return typeof Classes !== 'undefined' ? Classes : null; },
+    get Chatter() { return typeof Chatter !== 'undefined' ? Chatter : null; },
   };
   const has = (name) => !!Mods[name];
   const emit = (name, payload) => { if (has('Events')) Events.emit(name, payload); };
@@ -64,6 +65,7 @@ const Combat = (() => {
       // deferGold: 씬이 바닥에 떨어진 동전을 주워 담는 경우 true — 처치 골드를 즉시 더하지 않고 'monster_killed'/'loot' 의 gold·x·y 로만 알린다.
       // 씬은 동전을 주울 때 battle.collectGold(amount) 를 부른다. 기본 false(테스트·시뮬은 예전처럼 즉시 적용).
       deferGold: !!opts.deferGold,
+      chatter: opts.chatter !== false, kills: 0, lastKill: null, lead: null,
       beltCooldowns: {}, _tgSeq: 0, _belt: 0, _refresh: 0,
     };
     const party = () => B.entities.filter(isParty);
@@ -251,6 +253,8 @@ const Combat = (() => {
     function onMonsterKilled(ent, killer) {
       const d = ent.def || {};
       for (const m of B.monsters) delete m.threat[ent.uid];
+      // 파티 수다(Chatter)가 연속 처치·중간보스 처치를 읽는다
+      B.kills = (B.kills || 0) + 1; B.lastKill = { uid: ent.uid, killer: killer ? killer.uid : null, tier: d.tier, t: B.time };
       if (G) { G.counters.kills = (G.counters.kills || 0) + 1; if (d.tier === 'boss') G.counters.bossKills = (G.counters.bossKills || 0) + 1; }
       // 드랍을 먼저 굴려 처치 이벤트에 골드·위치를 싣는다(씬이 그 자리에 동전을 뿌린다). deferGold 면 골드는 씬이 collectGold 로 더한다.
       const loot = has('Loot') && Loot.roll && d.id ? Loot.roll(d, B.floor, rng) : null;
@@ -672,6 +676,8 @@ const Combat = (() => {
       updateTelegraphs(dt); updateGroundHeals(dt);
       B._belt += dt; if (B._belt >= BELT_CHECK) { B._belt = 0; beltAuto(); }
       B._refresh += dt; if (B._refresh >= REFRESH_EVERY) { B._refresh = 0; if (alive(B.player)) refresh(B.player); }
+      // 파티 수다: 상태를 훑어 'party_say' 를 낸다(AI 가 꺼져 있거나 battle.chatter === false 면 조용)
+      if (B.aiEnabled && B.chatter !== false && has('Chatter')) Chatter.update(B, dt);
       syncPlayer();
     }
 
