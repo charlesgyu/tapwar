@@ -443,36 +443,41 @@
   // ====================================================================
   // 9. 망령 (32×32, 반투명, 떠 있음)
   // ====================================================================
-  function wraithBody(F, dir, f, atk, o) {
+  // 망령: 큰 두건(어두운 얼굴 구멍 + 빛나는 눈) + 찢어진 로브(디더 밑단) + 뼈 손. 발 없이 떠 있고 바닥엔 그림자만.
+  MonsterSprites.register('wraith', build(32, 32, { x: 16, y: 30 }, (F, dir, f, atk) => {
     const hov = atk >= 0 ? -1 : [0, -1, -2, -1][f];
-    const { cx, hy, scale, robe, hood, hand, eyeCol, crownFn } = o;
-    F.shadow(cx, o.floorY, o.shRx + hov, 2, 'rgba(0,0,0,0.16)');
-    const ry = hy + 7 * scale;
-    // 로브(몸통 + 아래로 갈수록 가늘어짐) → 밑단 디더
-    F.blob(union(ell(cx, ry + hov, 7 * scale, 6 * scale), tri(cx - 7 * scale, ry + hov, cx + 7 * scale, ry + hov, cx, ry + 14 * scale + hov)), robe, { rw: scale > 1 ? 3 : 2 });
-    if (o.robeDeco) o.robeDeco(hov);
-    F.dither(cx - 8 * scale, cx + 8 * scale, ry + 7 * scale + hov, ry + 14 * scale + hov);
-    // 손
-    const hyy = atk >= 0 ? hy + 2 * scale : ry + 1 * scale;
-    const spread = atk >= 0 ? 9 * scale : 7 * scale;
-    if (dir !== 'up') { F.blob(ell(cx - spread, hyy + hov, 2 * scale, 2 * scale), hand, { rw: 1 }); F.blob(ell(cx + spread, hyy + hov, 2 * scale, 2 * scale), hand, { rw: 1 }); F.px(cx - spread - 2 * scale, hyy + hov - 1, hand[1]); F.px(cx + spread + 2 * scale, hyy + hov - 1, hand[1]); }
-    if (atk >= 0) { const bc = atk === 0 ? '#9b5cff' : '#5a2d9b'; for (let i = 0; i < 5; i++) { F.px(cx - 6 * scale + i * 3 * scale, hyy + hov - 3 - (i % 2) * 2, bc); } F.px(cx, hyy + hov - 5 * scale, '#e0c8ff'); }
-    // 두건/머리
-    F.blob(ell(cx, hy + hov, 6 * scale, 6 * scale), hood, { rw: scale > 1 ? 3 : 2 });
+    const cx = 16, hy = 8 + hov, ry = 17 + hov;
+    const robe = T.wraith, hood = ['#1f1a38', '#3b3264', '#6a5e9c'], hand = T.wraithHand;
+    F.shadow(cx, 29, 7 + hov, 2, 'rgba(0,0,0,0.18)');
+    // 로브: 둥근 몸통 + 아래로 좁아지는 자락, 옆에선 뒤로 흘러가는 자락
+    const skirt = dir === 'right' ? tri(cx - 9, ry, cx + 7, ry, cx - 2 + [0, 1, 0, -1][f], ry + 12) : tri(cx - 9, ry, cx + 9, ry, cx, ry + 12);
+    F.blob(union(ell(cx, ry, 9, 6), skirt), robe, { rw: 2 });
+    // 찢어진 자락: 세로 틈 + 체커 디더
+    for (let i = 0; i < 4; i++) F.b.clearRect(cx - 6 + i * 4 + (f & 1), ry + 6 + (i % 2) * 2, 1, 8);
+    F.dither(cx - 10, cx + 10, ry + 7, ry + 13);
+    // 소매+손: 앞으로 내밀거나(공격) 옆으로 늘어뜨림
+    const hyy = atk >= 0 ? hy + 3 : ry + 1, spread = atk >= 0 ? 9 : 10;
+    if (dir !== 'up') for (const sg of [-1, 1]) {
+      if (dir === 'right' && sg < 0) continue;
+      const hx = cx + sg * spread;
+      F.blob(line(cx + sg * 5, ry - 2, hx, hyy - 1, 3), robe, { rw: 1 });
+      F.blob(union(ell(hx, hyy + 1, 2, 2), line(hx, hyy + 1, hx + sg, hyy + 4, 1), line(hx - sg, hyy + 1, hx - sg * 2, hyy + 4, 1)), hand, { rw: 1 });
+    }
+    if (atk >= 0) { const bc = atk === 0 ? '#9b5cff' : '#5a2d9b'; for (let i = 0; i < 5; i++) F.px(cx - 6 + i * 3, hyy - 4 - (i % 2) * 2, bc); F.dot(cx - 1, hyy - 7 + atk * 2, 2, 2, '#e0c8ff'); F.px(cx - 1, hyy - 7 + atk * 2, W); }
+    // 두건: 큰 원 + 뒤로 흐르는 꼬리, 얼굴은 검은 구멍 + 빛나는 눈
+    const tail = dir === 'right' ? tri(cx - 5, hy - 4, cx - 11, hy + 2, cx - 4, hy + 5) : tri(cx - 7, hy - 2, cx + 7, hy - 2, cx, hy + 9);
+    F.blob(union(ell(cx, hy, 7, 7), tail), hood, { rw: 2 });
     if (dir === 'down') {
-      F.flat(ell(cx, hy + 1 + hov, 4 * scale, 3 * scale), '#15101f', '#15101f');
-      glowEye(F, cx - 3 * scale, hy + hov, 2 * scale, 2 * scale, eyeCol[0], eyeCol[1]); glowEye(F, cx + 1 * scale, hy + hov, 2 * scale, 2 * scale, eyeCol[0], eyeCol[1]);
+      F.flat(ell(cx, hy + 1, 5, 4), '#15101f', '#15101f');
+      glowEye(F, cx - 4, hy, 3, 3, '#7ff0ff', W); glowEye(F, cx + 2, hy, 3, 3, '#7ff0ff', W);
+      F.px(cx - 4, hy + 3, '#3fb8d8'); F.px(cx + 4, hy + 3, '#3fb8d8');
     } else if (dir === 'right') {
-      F.flat(ell(cx + 2 * scale, hy + 1 + hov, 3 * scale, 3 * scale), '#15101f', '#15101f');
-      glowEye(F, cx + 2 * scale, hy + hov, 2 * scale, 2 * scale, eyeCol[0], eyeCol[1]);
-    } else { F.dot(cx - 2 * scale, hy - 1 + hov, 4 * scale, 1, hood[0]); }
-    if (crownFn) crownFn(hov);
+      F.flat(ell(cx + 3, hy + 1, 4, 4), '#15101f', '#15101f');
+      glowEye(F, cx + 3, hy, 3, 3, '#7ff0ff', W);
+    } else F.dot(cx - 3, hy - 3, 6, 1, hood[2]);
     // 떠다니는 기운
-    const r = Pixel.rng(f + 11); for (let i = 0; i < 4 * scale; i++) F.px(cx - 10 * scale + Math.floor(r() * 20 * scale), hy + 4 + Math.floor(r() * 16 * scale) + hov, '#9b8ad0');
-  }
-  MonsterSprites.register('wraith', build(32, 32, { x: 16, y: 30 }, (F, dir, f, atk) => wraithBody(F, dir, f, atk, {
-    cx: 16, hy: 8, scale: 1, floorY: 29, shRx: 6, robe: T.wraith, hood: T.wraith, hand: T.wraithHand, eyeCol: ['#7ff0ff', '#ffffff'],
-  }), { alpha: 0.84 }));
+    const r = Pixel.rng(f + 11); for (let i = 0; i < 5; i++) F.px(cx - 11 + Math.floor(r() * 22), hy + 6 + Math.floor(r() * 18), i % 2 ? '#9b8ad0' : '#7ff0ff');
+  }, { alpha: 0.86 }));
 
   // ====================================================================
   // 10. 해골 기사 (48×48)

@@ -14,10 +14,10 @@ const Sprites = (() => {
   // 1 2 3 금속(밝음·중간·어둠), r 깃털·머리띠(빨강) / T t 밀짚(밝음·어둠) / z Z 두건(밝음·어둠) / # 지우기(투명으로)
   const PLAYER_PAL = {
     o: '#3b2a2a',
-    y: '#dcf7c4', h: '#a9e59b', H: '#6fc07a', D: '#3f8a56',
-    s: '#fde4c5', S: '#e6b792', x: '#f2a7a0',
-    k: '#2e2230', f: '#8fe3d6', e: '#5ccfae', E: '#227f6c', W: '#ffffff', m: '#c0674e',
-    g: '#93d25c', G: '#5f9f3c', d: '#3c7030', n: '#dcc45c',
+    y: '#c6eeb0', h: '#a3dc92', H: '#6fbd78', D: '#3f8a56',
+    s: '#f6cfa6', S: '#d9a37a', x: '#f0a69a',
+    k: '#2e2230', f: '#58c9b0', e: '#3fae96', E: '#1f6e60', W: '#ffffff', m: '#c0674e',
+    g: '#86bd5a', G: '#5a8f3e', d: '#39622c', n: '#d6bb5c',
     c: '#b8834d', C: '#8c5c33', K: '#5f3c21',
     b: '#6b4423', B: '#e2bb55',
     u: '#9a6540', U: '#5f3d25',
@@ -41,7 +41,7 @@ const Sprites = (() => {
     '..ohhhhhhhhhhhhhhHHo..', // 6
     '..ohhhhhhhhhhhhhhHHo..', // 7
     '..ohhhHhhHhhHhhHhHHo..', // 8 앞머리 가닥 선
-    '..ohHsDssDssDssDsDHo..', // 9 앞머리 톱니 끝(어두운 톤) + 이마
+    '..ohHsHssDssDssHsHHo..', // 9 이마(톱니는 눈 사이 col 9/12 만 D, 눈 위는 H → 눈썹처럼 안 보이게)
     '..ohHskkksssskkksDHo..', // 10 속눈썹선(3px, 1행)
     '..oHhsWffssssWffsHDo..', // 11 홍채 1행: 흰 하이라이트 + 밝은 청록
     '.ohHhsEeessssEeesHDHo.', // 12 옆머리가 바깥으로 퍼짐(단발), 가닥 선 H
@@ -234,7 +234,7 @@ const Sprites = (() => {
     '..ohhhhhhhhhhhhhhhHo..', // 6
     '..ohhhhhhhhhhhhhhhHo..', // 7
     '..ohhhhhhhhhhHsssssso.', // 8 이마 드러남
-    '..ohHhhhhhHhHssssssso.', // 9 앞머리가 대각선으로 + 뒤통수 가닥
+    '..ohHhhhhhHhHssssssso.', // 9 앞머리가 대각선으로 + 뒤통수 가닥(눈 위 열은 h 유지)
     '..ohHhhHhhHhHskkkssso.', // 10 속눈썹선
     '..ohHhhHhhhhHsWffssso.', // 11 눈
     '..ohHhhHhhhhHsEeesssso', // 12 코 돌기(외곽선 1px 바깥)
@@ -792,16 +792,16 @@ const Sprites = (() => {
 
   // ---------- NPC 팔레트 ----------
   const NPC_PALETTES = {
-    villagerA: { y: '#b98a63', h: '#8a5a36', H: '#64401f', D: '#452a14', e: '#8a5a3a', E: '#4a2e1c', f: '#b07a52', g: '#8fb0e0', G: '#5579b8', d: '#3a5790', n: '#e3dcc4', c: '#e2d3b0', C: '#b9a67f', K: '#8c7a58' },
+    villagerA: { y: '#b98a63', h: '#8a5a36', H: '#64401f', D: '#452a14', e: '#6b4426', E: '#3b2316', f: '#8a5a3a', g: '#8fb0e0', G: '#5579b8', d: '#3a5790', n: '#e3dcc4', c: '#e2d3b0', C: '#b9a67f', K: '#8c7a58' },
     villagerB: { y: '#fbe39c', h: '#f0c25a', H: '#c6962f', D: '#8f6a1c', e: '#5a8ad0', E: '#2f5a9a', f: '#8ab4ea', g: '#f09a92', G: '#c45a52', d: '#8a3a34', n: '#f7e6c0', c: '#f1e5cf', C: '#c8b797', K: '#978666' },
-    villagerC: { y: '#6a5560', h: '#4a3640', H: '#33232c', D: '#1f151b', e: '#8a5a3a', E: '#4a2e1c', f: '#b07a52', g: '#b899e0', G: '#7d5bb2', d: '#553c80', n: '#ece0b8', c: '#e7d4b8', C: '#b59c7a', K: '#86705a' },
+    villagerC: { y: '#6a5560', h: '#4a3640', H: '#33232c', D: '#1f151b', e: '#6b4426', E: '#3b2316', f: '#8a5a3a', g: '#b899e0', G: '#7d5bb2', d: '#553c80', n: '#ece0b8', c: '#e7d4b8', C: '#b59c7a', K: '#86705a' },
     villagerD: { y: '#f5b06a', h: '#e08a40', H: '#b36228', D: '#80411a', e: '#4a9a6a', E: '#246a44', f: '#7cc49a', g: '#9ed29a', G: '#5a9a60', d: '#3b6a40', n: '#e8dcae', c: '#e9dcc4', C: '#b9a984', K: '#8c7c5c', b: '#5a3a1e' },
-    villagerE: { y: '#b9a39a', h: '#8d6e63', H: '#654c43', D: '#46332d', e: '#8a5a3a', E: '#4a2e1c', f: '#b07a52', g: '#f3d27a', G: '#c9962f', d: '#8f6a1e', n: '#f8efcf', c: '#cfdbe6', C: '#98acbd', K: '#6f8495' },
+    villagerE: { y: '#b9a39a', h: '#8d6e63', H: '#654c43', D: '#46332d', e: '#6b4426', E: '#3b2316', f: '#8a5a3a', g: '#f3d27a', G: '#c9962f', d: '#8f6a1e', n: '#f8efcf', c: '#cfdbe6', C: '#98acbd', K: '#6f8495' },
     child: { y: '#f28d6e', h: '#d9553f', H: '#a63b2b', D: '#73261b', e: '#5a8ad0', E: '#2f5a9a', f: '#8ab4ea', g: '#ffffff', G: '#e9e3d2', d: '#bbb29c', n: '#8fd0e8', c: '#93d2ea', C: '#5fa6c4', K: '#3f7a94' },
     knight: { y: '#c3ccd6', h: '#9aa6b5', H: '#6d7886', D: '#4e5661', g: '#7f93c0', G: '#4f6392', d: '#35466c', n: '#d9c56a', c: '#e86a6a', C: '#b84040', K: '#7a2828', u: '#6f6f78', U: '#444450', b: '#3a2e2a', B: '#c8c8c8' },
     priest: { y: '#f3eefb', h: '#c9b6e0', H: '#9d86c2', D: '#6f5a92', e: '#6a9ad8', E: '#3a60a0', f: '#9dc2ee', g: '#ffffff', G: '#ece5d8', d: '#c9bfab', n: '#e2b84a', c: '#e8c46a', C: '#c39a3c', K: '#8e6d25', b: '#c39a3c', B: '#f3dc8a' },
-    smith: { y: '#8d6a55', h: '#5f4030', H: '#452c20', D: '#2d1b13', e: '#8a5a3a', E: '#4a2e1c', f: '#b07a52', g: '#a8744a', G: '#7a4e2c', d: '#553518', n: '#8a6a44', c: '#6a6a6a', C: '#4a4a4a', K: '#303030', a: '#9a9a9a', A: '#5e5e5e', s: '#f0c9a4', S: '#d19d78', r: '#d44a3a' },
-    merchant: { y: '#5a5a5a', h: '#3a3a3a', H: '#262626', D: '#161616', e: '#8a5a3a', E: '#4a2e1c', f: '#b07a52', g: '#f7f0dc', G: '#d7cbae', d: '#ab9f82', n: '#c9b27a', c: '#c9533f', C: '#95392d', K: '#66261e', a: '#fbf4e2', A: '#cfc3a6' },
+    smith: { y: '#8d6a55', h: '#5f4030', H: '#452c20', D: '#2d1b13', e: '#6b4426', E: '#3b2316', f: '#8a5a3a', g: '#a8744a', G: '#7a4e2c', d: '#553518', n: '#8a6a44', c: '#6a6a6a', C: '#4a4a4a', K: '#303030', a: '#9a9a9a', A: '#5e5e5e', s: '#f0c9a4', S: '#d19d78', r: '#d44a3a' },
+    merchant: { y: '#5a5a5a', h: '#3a3a3a', H: '#262626', D: '#161616', e: '#6b4426', E: '#3b2316', f: '#8a5a3a', g: '#f7f0dc', G: '#d7cbae', d: '#ab9f82', n: '#c9b27a', c: '#c9533f', C: '#95392d', K: '#66261e', a: '#fbf4e2', A: '#cfc3a6' },
   };
   const NPC_OPTS = {
     villagerA: { hair: 'short' },

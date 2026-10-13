@@ -1201,9 +1201,9 @@ const Town = (() => {
     for (let k = 0; k < 5; k++) { px(ctx, cx - 5 + k, 45 - k, OL); px(ctx, cx + 5 - k, 45 - k, OL); } R(ctx, cx - 1, 41, 3, 1, OL);
     // 지붕(기와, 사다리꼴)
     for (let k = 0; k < 20; k++) { const hw = 14 + k * 1.3; R(ctx, cx - Math.round(hw) - 1, 6 + k, Math.round(hw) * 2 + 3, 1, OL); }
-    for (let k = 0; k < 18; k++) { const hw = 14 + k * 1.3; const col = k % 4 === 3 ? '#8f3a37' : (k < 6 ? '#d4625c' : '#c24a46'); R(ctx, cx - Math.round(hw), 7 + k, Math.round(hw) * 2 + 1, 1, col); if (k % 4 === 0) for (let xx = cx - Math.round(hw) + ((k / 4) % 2) * 5; xx < cx + hw; xx += 10) px(ctx, xx, 7 + k + 2, '#8f3a37'); }
-    R(ctx, cx - 16, 4, 33, 3, OL); R(ctx, cx - 15, 5, 31, 1, '#e8847e');
-    R(ctx, cx - 39, 25, 78, 2, OL); R(ctx, cx - 38, 24, 76, 1, '#8f3a37');
+    for (let k = 0; k < 18; k++) { const hw = 14 + k * 1.3; const col = k % 4 === 3 ? '#6e4a42' : (k < 6 ? '#b8857a' : '#9c6a5e'); R(ctx, cx - Math.round(hw), 7 + k, Math.round(hw) * 2 + 1, 1, col); if (k % 4 === 0) for (let xx = cx - Math.round(hw) + ((k / 4) % 2) * 5; xx < cx + hw; xx += 10) px(ctx, xx, 7 + k + 2, '#6e4a42'); }
+    R(ctx, cx - 16, 4, 33, 3, OL); R(ctx, cx - 15, 5, 31, 1, '#cfa095');
+    R(ctx, cx - 39, 25, 78, 2, OL); R(ctx, cx - 38, 24, 76, 1, '#6e4a42');
     return { canvas: c, ox: cx, oy: 82 };
   }
 

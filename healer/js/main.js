@@ -39,8 +39,8 @@
     makeActor('knight', 14 * TILE, 8.5 * TILE, { ai: 'stand', name: '성문 경비', lines: LINES.knight }),
     makeActor('priest', 6.3 * TILE, 14.3 * TILE, { ai: 'stand', name: '신관', lines: LINES.priest }), // 신전 문 오른쪽(문 앞 지점을 막지 않게)
     makeActor('smith', 6.5 * TILE, 30 * TILE, { ai: 'stand', name: '대장장이', lines: LINES.smith }),
-    makeActor('merchant', 9.5 * TILE, 45.7 * TILE, { ai: 'stand', name: '상인', lines: LINES.merchant }),
-    makeActor('villagerE', 14.5 * TILE, 45.7 * TILE, { ai: 'stand', name: '상인', lines: LINES.merchant }),
+    makeActor('merchant', 9.5 * TILE, 47.3 * TILE, { ai: 'stand', name: '상인', lines: LINES.merchant }),
+    makeActor('villagerE', 14.5 * TILE, 47.3 * TILE, { ai: 'stand', name: '상인', lines: LINES.merchant }),
     makeActor('villagerA', 12 * TILE, 15 * TILE, { ai: 'wander', home: { x: 12, y: 15, r: 5 }, name: '마을 주민', lines: LINES.villager, speed: 60 }),
     makeActor('villagerB', 14 * TILE, 31 * TILE, { ai: 'wander', home: { x: 12, y: 31, r: 5 }, name: '마을 주민', lines: LINES.villager, speed: 56 }),
     makeActor('villagerC', 10 * TILE, 33 * TILE, { ai: 'wander', home: { x: 12, y: 32, r: 5 }, name: '마을 주민', lines: LINES.villager, speed: 64 }),
@@ -308,7 +308,8 @@
     }
     ctx.drawImage(world.overlay, 0, 0);
     // 구름 그림자
-    for (const c of clouds) Pixel.ellipse(ctx, Math.round(c.x), Math.round(c.y), c.r, Math.round(c.r * 0.55), 'rgba(40,60,90,0.07)');
+    // 구름 모양(타원 3개 합) + 가장자리 2px 체커 디더로 흐리게
+    for (const c of clouds) drawCloudShadow(Math.round(c.x), Math.round(c.y), c.r);
     // 화면 공간 요소
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     drawLabels(cx, cy);
@@ -316,6 +317,22 @@
     drawJoystick();
   }
 
+  function drawCloudShadow(cx, cy, r) {
+    const col = 'rgba(40,60,90,0.05)', edge = 'rgba(40,60,90,0.025)';
+    const parts = [[0, 0, r], [-Math.round(r * 0.5), -Math.round(r * 0.3), Math.round(r * 0.6)], [Math.round(r * 0.35), -Math.round(r * 0.4), Math.round(r * 0.7)]];
+    const inside = (x, y, shrink) => parts.some(([ox, oy, rr]) => { const rx = rr - shrink, ry = Math.round(rr * 0.55) - shrink; if (rx <= 0 || ry <= 0) return false; const dx = (x - cx - ox) / rx, dy = (y - cy - oy) / ry; return dx * dx + dy * dy <= 1; });
+    const R0 = Math.round(r * 1.1), RY = Math.round(r * 0.7);
+    ctx.fillStyle = col;
+    for (let y = cy - RY; y <= cy + RY; y++) {
+      let run = -1;
+      for (let x = cx - R0; x <= cx + R0 + 1; x++) {
+        const inCore = x <= cx + R0 && inside(x, y, 2);
+        if (inCore && run < 0) run = x; else if (!inCore && run >= 0) { ctx.fillRect(run, y, x - run, 1); run = -1; }
+      }
+    }
+    ctx.fillStyle = edge;
+    for (let y = cy - RY; y <= cy + RY; y++) for (let x = cx - R0 + ((y & 1)); x <= cx + R0; x += 2) if (inside(x, y, 0) && !inside(x, y, 2)) ctx.fillRect(x, y, 1, 1);
+  }
   const clouds = [{ x: 120, y: 400, r: 80 }, { x: 600, y: 1000, r: 110 }, { x: 360, y: 1640, r: 96 }];
 
   function toScreen(wx, wy, cx, cy) { return { x: (wx - cx) * zoom, y: (wy - cy) * zoom }; }
