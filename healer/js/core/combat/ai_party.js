@@ -18,9 +18,9 @@ const AIParty = (() => {
   const RETREAT_HP = 0.30, RETURN_HP = 0.60, RETREAT_MAX = 8, RETREAT_CD = 5, RETREAT_SPEED = 1.15;
   const TANK_BACK_HP = 0.25, TANK_OK_HP = 0.45, TANK_BACK_MAX = 2.2, TANK_BACK_CD = 8;
   // 앞장서기(battle.lead): 걷는 속도는 힐러가 따라올 수 있게 힐러 속도의 90%, 힐러가 6타일 넘게 처지면 기다린다.
-  // 무리 9타일 앞에서 멈춰 1.2초(파티가 모이면) ~ 3초(안 모여도) 기다린 뒤 돌진. 같은 무리는 30초 안에 다시 멈추지 않는다.
+  // 무리 9타일 앞에서 멈춰 1.2초(파티가 모이면) ~ 4초(안 모여도) 기다린 뒤 돌진. 같은 무리는 30초 안에 다시 멈추지 않는다.
   const LEAD_PACE = 0.9, LEAD_WAIT_R = 6 * TILE, LEAD_STUCK = 2.5;
-  const PULL_STOP = 9 * TILE, PULL_WAIT = 1.2, PULL_MAX_WAIT = 3, PULL_GIVEUP = 7, PULL_REPEAT = 30;
+  const PULL_STOP = 9 * TILE, PULL_WAIT = 1.2, PULL_MAX_WAIT = 4, PULL_GIVEUP = 7, PULL_REPEAT = 30;
   const GATHER_HEALER = 4.5 * TILE, GATHER_MATE = 4 * TILE;
 
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -279,7 +279,10 @@ const AIParty = (() => {
         return true;
       }
       L.state = 'pull';
-      navTo(ent, battle, tgt.x, tgt.y, dt, CHASE_SPEED);
+      // 돌진은 힐러가 따라올 수 있는 빠르기로(힐러보다 빨리 뛰어들면 힐 사거리 밖에서 싸운다). 힐러가 처지면 잠깐 멈춘다.
+      const p = battle.player;
+      if (alive(p) && dist(ent, p) > LEAD_WAIT_R) { ent.state = 'idle'; return true; }
+      navTo(ent, battle, tgt.x, tgt.y, dt, alive(p) && ent.speed > 0 ? Math.min(CHASE_SPEED, p.speed / ent.speed) : CHASE_SPEED);
       return true;
     }
     if (L.k >= L.pts.length) return false;                     // 쉬는 중(경로 없음)엔 먼저 덤비지 않는다
