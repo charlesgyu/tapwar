@@ -51,7 +51,7 @@ module.exports = {
     const rate = (level) => {
       let acc = 0;
       const c = boot(); c.G.player.level = level;
-      const post = c.Recruit.posts(c.G, T0).find((q) => c.Recruit.healerOpen(q));
+      const post = c.Recruit.posts(c.G, T0).find((q) => c.Recruit.healerOpen(q) && q.floor === 1);
       post.levelRange = [5, 7];
       for (let i = 0; i < 200; i++) {
         c.G.recruit.pending = null;
@@ -110,13 +110,15 @@ module.exports = {
     assert.ok(G.party.length > 0);
     assert.ok(Recruit.leave(G).ok); assert.strictEqual(G.party.length, 0);
     // 거절되면 같은 글엔 다시 못 낸다
-    const post3 = Recruit.posts(G, T0).find((p) => Recruit.healerOpen(p) && p.state === 'open');
+    const post3 = Recruit.posts(G, T0).find((p) => Recruit.healerOpen(p) && p.state === 'open' && p.floor === 1);
     let seed = 1; for (;; seed++) if (RNG.make(seed).next() >= Recruit.fit(G, post3).chance) break;
     Recruit.apply(G, post3.id, T0, RNG.make(seed));
     const r = Recruit.tick(G, T0 + 7000).events.find((e) => e.type === 'apply_result');
     assert.ok(r && !r.ok);
     assert.strictEqual(Recruit.apply(G, post3.id, T0 + 8000).reason, 'already_rejected');
     assert.strictEqual(Recruit.apply(G, 'nope', T0).reason, 'gone');
+    const high = Recruit.posts(G, T0).find((p) => Recruit.healerOpen(p) && p.floor > 1);
+    if (high) assert.strictEqual(Recruit.apply(G, high.id, T0 + 8000).reason, 'floor_locked', '안 열린 층 파티엔 지원 불가');
     const other = Recruit.posts(G, T0).find((p) => p.state === 'open' && !(p.slots.healer > 0));
     if (other) assert.strictEqual(Recruit.apply(G, other.id, T0 + 8000).reason, 'no_healer_slot');
   },

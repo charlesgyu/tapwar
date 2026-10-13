@@ -183,6 +183,10 @@
       if (sum.memberDeaths) notes.push(['warn', `동료가 ${sum.memberDeaths}번 쓰러졌어요`]);
       if (sum.playerDeaths) notes.push(['warn', `${(State.get().player || {}).name || '리프'}가 ${sum.playerDeaths}번 쓰러졌어요`]);
       if (p.outcome === 'cleared' && floor < 10) notes.push(['ok', `${floor + 1}층 도전 가능`]);
+      // 구인구직 파티: 한 판이 끝나 해산(돌파면 리더가 약속한 보상 분배)
+      const rc = sum.recruit;
+      if (rc && rc.kind === 'joined') notes.push(rc.bonusGold ? ['ok', `🤝 ${rc.leaderName}님 파티 보상 +${num(rc.bonusGold)}골드`] : ['', `🤝 ${rc.leaderName}님 파티 보상 없음(미돌파)`]);
+      if (rc) notes.push(['', rc.kind === 'joined' ? '파티 해산 — 게시판에서 새 파티를 찾아보세요' : `모집 파티 ${rc.count}명 해산`]);
       if (notes.length) root.appendChild(el('div', { class: 'rs-notes' }, notes.map(([c, t]) => el('span', { class: 'rs-note ' + c, text: t }))));
       const lvs = groupLevels(p.levelUps);
       if (lvs.length) root.appendChild(UI.section('🎉 레벨 업', lvs.map((l) => el('div', { class: 'rs-lv' }, [

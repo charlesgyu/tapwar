@@ -1,6 +1,6 @@
 // 앱 전체 E2E: node healer/tools/e2e_app.mjs [outDir]
 // 실제 index.html 을 file:// 로 열어(서버 없이도 동작해야 하므로) 390×844 @2x 터치 폰에서 처음부터 끝까지 한 바퀴 돈다.
-//   새 게임 → 프롤로그 건너뛰기 → 마을 → 장로 엘다 대화 → 메인 퀘스트 수락 → 성문 경비 대화 → 모험가 사무소 4명 고용
+//   새 게임 → 프롤로그 건너뛰기 → 마을 → 장로 엘다 대화 → 메인 퀘스트 수락 → 성문 경비 대화 → 모험가 사무소 게시판(힐러 모집 파티 지원·합류)
 //   → 상인(포션·장비 구매) → 가방(벨트 등록·장착) → 신전 강화 → 은행 입금 → 여관 식사 → 경매장 → 대장간 조합 → 길드 가입
 //   → 성문(탑) → 1층(인트로 건너뛰기) → 자동 탐험 5초 → 무리 옆 순간이동·전투 8초 → 상자 → 보스(소환 확인 후 HP 5% 치트) → 출구
 //   → 결과 화면 → 마을 → 퀘스트 완료 → 저장 → 새로고침 → 이어하기 → 상태 비교 → 2~10층 입장(각 2초, 6층 힐러 저격 확인).
@@ -90,7 +90,7 @@ await wait(600);
 await shot('town');
 step('프롤로그 건너뛰기 → 마을(기본 장비)', inTown && await ev(() => !!(window.__healer.G().player.equipment.main && window.__healer.G().player.equipment.body)), await ev(() => { const e = window.__healer.G().player.equipment; return `fps ${Scenes.fps().toFixed(0)} · 무기 ${e.main && e.main.id} · 옷 ${e.body && e.body.id}`; }));
 
-// 테스트 준비: 4명 고용·구매·강화 비용(새 게임 골드 300 으로는 부족) — 치트는 이것과 던전 순간이동/보스 HP 뿐
+// 테스트 준비: 구매·강화 비용(새 게임 골드 300 으로는 부족) — 치트는 이것과 던전 순간이동/보스 HP 뿐
 await ev(() => { window.__healer.G().player.gold = 6000; window.__healer.TownScene.updateHud(true); });
 
 // 실제 화면 탭으로 한 번 걷기(Scenes 포인터 → TownScene.onTap → 길찾기)
@@ -120,24 +120,28 @@ step('메인 퀘스트 수락(첫 걸음)', accepted && qs === 'active', qs);
 // 목표 2: 성문 경비와 대화
 await talk('guard1'); await finishDialogs();
 
-// ============ 4. 모험가 사무소: 4명 고용 ============
+// ============ 4. 모험가 사무소: 구인구직 게시판 → 힐러 모집 파티에 지원 → 합류 ============
 ok = await visit('adventurer', 'adventurer');
 await wait(200);
-// 역할이 고르게: 탱커 1 → 원딜 → 근딜 → 나머지(힐러 후보는 빼고) 순으로 이름을 골라 그 카드의 '고용' 버튼을 누른다
-const picks = await ev(() => {
-  const c = Facilities.adventurer.candidates(window.__healer.G()).filter((m) => m.role !== 'healer');
-  const out = [];
-  for (const role of ['tank', 'ranged', 'melee', 'ranged', 'melee', 'tank']) { const m = c.find((x) => x.role === role && !out.includes(x)); if (m && out.length < 4) out.push(m); }
-  for (const m of c) if (out.length < 4 && !out.includes(m)) out.push(m);
-  return out.map((m) => m.name);
-});
-for (const nm of picks) {
-  const card = page.locator('#ui-root .ui-overlay').last().locator('div', { hasText: nm }).filter({ has: page.locator('button.btn', { hasText: /^\s*고용\s*$/ }) }).last();
-  await card.locator('button.btn', { hasText: /^\s*고용\s*$/ }).first().click(); await wait(150);
+await shot('adventurer_board');
+await page.locator('#ui-root .rb-mbtn[data-menu="find"]').click(); await wait(250);
+// 1층·레벨 맞는 힐러 모집글에 지원 → 2~6초 검토 → 합류(드물게 거절되면 다른 글에 다시 지원)
+let joined = null, applied = 0;
+for (let tries = 0; tries < 5 && !joined; tries++) {
+  const id = await ev(() => { const G = window.__healer.G(); return (Recruit.posts(G).find((p) => Recruit.fits(G, p) && p.floor === 1 && G.recruit.applied[p.id] !== 'rejected') || {}).id || null; });
+  if (!id) { await wait(1000); continue; }
+  const btn = page.locator(`#ui-root [data-apply="${id}"]`);
+  if (!(await btn.count())) { await wait(500); continue; }
+  await btn.click(); applied++;
+  await wait(300);
+  if (tries === 0) await shot('adventurer_applied');
+  joined = await until(() => { const G = window.__healer.G(); return G.recruit.joined ? G.recruit.joined.floor : (G.recruit.pending ? null : (G.recruit.joined || 'no')); }, null, 9000, 200);
+  if (joined === 'no') joined = null;
 }
-await shot('adventurer_hired');
+await wait(300);
+await shot('adventurer_joined');
 const partyN = await ev(() => window.__healer.G().party.length);
-step('모험가 사무소 4명 고용', ok && partyN === 4, `파티 ${partyN}명 · 퀘스트 ${await ev(() => Quests.status(window.__healer.G(), 'main_01_prepare'))}`);
+step('구인구직 게시판: 힐러 모집 파티 지원 → 합류', ok && joined === 1 && partyN >= 1, `지원 ${applied}회 · 파티 ${partyN}명 · 리더 ${await ev(() => (window.__healer.G().recruit.joined || {}).leaderName)} · 퀘스트 ${await ev(() => Quests.status(window.__healer.G(), 'main_01_prepare'))}`);
 await closeScreen();
 
 // ============ 5. 상인: 포션·장비 구매 ============
@@ -328,6 +332,7 @@ await wait(300);
 await finishDialogs();   // 챕터 마을 이벤트가 뜨면 넘긴다
 await shot('town_return');
 step('결과 → 마을 복귀', !!back, await ev(() => `성문 앞 y=${Math.round(window.__healer.player.y / 32)} · 1층 최고 ${window.__healer.G().tower.highestCleared}`));
+step('게시판 파티: 돌파 후 해산·보상', await ev(() => { const G = window.__healer.G(); return !G.recruit.joined && G.recruit.history[0] && G.recruit.history[0].cleared && G.recruit.history[0].bonusGold > 0; }), await ev(() => JSON.stringify(window.__healer.G().recruit.history[0] || {})));
 await talk('adventurer_clerk');
 const done = await dialogPick('완료: 첫 걸음', 'quest_complete');
 await finishDialogs();

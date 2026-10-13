@@ -118,11 +118,21 @@ const Recruit = (() => {
   }
   const NPC_LINES = ['딜은 자신 있어요!', '힐만 잘 받으면 안 죽어요 ㅎㅎ', '경험치 나눠요~', '보스 패턴 다 알아요', '물약 넉넉히 챙겼어요', '오늘 처음이에요 잘 부탁드려요', '말 안 하고 열심히 할게요', '지각 안 해요!'];
 
-  function member(rng, role, lo, hi, opts = {}) {
+  // taken: 같은 파티 안에서 이름이 겹치지 않게(이미 쓴 이름 집합)
+  function member(rng, role, lo, hi, opts = {}, taken = null) {
     const lv = clamp(rng.int(lo, hi), 1, 40);
     if (!hasParty()) return { uid: 'n' + rng.int(1, 1e9), name: '모험가', cls: ROLE_CLASSES[role][0], role, level: lv, hp: 100, mp: 50, buffs: [], curses: [] };
-    return Party.generateMember(rng, lv, Object.assign({ cls: rng.pick(ROLE_CLASSES[role]), role }, opts));
+    const m = Party.generateMember(rng, lv, Object.assign({ cls: rng.pick(ROLE_CLASSES[role]), role }, opts));
+    if (taken) {
+      if (taken.has(m.name)) {
+        const pool = (m.gender === 'm' ? Party.MALE_NAMES : Party.FEMALE_NAMES).filter((n) => !taken.has(n));
+        if (pool.length) m.name = rng.pick(pool);
+      }
+      taken.add(m.name);
+    }
+    return m;
   }
+  const namesOf = (list, extra) => new Set(list.map((m) => m.name).concat(extra || []));
 
   // o: { id, createdAt, floor?, seekHealer?, fitLevel? }
   function makePost(rng, G, o) {
@@ -159,7 +169,8 @@ const Recruit = (() => {
     if (!memberRoles.length) { memberRoles = [full[0]]; slots[full[0]] = Math.max(0, slots[full[0]] - 1); }
     // 리더는 탱커/딜러가 먼저(힐러가 리더인 글은 어색하다), 레벨은 범위 위쪽
     memberRoles.sort((a, b) => (a === 'healer') - (b === 'healer'));
-    const members = memberRoles.map((role, i) => member(rng, role, i === 0 ? Math.max(lo, hi - 1) : lo, hi));
+    const taken = new Set([(G.player && G.player.name) || '리프']);
+    const members = memberRoles.map((role, i) => member(rng, role, i === 0 ? Math.max(lo, hi - 1) : lo, hi, {}, taken));
     const fi = floorInfo(floor);
     const bonusGold = Math.round((60 + 45 * floor) * (tags.includes('보스만') ? 1.3 : 1) * (tags.includes('빡겜') ? 1.2 : 1) * rng.float(0.85, 1.2) / 5) * 5;
     return {
@@ -225,7 +236,7 @@ const Recruit = (() => {
 
   function fillOne(rng, p, role) {
     const [lo, hi] = p.levelRange;
-    p.members.push(member(rng, role, lo, hi));
+    p.members.push(member(rng, role, lo, hi, {}, namesOf(p.members)));
     p.slots[role]--;
     if (slotTotal(p.slots) <= 0) return true;
     return false;
@@ -258,7 +269,7 @@ const Recruit = (() => {
     }
     // 새 글
     const openCount = m.posts.filter((p) => p.state === 'open').length;
-    if (m.posts.length < MAX_POSTS && (openCount < MIN_POSTS || rng.chance(0.4))) {
+    if (m.posts.length < MAX_POSTS && (openCount < MIN_POSTS || rng.chance(openCount < BASE_POSTS ? 0.7 : 0.35))) {
       const needHealer = m.posts.filter((p) => fits(G, p)).length < MIN_HEALER_POSTS;
       const p = makePost(rng, G, { id: `rp${m.bucket}_n${m.seq = (m.seq || 0) + 1}`, createdAt: now, seekHealer: needHealer ? true : undefined, fitLevel: needHealer, floor: needHealer ? maxOpen(G) : undefined });
       m.posts.unshift(p);
@@ -298,7 +309,7 @@ const Recruit = (() => {
       const pool = roles.filter((x) => waiting(x) <= need[x]);
       const role = rng.pick(pool.length ? pool : roles);
       const [lo, hi] = recommended(ps.floor);
-      const m = member(rng, role, Math.max(1, lo - 1), hi + 1);
+      const m = member(rng, role, Math.max(1, lo - 1), hi + 1, {}, namesOf(ps.accepted.concat(ps.applicants.map((x) => x.member)), [G.player.name]));
       const a = { id: `ap${ps.seq++}`, member: m, at: now, msg: rng.pick(APPLY_LINES[role]) };
       ps.applicants.push(a);
       out.push({ type: 'applicant', id: a.id, role, name: m.name, level: m.level });
@@ -358,6 +369,8 @@ const Recruit = (() => {
     const p = find(G, postId, now);
     if (!p || p.state !== 'open') return { ok: false, reason: 'gone' };
     if (!(p.slots.healer > 0)) return { ok: false, reason: 'no_healer_slot' };
+    // 아직 못 가 본 층의 파티엔 끼지 않는다(층 건너뛰기로 이야기·진행이 꼬이지 않게)
+    if (p.floor > maxOpen(G)) return { ok: false, reason: 'floor_locked' };
     if (r.applied[p.id] === 'rejected') return { ok: false, reason: 'already_rejected' };
     rng = rng || RNG.global();
     const f = fit(G, p);

@@ -24,7 +24,7 @@ js/core/rng.js  js/core/events.js
 js/core/data_classes.js  js/core/data_skills.js  js/core/data_items.js
 js/core/data_monsters.js  js/core/data_dialogue.js  js/core/data_quests.js  js/core/data_story.js
 js/core/state.js  js/core/stats.js  js/core/level.js  js/core/inventory.js
-js/core/economy.js  js/core/facilities.js  js/core/party.js  js/core/quests.js
+js/core/economy.js  js/core/facilities.js  js/core/party.js  js/core/recruit.js  js/core/quests.js
 js/core/combat/entities.js  js/core/combat/combat.js  js/core/combat/ai_party.js
 js/core/combat/ai_healer.js  js/core/combat/ai_monster.js  js/core/combat/loot.js
 js/core/dungeon/gen.js  js/core/dungeon/floor.js
@@ -69,6 +69,10 @@ G = {
   tower: { highestCleared: 0, records: { [floor]: { clears, bestTime } } },
   auction: { hourIndex, listings: [ { uid, item, price } ], mine: [ { uid, item, price, listedAt } ], resetTickets: 1 },
   adventurer: { day, candidates: [memberInst...] },
+  recruit: { market: { bucket, posts: [post], lastTick, churn, matched, seq, day } | null, pending: { postId, decideAt, accepted, bonusMult, reason } | null,
+             applied: { [postId]: 'rejected' }, joined: { postId, floor, leaderName, leaderUid, title, rewardBonus, prevParty: [memberInst] } | null,
+             posting: { floor, slots: {tank,melee,ranged,healer}, fee, createdAt, applicants: [ { id, member, at, msg } ], accepted: [memberInst], nextAt, seq, title } | null,
+             leading: { floor, memberUids, fee } | null, history: [ { kind, floor, cleared, reason, bonusGold, leaderName?, count?, day } ] },   // 구인구직 게시판(§6.1)
   counters: { steps: 0, kills: 0, bossKills: 0, chests: 0, heals: 0 },
   day: 1, playTime: 0,
 }
@@ -291,6 +295,23 @@ Party.add(G, memberInst) -> bool (정원·중복 uid 검사, 'party_changed' {ac
 Party.heal(G) (마을 복귀 시 파티원 + 플레이어 HP/MP 전부 회복, 저주 제거, 'party_healed') ; Party.gainXp(G, xp) -> [Level.addXp 결과] (전원 같은 양) ; Party.hireCost(level) ; Party.describe(m) -> '서연 Lv.3 전사(탱커)'
 ```
 
+### 6.1 구인구직 게시판 (core/recruit.js — `Recruit`)
+모험가 사무소의 주된 파티 구성 방법. 초반엔 게시료를 낼 수 없어 NPC 파티의 "힐러 구해요" 글에 지원하며 시작한다(직접 고용 `Facilities.adventurer.hire` 는 코어에 남아 있지만 UI 에서는 뺐다).
+```js
+Recruit.market(G, now?) / posts(G, now?) / find(G, postId) / counters(G, now?) -> { live, matchedToday }
+  // 현실 3분 버킷(bucketOf(now) = floor(now/180000)) + G.day + highestCleared + 플레이어 레벨 시드로 13개 생성(generate(G, bucket), 순수·결정적), 힐러 지원 가능 글 ≥ 3 보장.
+  // post = { id, floor, floorName, title, tags: ['초보환영'|'빡겜'|'친목'|'보스만'|'파밍'], levelRange, leader, members: [memberInst], slots: {tank,melee,ranged,healer}, size, bonusGold, createdAt, state: 'open'|'full', fullAt, quote }
+Recruit.tick(G, now?) -> { events: [ { type: 'post_new'|'slot_filled'|'post_full'|'removed'|'apply_result'|'applicant', ... } ] }
+  // 4초마다 한 걸음(최대 8걸음 몰아서): 마감 글 2.5초 뒤 제거·12분 지난 글 제거, 55% 확률로 아무 글의 빈 자리 하나 채움, 새 글 등록(열린 글 10~16 유지).
+Recruit.fit(G, post) -> { kind: 'in'|'low'|'high', chance, bonusMult, text }  // 범위 안 0.92, 아래 max(0.05, 0.75−0.25×차이), 위 0.97(3 이상 높으면 보상 50%, 그 외 80%)
+Recruit.apply(G, postId, now?, rng?) -> { ok, delay, fit } ('joined'|'leading'|'posting'|'pending'|'gone'|'no_healer_slot'|'already_rejected') — 2~6초 뒤 tick 이 apply_result 를 낸다
+Recruit.join(G, post, bonusMult) (남은 빈 자리를 NPC 로 채우고 G.party = 그 파티, 원래 파티는 joined.prevParty 에 보관) ; leave(G) (탈퇴/해산) ; allowedFloor(G) -> 목표 층|null (탑 화면은 그 층만 입장 허용, 잠긴 층이어도 파티 목표면 허용)
+Recruit.finishRun(G, { floor, reason, cleared }) -> { kind, bonusGold, ... }|null  // Floor.leave 가 부른다: 목표 층 한 판이 끝나면 해산, 돌파면 rewardBonus 지급. summary.recruit 로 결과 화면에 표시.
+Recruit.feeFor(floor, slots) = max(400, slots × (150 + 60×floor)) ; newDraft(G) / addSlot(G, draft, role) (누를 때마다 +1, 정원 4 − 현재 파티원) / removeSlot / resetSlots / draftFee
+Recruit.post(G, draft, now?) (게시료 지불 → posting) ; tick 이 3~10초마다 요청 역할의 지원자(레벨 = 층 권장 범위 ±1) 도착(대기 최대 5) ; acceptApplicant / rejectApplicant ; closePosting (수락 ≥ 1, G.party 에 추가 → leading) ; cancelPosting (50% 환불)
+```
+UI: `ui_adventurer.js` 의 `RecruitUI.pump()` 가 1초마다 tick 하고(마을 씬도 부름) 결과를 토스트로 알린다. 화면은 메뉴(파티 찾기·파티원 모집·내 파티/모집 현황·의뢰 게시판) → params.view 하위 화면.
+
 ## 7. 퀘스트 엔진 (core/quests.js — `Quests`)
 ```js
 Quests.init() (Events 구독, main.js 가 게임 시작 시 1회 호출; 멱등) ; Quests.dispose() ; Quests.handle(name, payload) (직접 호출용)
@@ -446,7 +467,7 @@ UI.tabs(container, [{ id, label, render(pane) }], activeId) ; UI.itemCard(instOr
 UI.el(tag, attrs, children) ; UI.gold(n) ; UI.bar(value, max, 'hp'|'mp'|'xp'|'fatigue') ; UI.empty(text) ; UI.row(children, cls) ; UI.section(title, children)
 UI.STAT_NAMES / SLOT_NAMES / ARMOR_NAMES / ROLE_NAMES
 ```
-화면 이름(각 ui_*.js 가 register): `shop`(상인), `auction`, `bank`, `smithy`, `inn`, `engraver`, `temple`, `adventurer`(모험가 사무소: 고용/파티/의뢰 게시판), `guild`, `tower`(층 선택·입장), `inventory`(가방+장비+벨트), `status`(스탯 분배·스킬 선택·설정), `quests`(진행/완료, 힌트), `party`(파티원 상세), `title`(새 게임/이어하기), `result`(층 결과).
+화면 이름(각 ui_*.js 가 register): `shop`(상인), `auction`, `bank`, `smithy`, `inn`, `engraver`, `temple`, `adventurer`(모험가 사무소: 구인구직 게시판 메뉴 → 파티 찾기/파티원 모집/내 파티·모집 현황/의뢰 게시판, params.view), `guild`, `tower`(층 선택·입장), `inventory`(가방+장비+벨트), `status`(스탯 분배·스킬 선택·설정), `quests`(진행/완료, 힌트), `party`(파티원 상세), `title`(새 게임/이어하기), `result`(층 결과).
 - 모든 시설 화면은 `Facilities.*` 의 { ok, reason } 를 토스트로 보여주고 `api.refresh()` 로 다시 그린다. 골드 표시는 `UI.gold`.
 - 씬: `Scenes.register(name, scene)`, `Scenes.go(name, params)`, `Scenes.current()`, `Scenes.update(dt)`, `Scenes.draw()`. scene = `{ enter(params), exit(), update(dt), draw(ctx), onTap(x,y)?, onJoy(dx,dy)? }`. 캔버스·DPR·zoom·조이스틱·탭 판정은 `js/scenes/scene.js` 가 공통으로 관리하고 현재 씬에 콜백.
 - 마을 씬(`town_scene.js`): 기존 main.js 의 마을 로직을 씬으로 옮긴 것. NPC 터치 → `UI.dialog`(Dialogue.greet + 수주 가능 퀘스트 선택지) ; 시설 문 → `UI.open(시설)` ; 성문 → `UI.open('tower')` ; 하단 고정 버튼: 가방·상태·퀘스트·파티.
@@ -454,7 +475,7 @@ UI.STAT_NAMES / SLOT_NAMES / ARMOR_NAMES / ROLE_NAMES
 - 부트(`main.js`): DOM 준비 → `UI.init()` → 저장 있으면 `title` 화면(이어하기/새 게임), 없으면 새 게임 → 프롤로그 `UI.story` → 마을 씬. 60초마다·씬 전환마다 `State.save()`.
 
 ## 12. 완성 기준 (수용 테스트)
-1. 새 게임 → 프롤로그 → 마을 → 모험가 사무소에서 4명 고용 → 성문 → 1층 → 몬스터 무리 전투(자동 힐 동작, 수동 스킬 가능) → 상자 → 중간보스 3 → 층 보스(소환 패턴 포함) → 출구 → 마을 복귀(보상·기록·챕터 진행).
+1. 새 게임 → 프롤로그 → 마을 → 모험가 사무소 게시판에서 힐러 모집 파티에 지원·합류 → 성문 → 1층 → 몬스터 무리 전투(자동 힐 동작, 수동 스킬 가능) → 상자 → 중간보스 3 → 층 보스(소환 패턴 포함) → 출구 → 마을 복귀(보상·기록·챕터 진행).
 2. 1~10층 모두 생성·클리어 가능(시뮬레이션으로 검증: 적정 레벨 파티가 1~5층 ≥ 90% 생존, 6~10층은 장비/레벨 요구).
 3. 모든 시설 실제 동작(구매/판매/경매/보관/수리/분해/조합/식사/숙박/각인/스킬 강화/고용/길드).
 4. 퀘스트 4종(메인/의뢰/일일/히든) 수주·진행·완료·보상, NPC 대사에 힌트.

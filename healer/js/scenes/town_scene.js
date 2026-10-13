@@ -413,7 +413,11 @@ const TownScene = (() => {
       for (const c of clouds) { c.x += dt * 8; c.y += dt * 3; if (c.x - c.r > Town.W) c.x = -c.r; if (c.y - c.r > Town.H) c.y = -c.r; }
       Scenes.followCamera(player, Town.W, Town.H);
       updatePrompt();
-      hudT -= dt; if (hudT <= 0) { hudT = 1; updateHud(); }
+      hudT -= dt; if (hudT <= 0) {
+        hudT = 1; updateHud();
+        // 구인구직 게시판은 마을에 있는 동안 계속 움직인다(지원 결과·새 지원자 토스트)
+        if (typeof RecruitUI !== 'undefined' && RecruitUI) RecruitUI.pump();
+      }
       if (pendingEventT >= 0 && !talking && !UI.isOpen() && !document.querySelector('.ui-overlay')) { pendingEventT -= dt; if (pendingEventT < 0) playTownEvent(); }
     },
     draw,

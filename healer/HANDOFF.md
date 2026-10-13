@@ -86,3 +86,4 @@ Playwright 는 `/opt/node-tools/node_modules/playwright/index.mjs` 에서 import
 - `MonsterSprites.get` 은 미등록 id 에 보라색 대체 스프라이트를 돌려주므로 그래픽이 없어도 게임은 돈다. `DungeonTiles.chunk` 도 바이옴 미등록 시 단색 대체.
 - 마을은 24×34 타일로 압축(좌·우 4층 시설 + 가운데 성문→광장→시장→잡화상 대로). 시장 상인은 좌판 옆 통로(11.35, 22.6)에 서 있어 가려지지 않는다.
 - 저장 키 `localStorage['healer.save']`, 버전 1.
+- 모험가 사무소는 **구인구직 게시판**(core/recruit.js `Recruit`, ui_adventurer.js `RecruitUI`, DESIGN §6.1)이 주 파티 구성 수단이다. 직접 고용 UI는 없앴다(코어 `Facilities.adventurer.hire` 는 테스트 호환용으로 남김). 게시판 파티는 목표 층 한 판 뒤 `Floor.leave → Recruit.finishRun` 에서 해산된다. 테스트: `tests/recruit.test.js`.

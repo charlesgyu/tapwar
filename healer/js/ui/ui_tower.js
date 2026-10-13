@@ -14,6 +14,9 @@
   const maxOpen = (g) => Math.min(FLOOR_COUNT(), (tower(g).highestCleared || 0) + 1);
   const fmtTime = (t) => { if (!(t > 0)) return '-'; const m = Math.floor(t / 60), s = Math.round(t % 60); return m ? `${m}분 ${String(s).padStart(2, '0')}초` : `${s}초`; };
   const bossName = (fd) => { const b = fd && fd.boss && typeof Monsters !== 'undefined' ? Monsters.get(fd.boss) : null; return b ? b.name : '???'; };
+  // 구인구직 파티(합류/모집)면 그 파티의 목표 층만 들어갈 수 있다(null = 제한 없음)
+  const partyFloor = (g) => (typeof Recruit !== 'undefined' ? Recruit.allowedFloor(g) : null);
+  const recruitState = (g) => (typeof Recruit !== 'undefined' ? Recruit.ensure(g) : {});
   const chapterTitle = (f) => { const c = typeof Story !== 'undefined' && Story.chapter ? Story.chapter(f) : null; return c ? c.title : ''; };
 
   function injectStyle() {
@@ -54,13 +57,20 @@
 .tw-party .lvl.ok { color:#2f6b2f; }
 .tw-fat { display:grid; grid-template-columns:40px 1fr; gap:6px; align-items:center; margin:6px 0; font-size:11px; font-weight:800; color:#7a6a5a; }
 .tw-go { width:100%; min-height:52px; font-size:17px; margin-top:4px; }
+.tw-goal { display:flex; align-items:center; gap:8px; padding:8px 10px; margin-bottom:8px; border-radius:12px; background:#e8f5e0; border:2px solid #a9d494; color:#2f6b2f; font-weight:800; font-size:12.5px; line-height:1.35; }
+.tw-goal .ic { font-size:24px; }
+.tw-goal .tx { flex:1; min-width:0; }
+.tw-goal b { display:block; font-size:15px; font-weight:900; color:#245a24; }
+.tw-goal .btn { flex:none; min-height:44px; padding:6px 12px; }
+.tw-row.other { opacity:0.55; }
 `;
     document.head.appendChild(s);
   }
 
   function floorRow(g, f, sel, onPick) {
     const fd = Floors.get(f) || { name: `${f}층`, biome: 'forest', levelRange: [1, 1] };
-    const locked = f > maxOpen(g);
+    const pf = partyFloor(g);
+    const locked = f > maxOpen(g) && f !== pf;
     const rec = tower(g).records[f];
     const cave = fd.biome === 'cave';
     const right = locked
@@ -68,7 +78,7 @@
       : rec && rec.clears
         ? el('div', { class: 'tw-right' }, [el('div', { class: 'clr', text: `✔ 클리어 ${rec.clears}회` }), el('div', { text: `⏱ ${fmtTime(rec.bestTime)}` })])
         : el('div', { class: 'tw-right' }, [el('span', { class: 'new', text: '도전!' }), rec && rec.attempts ? el('div', { text: `시도 ${rec.attempts}회` }) : null]);
-    return el('button', { class: 'tw-row' + (cave ? ' cave' : '') + (locked ? ' locked' : '') + (sel ? ' sel' : ''), 'data-floor': f, onClick: () => onPick(f, locked) }, [
+    return el('button', { class: 'tw-row' + (cave ? ' cave' : '') + (locked ? ' locked' : '') + (sel ? ' sel' : '') + (pf && pf !== f ? ' other' : ''), 'data-floor': f, onClick: () => onPick(f, locked) }, [
       el('div', { class: 'tw-num' }, [String(f), el('small', { text: '층' })]),
       el('div', { class: 'tw-mid' }, [
         el('b', { text: locked ? `${cave ? '🪨' : '🌲'} ???` : `${cave ? '🪨' : '🌲'} ${fd.name}` }),
@@ -117,9 +127,15 @@
 
   async function enter(g, f, api) {
     if ((g.player.fatigue || 0) >= FATIGUE_MAX) { api.toast('너무 지쳐서 들어갈 수 없어요'); return; }
-    if (f > maxOpen(g)) { api.toast('아직 열리지 않은 층이에요'); return; }
+    const pf = partyFloor(g);
+    if (pf && f !== pf) { api.toast(`파티 목표 층(${pf}층)만 들어갈 수 있어요`); return; }
+    if (f > maxOpen(g) && f !== pf) { api.toast('아직 열리지 않은 층이에요'); return; }
+    if (recruitState(g).posting) {
+      const yes = await api.confirm('게시판에 모집 중인 글이 있어요.\n마감하지 않고 지금 파티로 출발할까요?', { ok: '그냥 출발', cancel: '그만두기' });
+      if (!yes) return;
+    }
     if (!Party.members(g).length) {
-      const yes = await api.confirm('동료 없이 혼자 탑에 들어갈까요?\n힐러 혼자서는 몬스터를 쓰러뜨리기 어려워요.', { ok: '혼자 가기', cancel: '그만두기' });
+      const yes = await api.confirm('동료 없이 혼자 탑에 들어갈까요?\n힐러 혼자서는 몬스터를 쓰러뜨리기 어려워요.\n(모험가 사무소 게시판에서 힐러를 구하는 파티를 찾을 수 있어요)', { ok: '혼자 가기', cancel: '그만두기' });
       if (!yes) return;
     }
     if (typeof Scenes === 'undefined' || !Scenes.go) { api.toast('던전을 열 수 없어요'); return; }
@@ -134,15 +150,30 @@
       PartyUI.injectStyle(); injectStyle();
       const g = G();
       const hc = tower(g).highestCleared || 0;
-      if (!params.floor || params.floor > maxOpen(g)) params.floor = maxOpen(g);
+      const pf = partyFloor(g);
+      if (pf) params.floor = pf;
+      else if (!params.floor || params.floor > maxOpen(g)) params.floor = maxOpen(g);
       root.appendChild(el('div', { class: 'tw-sum' }, [
         el('span', { class: 'ic', text: '🗼' }),
         el('div', {}, [el('b', { text: hc ? `최고 ${hc}층 돌파` : '아직 오른 층이 없어요' }), el('small', { text: hc >= FLOOR_COUNT() ? '모든 층을 돌파했어요!' : `지금 도전할 층: ${maxOpen(g)}층` })]),
       ]));
+      if (pf) {
+        const rs = recruitState(g), j = rs.joined;
+        root.appendChild(el('div', { class: 'tw-goal' }, [
+          el('span', { class: 'ic', text: j ? '🤝' : '👑' }),
+          el('div', { class: 'tx' }, [el('b', { text: `파티 목표: ${pf}층` }), j ? `${j.leaderName}님 파티 · 돌파 보상 🪙 +${j.rewardBonus}` : '내가 모은 파티 · 다녀오면 해산']),
+          el('button', { class: 'btn danger', text: j ? '탈퇴' : '해산', onClick: async () => {
+            const yes = await api.confirm(j ? `${j.leaderName}님 파티에서 탈퇴할까요?` : '모은 파티를 해산할까요?', { ok: j ? '탈퇴' : '해산', cancel: '그만두기' });
+            if (!yes) return;
+            Recruit.leave(g); save(); api.toast(j ? '파티에서 탈퇴했어요' : '파티를 해산했어요'); api.refresh();
+          } }),
+        ]));
+      }
       let selEl = null;
       for (let f = 1; f <= FLOOR_COUNT(); f++) {
         const sel = f === params.floor;
         const row = floorRow(g, f, sel, (ff, locked) => {
+          if (pf && ff !== pf) { api.toast(`파티 목표 층(${pf}층)만 들어갈 수 있어요`); return; }
           if (locked) { api.toast(`${ff - 1}층 보스를 쓰러뜨리면 열려요`); return; }
           params.floor = ff; api.refresh();
         });
