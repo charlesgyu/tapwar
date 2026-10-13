@@ -1,6 +1,6 @@
 # 📜 TAPWAR (탭워) 공식 게임 설정 및 룰북 (System Design Manifesto)
 
-> 🧑‍⚕️ **새 프로젝트 [모두의 힐러]** 는 `healer/` 폴더에서 독립적으로 개발합니다. 실행법·기획은 [healer/README.md](healer/README.md) 참고.
+> 🧑‍⚕️ **[모두의 힐러]** 는 별도 저장소 `charlesgyu/everyones-healer` 로 이전했습니다.
 
 > **버전:** v2026.10.11-SeoulEdition  
 > **장르:** 실시간 행정구역 전선 전략 시뮬레이션 (Real-Time Administrative Front-Line Strategy)  
