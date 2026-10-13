@@ -2919,7 +2919,7 @@ const ITEM_BAL = {
   rapidInterval: 0.5,  // 속사: 다음 5공격 발사 간격 절반
   powerBonus: 0.5,     // 파워샷: 공격력 +50%
   critBonus: 1,        // 크리티컬: 공격력 +100% (2배)
-  bounceCount: 2,      // 튕기기: 두 번 더 튕김 (공격력 그대로)
+  bounceCount: 1,      // 튕기기: 한 번 더 튕김 (밸런스 v66: 2 → 1)
   bounceFirstScale: 0,   // 튕긴 타격에는 아이템 효과 없음 (기본 공격력만)
   bounceNextScale: 0,
   explodeRatio: 0.5,   // 폭발: 붙어 있는 상대 지역에 공격력의 50%
@@ -2954,7 +2954,7 @@ const ITEM_ICON = {
 const ITEMS = [
   { key: 'power', name: '파워샷', desc: '20% 확률로 공격력 50% 증가' },
   { key: 'crit', name: '크리티컬', desc: '10% 확률로 공격력 2배' },
-  { key: 'pierce', name: '튕기기', desc: '10% 확률로 옆 상대 지역으로 두 번 더 튕김 (튕긴 곳은 기본 공격력만)' },
+  { key: 'pierce', name: '튕기기', desc: '10% 확률로 옆 상대 지역으로 한 번 더 튕김 (튕긴 곳은 기본 공격력만)' },
   { key: 'explode', name: '폭발', desc: '10% 확률로 맞힌 곳에 붙은 모든 상대 지역에 50% 피해' },
   { key: 'piercing', name: '관통샷', desc: '10% 확률로 상대의 모든 방어 효과 무시' },
   { key: 'paralyze', name: '마비', desc: '10% 확률로 맞은 상대 지역의 다음 5발 공격 속도 50% 감소' },
