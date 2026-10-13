@@ -160,4 +160,16 @@ module.exports = {
     assert.ok(Items.isStackable(Items.get('hp_potion_s')) && !Items.isStackable(Items.get('cloth_body_1')) && !Items.isStackable(Items.get('scroll_hidden_f1')));
     assert.strictEqual(Items.gradeName('legendary'), '전설'); assert.strictEqual(Items.slotName('off'), '보조');
   },
+  'Items.itemLevel: 결정적, 층대·등급·접사가 높을수록 크고 장비가 아니면 0'(assert) {
+    const { Items } = boot();
+    const mk = (id, grade, n) => ({ uid: 'x', id, grade, affixes: Array.from({ length: n }, () => ({ stat: 'int', value: 2 })) });
+    const a = Items.itemLevel(mk('staff_wood_two', 'common', 0));
+    assert.strictEqual(a, Items.itemLevel(mk('staff_wood_two', 'common', 0)), '같은 입력 같은 값');
+    assert.strictEqual(a, 28);
+    assert.ok(Items.itemLevel(mk('staff_wood_two', 'uncommon', 0)) > a, '등급');
+    assert.ok(Items.itemLevel(mk('staff_wood_two', 'rare', 2)) > Items.itemLevel(mk('staff_wood_two', 'rare', 1)), '접사');
+    assert.ok(Items.itemLevel(mk('staff_crystal_two', 'common', 0)) > a, '층대');
+    assert.strictEqual(Items.itemLevel(mk('hp_potion_s', 'common', 0)), 0);
+    assert.strictEqual(Items.itemLevel(null), 0);
+  },
 };

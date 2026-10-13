@@ -99,6 +99,17 @@ module.exports = {
     assert.strictEqual(Inventory.locate(G, r2.uid).where, 'bag');
   },
 
+  '반지 칸 지정(slotHint): ring2 를 골라 교체, 반지가 아니면 무시'(assert) {
+    const { Inventory, G, give } = boot();
+    const r1 = give('ring_copper'), r2 = give('ring_silver'), r3 = give('ring_crystal');
+    Inventory.equip(G, r1.uid); Inventory.equip(G, r2.uid);
+    const res = Inventory.equip(G, r3.uid, 'ring2');
+    assert.strictEqual(res.slot, 'ring2'); assert.strictEqual(res.unequipped[0], r2);
+    assert.strictEqual(G.player.equipment.ring1, r1);
+    const hat = give('cloth_hat_1');
+    assert.strictEqual(Inventory.equip(G, hat.uid, 'ring2').slot, 'hat');
+  },
+
   '가방 장비: 착용하면 칸이 늘고(20+12), 벗을 때 아이템이 20칸을 넘으면 실패, 작은 가방으로 교체도 같은 규칙'(assert) {
     const { Inventory, G, give } = boot();
     const bagM = give('bag_m'), bagS = give('bag_s');

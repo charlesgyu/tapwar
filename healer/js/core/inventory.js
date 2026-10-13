@@ -116,9 +116,10 @@ const Inventory = (() => {
     if (d.levelReq && (G.player.level || 1) < d.levelReq) return fail('level');
     return { ok: true };
   }
-  // 반지는 빈 칸 우선, 둘 다 차 있으면 첫째를 교체
-  function targetSlot(G, d) {
+  // 반지는 빈 칸 우선, 둘 다 차 있으면 첫째를 교체. hint('ring1'|'ring2')를 주면 그 칸에 끼운다(상태창 슬롯 탭).
+  function targetSlot(G, d, hint) {
     if (d.slot !== 'ring') return d.slot;
+    if (hint === 'ring1' || hint === 'ring2') return hint;
     const eq = G.player.equipment;
     return !eq.ring1 ? 'ring1' : (!eq.ring2 ? 'ring2' : 'ring1');
   }
@@ -147,11 +148,11 @@ const Inventory = (() => {
     if (slot === 'bag') ensureBag(G);
     if (slot === 'belt') syncBelt(G);
   }
-  function equip(G, uid) {
+  function equip(G, uid, slotHint) {
     const i = indexOf(G, uid); if (i < 0) return fail('not_found');
     const inst = G.player.bag[i], d = def(inst);
     const chk = canEquip(G, inst); if (!chk.ok) return chk;
-    const slot = targetSlot(G, d), displaced = displacedSlots(G, d, slot);
+    const slot = targetSlot(G, d, slotHint), displaced = displacedSlots(G, d, slot);
     // 공간: 장착하면 가방 한 칸이 비고, 벗겨진 장비가 그만큼 들어가야 한다. 가방 교체는 새 칸 수 기준.
     const after = items(G).length - 1 + displaced.length;
     const cap = d.slot === 'bag' ? BASE_BAG + (d.bagSize || 0) : bagSize(G);
