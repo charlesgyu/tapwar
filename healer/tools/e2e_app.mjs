@@ -93,15 +93,19 @@ step('프롤로그 건너뛰기 → 마을(기본 장비)', inTown && await ev((
 // 테스트 준비: 구매·강화 비용(새 게임 골드 300 으로는 부족) — 치트는 이것과 던전 순간이동/보스 HP 뿐
 await ev(() => { window.__healer.G().player.gold = 6000; window.__healer.TownScene.updateHud(true); });
 
-// 실제 화면 탭으로 한 번 걷기(Scenes 포인터 → TownScene.onTap → 길찾기)
+// 탭만으로는 걷지 않는다(이동은 조이스틱 드래그만): 빈 곳 탭은 제자리, 드래그는 이동
 const tapOk = await (async () => {
-  const p0 = await ev(() => ({ x: window.__healer.player.x, y: window.__healer.player.y }));
+  const pos = () => ev(() => ({ x: window.__healer.player.x, y: window.__healer.player.y }));
+  const p0 = await pos();
   await page.touchscreen.tap(195, 330);
-  await wait(1500);
-  const p1 = await ev(() => ({ x: window.__healer.player.x, y: window.__healer.player.y }));
-  return Math.hypot(p1.x - p0.x, p1.y - p0.y) > 20;
+  await wait(900);
+  const p1 = await pos();
+  await page.mouse.move(195, 600); await page.mouse.down(); await page.mouse.move(195, 540, { steps: 4 });
+  await wait(700); await page.mouse.up(); await wait(200);
+  const p2 = await pos();
+  return Math.hypot(p1.x - p0.x, p1.y - p0.y) < 2 && Math.hypot(p2.x - p1.x, p2.y - p1.y) > 20;
 })();
-step('화면 탭 이동', tapOk);
+step('탭은 제자리, 드래그로 이동', tapOk);
 
 // ============ 2. NPC 대화: 장로 엘다 ============
 let ok = await talk('priest_elder');

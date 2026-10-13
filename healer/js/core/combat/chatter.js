@@ -12,7 +12,7 @@ const Chatter = (() => {
   const TICK = 0.1;
   const GLOBAL_GAP = 1.5, URGENT_GAP = 0.6, ENT_GAP = 3.5, PENDING_LIFE = 1.4;
   const HEAL_REQ = { tank: 0.40, other: 0.45 }, URGENT_HP = 0.30, THANKS_FROM = 0.35, THANKS_AT = 0.75, WANTS_HEAL_FOR = 3.5;
-  const MANY_FOES = 8, BANTER_KILLS = 3, BANTER_WIN = 2.2;
+  const MANY_FOES = 8, BIG_PULL = 14, BANTER_KILLS = 3, BANTER_WIN = 2.2;
   // 종류별 쿨타임(초, 같은 사람 기준. g: 파티 전체 기준)
   const KIND_GAP = {
     pull: 6, pull_go: 6, many: 20, telegraph: 4.5, heal_req: 5, heal_req_tank: 4, boss: 60, miniboss: 30, summon: 10, phase: 8,
@@ -200,7 +200,7 @@ const Chatter = (() => {
     const pull = battle.lead && battle.lead.pull;
     if (pull && pull !== st.pullSeen && lead) {
       st.pullSeen = pull;
-      const kind = pull.tier === 'boss' ? 'boss' : pull.tier === 'miniboss' ? 'pull_mini' : pull.size >= MANY_FOES ? 'pull_big' : 'pull';
+      const kind = pull.tier === 'boss' ? 'boss' : pull.tier === 'miniboss' ? 'pull_mini' : pull.size >= BIG_PULL && rand(st) < 0.6 ? 'pull_big' : 'pull';
       propose(st, battle, lead, kind, { gapKey: kind === 'boss' ? 'boss' : 'pull', priority: kind === 'boss' ? 3 : 2 });
       if (kind === 'boss') st.bossSeen[pull.uid] = true;
     }
@@ -215,7 +215,8 @@ const Chatter = (() => {
       st.combat = false;
       const won = battle.allies().length && st.kills > (st.combatKills || 0) && !battle.result;
       if (won) {
-        const bossDown = battle.monsters.some((m) => m.tier === 'boss' && !m.alive && st.bossSeen[m.uid]);
+        const boss = battle.monsters.find((m) => m.tier === 'boss' && !m.alive && st.bossSeen[m.uid] && !st.bossCheered);
+        const bossDown = !!boss; if (boss) st.bossCheered = true;
         const who = rand(st) < 0.7 ? lead : battle.members.filter(alive)[Math.floor(rand(st) * battle.members.filter(alive).length)];
         if (who) propose(st, battle, who, bossDown ? 'victory_boss' : 'victory', { gapKey: 'victory', delay: 0.6, life: 2.5 });
       }

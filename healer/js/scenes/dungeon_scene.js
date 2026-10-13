@@ -272,8 +272,8 @@ const DungeonScene = (() => {
     const spot = goal || AIParty.behindSpot(battle, HEALER_BACK, 0, player.radius);
     if (!spot) return;
     const d = dist(player, spot);
-    // 시전 중엔 많이 처지지 않는 한(7타일) 서서 마저 시전한다 — 움직이면 주문이 끊긴다
-    if (d < 6 || (player.cast && d < FOLLOW_FORCE)) { if (route && route.kind === 'lead') route = null; return; }
+    // 시전 중엔 많이 처지지 않는 한(4타일) 서서 마저 시전한다 — 움직이면 주문이 끊긴다
+    if (d < 6 || (player.cast && d < 4 * TILE)) { if (route && route.kind === 'lead') route = null; return; }
     if (canStandLine(player, spot, player.radius)) {
       if (route && route.kind === 'lead') route = null;
       battle.moveTo(player, spot.x, spot.y, dt, d < 24 ? 0.9 : 1);
@@ -365,12 +365,7 @@ const DungeonScene = (() => {
     let pick = null, pd = TAP_PICK_R;
     for (const e of battle.party()) { const d = Math.hypot(e.x - wx, e.y - 14 - wy); if (d < pd) { pd = d; pick = e; } }
     if (pick) { selectTarget(pick.uid); return; }
-    if (!alive(player)) return;
-    const pts = findPath(player.x, player.y, wx, wy);
-    if (!pts || !pts.length) { toast('그곳으로는 갈 수 없어요', 1200); return; }
-    route = { kind: 'tap', pts, at: time };
-    tapMark = { x: wx, y: wy, t: 0 };
-    manualT = 0; followMoving = false; explore.target = null; dropLead();
+    // 빈 곳 탭으로는 이동하지 않는다(이동은 조이스틱·AUTO 만)
   }
   function selectTarget(uid) {
     selUid = selUid === uid ? null : uid;

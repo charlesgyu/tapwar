@@ -1,5 +1,6 @@
 // 층 시뮬레이션 — 적정 레벨 파티(탱1 근딜1 원딜2 + 힐러=플레이어)가 탐험 봇으로 층을 끝까지 돈다.
-// 사용: node healer/tools/sim.js <floor|all> [maxSeconds] [partyLevel] [--json] [--seed=1] [--runs=1] [--gear=basic|normal|good] [--skill=N] [--nododge] [--quiet] [--trace]
+// 사용: node healer/tools/sim.js <floor|all> [maxSeconds] [partyLevel] [--json] [--seed=1] [--runs=1] [--gear=basic|normal|good] [--skill=N] [--nododge] [--quiet] [--trace] [--lead]
+//   --lead: 게임의 AUTO 처럼 탱커가 앞장서고(풀링 포함) 힐러가 뒤따른다. 없으면 예전처럼 힐러(봇)가 앞장선다.
 //   봇: 가장 가까운(BFS 걸음 수) 미방문 무리/상자/중간보스 → 모두 돌면 보스 → 출구. 전투 중엔 제자리(힐러 AI 가 시전), 비전투엔 HP/MP 가 찰 때까지 쉰다.
 //   dt=0.1 고정 스텝. 결과: cleared/wipe/timeout, 걸린 시간, 걸음·킬·상자, 사망 횟수, 평균 MP, 스킬 사용 통계, 보스 페이즈.
 // 모듈로도 쓴다: require('./sim').run({ floor, maxSeconds, level, seed, gear, skill }) -> stats (tests/sim_smoke.test.js)
@@ -64,7 +65,7 @@ function setupMembers(ctx, G, level, floor, o) {
 }
 
 // ---------------- 탐험 봇 ----------------
-function makeBot(ctx, fs, G) {
+function makeBot(ctx, fs, G, lead = false) {
   const { map, battle } = fs, p = battle.player, cols = map.cols, rows = map.rows;
   const S = { target: null, path: [], wp: 0, stuck: 0, rest: 0, resting: false, wait: 0, visited: new Set(), unreachable: new Set(), replans: 0,
     lastHit: 0, lastPartyHit: 0, stalemates: 0, regroups: 0, retreats: 0, budget: { dead: 0, cast: 0, combat: 0, rest: 0, stragglers: 0, lead: 0, move: 0, regroup: 0 } };   // budget: 시간이 어디에 쓰였는지(진단용)
@@ -214,13 +215,80 @@ function makeBot(ctx, fs, G) {
     if (S.lastHit > S.lastStalemate) { S.stalemates++; S.lastStalemate = fs.time; }
     return true;
   }
+  // ---- 탱커 앞장(--lead, 게임의 AUTO 와 같은 방식) ----
+  // 탱커(AIParty.leaderOf)가 BFS 경로로 다음 목표에 먼저 걷고(AIParty.lead → 풀링 포함), 힐러는 탱커 발자국 2.7타일 뒤를 따라간다.
+  // 상자·출구는 힐러가 밟아야 하므로 탱커가 닿으면 힐러가 직접 간다. 전투 중엔 예전처럼 제자리(너무 멀면 탱커 쪽으로).
+  const AIParty = ctx.AIParty;
+  const HEALER_BACK = 2.7 * TILE;
+  const W = { path: [], wp: 0, at: -99, key: '' };
+  function walkTo(spot, dt) {
+    const from = tileOf(p), to = tileOf(spot), key = to.i + ',' + to.j;
+    if (from.i === to.i && from.j === to.j) { battle.moveTo(p, spot.x, spot.y, dt); return; }
+    if (W.key !== key || fs.time - W.at > 1) {
+      const { dist: d, prev } = bfs(from), cell = to.j * cols + to.i;
+      W.path = d[cell] >= 0 ? pathTo(from, cell, prev) : []; W.wp = 0; W.at = fs.time; W.key = key;
+      if (W.path.length) W.path[W.path.length - 1] = { x: spot.x, y: spot.y };
+    }
+    while (W.path[W.wp] && dist(p, W.path[W.wp]) <= 6) W.wp++;
+    const wp = W.path[W.wp] || spot;
+    battle.moveTo(p, wp.x, wp.y, dt);
+  }
+  function healerFollow(dt, goal) {
+    const spot = goal || AIParty.behindSpot(battle, HEALER_BACK, 0, p.radius);
+    if (!spot) return;
+    const d = dist(p, spot);
+    if (d < 6 || (p.cast && d < 4 * TILE)) return;
+    walkTo(spot, dt);
+  }
+  function hold() { if (!battle.lead || battle.lead.pts.length) AIParty.lead(battle, null); }
+  function leadStep(dt, ld, inCombat) {
+    if (inCombat) {
+      hold(); S.target = null;
+      // 탱커가 너무 멀면(7타일) 힐 사거리 안으로 붙는다
+      if (dist(p, ld) > 7 * TILE && !p.cast) walkTo(ld, dt);
+      return spend('combat', dt);
+    }
+    if (needRest(inCombat)) { hold(); S.target = null; const spot = AIParty.behindSpot(battle, HEALER_BACK, 0, p.radius); if (spot && dist(p, spot) > 3 * TILE) walkTo(spot, dt); return spend('rest', dt); }
+    let L = battle.lead;
+    if (!L || !S.target || S.leadUid !== ld.uid || (!L.pts.length && L.state === 'hold')) {
+      if (!chooseFrom(ld)) return;
+      L = AIParty.lead(battle, S.path, S.target); S.leadUid = ld.uid;
+    }
+    const t = S.target;
+    if (L.state === 'stuck') { S.replans++; if (S.replans % 2 === 0) S.unreachable.add(t.id); S.target = null; hold(); return; }
+    if (L.state === 'ready' || L.state === 'pull') spend('lead', dt); else spend('move', dt);
+    let goal = null;
+    if (t.kind === 'chest' || t.kind === 'exit') {
+      if (L.state === 'arrived' || dist(ld, t) <= 1.5 * TILE) {
+        goal = { x: t.x, y: t.y };
+        if (dist(p, t) <= ARRIVE[t.kind] + 6) { arrive(); hold(); return; }
+      }
+    } else if (L.state === 'arrived' || dist(ld, t) <= ARRIVE[t.kind]) { arrive(); hold(); return; }
+    healerFollow(dt, goal);
+  }
+  function chooseFrom(ent) {
+    const from = tileOf(ent), { dist: d, prev } = bfs(from);
+    let best = null;
+    for (const c of candidates()) {
+      const v = d[c.j * cols + c.i];
+      if (v < 0) { S.unreachable.add(c.id); continue; }
+      if (!best || v < best.v) best = { v, c };
+    }
+    if (!best) return false;
+    S.target = best.c; S.path = pathTo(from, best.c.j * cols + best.c.i, prev); S.wp = 0; S.stuck = 0;
+    return true;
+  }
+
   function step(dt) {
     if (fs.result) return;
     if (!alive(p)) return spend('dead', dt);
-    if (p.cast) return spend('cast', dt);
+    const ld = lead ? AIParty.leaderOf(battle) : null;
+    if (!ld && battle.lead) AIParty.unlead(battle);
+    if (p.cast && !ld) return spend('cast', dt);
     const inCombat = battle.inCombat() && !stalemate();
-    if (inCombat && partyStuck()) { spend('regroup', dt); return regroup(dt); }
+    if (inCombat && partyStuck()) { if (battle.lead) AIParty.unlead(battle); spend('regroup', dt); return regroup(dt); }
     if (S.target && (S.target.kind === 'regroup' || S.target.kind === 'retreat')) S.target = null;   // 합류·후퇴가 끝났으면 탐험으로
+    if (ld) return leadStep(dt, ld, inCombat);
     if (inCombat) return spend('combat', dt);
     if (needRest(inCombat)) return spend('rest', dt);
     if (waitStragglers()) return spend('stragglers', dt);
@@ -244,7 +312,7 @@ function run(o = {}) {
   setupPlayer(ctx, G, level, floor, opts);
   setupMembers(ctx, G, level, floor, opts);
   const fs = Floor.start(G, floor, { rng: RNG.make(seed) });
-  const bot = makeBot(ctx, fs, G);
+  const bot = makeBot(ctx, fs, G, !!o.lead);
   const st = { skills: {}, cancels: 0, bossPhase: 0, bossEngaged: false, playerHits: 0, mpSamples: 0, mpSum: 0, levelUps: 0, cursesOnPlayer: 0 };
   const bossUid = fs.boss ? fs.boss.uid : null;
   Events.on('cast_done', (e) => { if (e.uid === 'player' && e.skillId) st.skills[e.skillId] = (st.skills[e.skillId] || 0) + 1; });
@@ -269,7 +337,7 @@ function run(o = {}) {
   const summary = Floor.leave(fs, G, fs.result || 'escape');
   const phases = fs.boss && fs.boss.def.phases ? fs.boss.def.phases.length : 1;
   return {
-    floor, name: fs.map.name, level, gear: opts.gear, skill: opts.skill, seed, result, time: summary.time, realMs: Date.now() - t0,
+    floor, name: fs.map.name, level, gear: opts.gear, lead: !!o.lead, skill: opts.skill, seed, result, time: summary.time, realMs: Date.now() - t0,
     steps: summary.steps, kills: summary.kills, monsters: fs.battle.monsters.length, chests: summary.chests, chestsTotal: fs.chests.length,
     groupsVisited: bot.state.visited.size, groupsTotal: fs.map.groups.length, unreachable: Array.from(bot.state.unreachable),
     playerDeaths: summary.playerDeaths, memberDeaths: summary.memberDeaths, avgMp: st.mpSamples ? st.mpSum / st.mpSamples : 0,
@@ -299,7 +367,7 @@ function fmt(r) {
   const skills = Object.entries(r.skills).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}×${v}`).join(' ') || '(없음)';
   const boss = r.boss.defeated ? `처치(페이즈 ${r.boss.phases}/${r.boss.phases})` : r.boss.engaged ? `교전(페이즈 ${r.boss.phase}/${r.boss.phases}, HP ${pct(r.boss.hpLeft)}%)` : '미교전';
   return [
-    `=== ${r.floor}층 ${r.name} | 파티 Lv.${r.level} | 장비 ${r.gear} | 스킬 Lv.${r.skill} | seed ${r.seed} ===`,
+    `=== ${r.floor}층 ${r.name} | 파티 Lv.${r.level} | 장비 ${r.gear} | 스킬 Lv.${r.skill} | seed ${r.seed}${r.lead ? ' | 탱커 앞장' : ''} ===`,
     `결과: ${r.result}  시간: ${r.time}s (실제 ${(r.realMs / 1000).toFixed(1)}s)  걸음: ${r.steps}  킬: ${r.kills}/${r.monsters}  상자: ${r.chests}/${r.chestsTotal}  무리: ${r.groupsVisited}/${r.groupsTotal}`,
     `플레이어 사망: ${r.playerDeaths}  파티원 사망: ${r.memberDeaths}  평균 MP: ${pct(r.avgMp)}%  피격: ${r.playerHits}  저주: ${r.cursesOnPlayer}  보스: ${boss}  피로 +${r.fatigueGained}  레벨업 ${r.levelUps} → [${r.partyLevels.join(',')}]`,
     `스킬: ${skills}  (취소 ${r.cancels})`,
@@ -323,14 +391,14 @@ function parseArgs(argv) {
     floors: pos[0] === 'all' ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] : [parseInt(pos[0] || '1', 10)],
     maxSeconds: pos[1] ? parseFloat(pos[1]) : 3600, level: pos[2] ? parseInt(pos[2], 10) : 0,
     seed: parseInt(flag('seed', '1'), 10), runs: parseInt(flag('runs', '1'), 10), gear: flag('gear', ''), skill: parseInt(flag('skill', '0'), 10),
-    json: argv.includes('--json'), quiet: argv.includes('--quiet'), dodge: !argv.includes('--nododge'), trace: argv.includes('--trace'),
+    json: argv.includes('--json'), lead: argv.includes('--lead'), quiet: argv.includes('--quiet'), dodge: !argv.includes('--nododge'), trace: argv.includes('--trace'),
   };
 }
 function main() {
   const a = parseArgs(process.argv.slice(2));
   const rows = [];
   for (const floor of a.floors) for (let k = 0; k < a.runs; k++) {
-    const r = run({ floor, maxSeconds: a.maxSeconds, level: a.level || undefined, seed: a.seed + k, gear: a.gear || undefined, skill: a.skill || undefined, dodge: a.dodge, trace: a.trace });
+    const r = run({ floor, maxSeconds: a.maxSeconds, level: a.level || undefined, seed: a.seed + k, gear: a.gear || undefined, skill: a.skill || undefined, dodge: a.dodge, trace: a.trace, lead: a.lead });
     rows.push(r);
     if (!a.json && !a.quiet) console.log(fmt(r) + '\n');
   }

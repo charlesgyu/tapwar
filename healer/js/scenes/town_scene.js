@@ -158,26 +158,18 @@ const TownScene = (() => {
     if (talking) return;
     let hit = null, hd = 24; // NPC 터치 반경(월드 px), 스프라이트 몸통 중심 기준
     for (const n of npcs) { const d = Math.hypot(n.x - wx, n.y - 18 - wy); if (d < hd) { hd = d; hit = n; } }
+    // 탭으로는 캐릭터가 걷지 않는다(이동은 조이스틱만). 가까이 있는 NPC·건물만 탭으로 상호작용
     if (hit) {
-      if (Math.hypot(hit.x - player.x, hit.y - player.y) < 64) talkTo(hit);
-      else {
-        // 정면(아래)에서 말을 거는 게 자연스럽지만 막혀 있으면 옆으로
-        const spots = [[0, 26], [26, 0], [-26, 0], [0, -24]].map(([ox, oy]) => ({ x: hit.x + ox, y: hit.y + oy })).filter((p) => Town.canStand(p.x, p.y));
-        const s = spots[0] || { x: hit.x, y: hit.y + 26 };
-        hit.talkT = Math.max(hit.talkT, 4); hit.path = null; // 걸어가는 동안 도망가지 않게
-        goTo(s.x, s.y, () => talkTo(hit));
-        tapMark = { x: s.x, y: s.y, t: 0 };
-      }
+      if (Math.hypot(hit.x - player.x, hit.y - player.y) < 72) talkTo(hit);
+      else UI.toast('가까이 가서 탭하면 대화할 수 있어요', 1400);
       return;
     }
     const b = Town.buildingAtTile(Math.floor(wx / TILE), Math.floor(wy / TILE));
     if (b) {
       const d = Town.doorPoint(b);
-      goTo(d.x, d.y, () => enterBuilding(b));
-      tapMark = { x: d.x, y: d.y, t: 0 };
+      if (Math.hypot(d.x - player.x, d.y - player.y) < 72) enterBuilding(b);
       return;
     }
-    if (goTo(wx, wy)) tapMark = { x: wx, y: wy, t: 0 };
   }
 
   // ---------- 시설 ----------
@@ -395,7 +387,7 @@ const TownScene = (() => {
         unsubs.push(Events.on('chapter_advanced', checkTownEvent));
       }
       updateHud(true);
-      if (!entered) UI.toast('탭하면 이동, 드래그하면 조이스틱, 두 번 탭하면 메뉴!', 3500);
+      if (!entered) UI.toast('드래그로 이동, 가까이서 탭하면 대화, 두 번 탭하면 메뉴!', 3500);
       entered = true;
       checkTownEvent();
     },
