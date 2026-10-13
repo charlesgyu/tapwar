@@ -3285,7 +3285,10 @@ function openItemPick() {
     const b = document.createElement('button');
     b.className = 'item-card';
     b.innerHTML = itemCardHtml(it, itemCount(OWNER.PLAYER, it.key));
-    b.onclick = () => chooseItem(it.key);
+    // 카드 창이 뜨기 전부터 지도를 누르고 있던 손가락을 떼면 생기는 '유령 클릭'이 카드를 골라 버리는 문제 방지:
+    // 창이 열린 뒤 이 카드 위에서 직접 누르기 시작한 경우만 고름 (키보드 선택은 detail 0 이라 허용)
+    b.addEventListener('pointerdown', () => { b.dataset.armed = '1'; });
+    b.onclick = e => { if (e.detail !== 0 && !b.dataset.armed) return; chooseItem(it.key); };
     list.appendChild(b);
   });
   m.style.display = 'flex';

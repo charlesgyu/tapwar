@@ -13,7 +13,7 @@
 
 ## 매번 하는 배포 순서 (사용자 요청: 바꿀 때마다 전부)
 1. `node --check game.js`
-2. `index.html`의 `game.js?v=20261012_items_vNN` / `audio.js?v=...` **버전 숫자 +1** (현재 v67). 휴대폰이 새 파일을 받게 하는 용도.
+2. `index.html`의 `game.js?v=20261012_items_vNN` / `audio.js?v=...` **버전 숫자 +1** (현재 v68). 휴대폰이 새 파일을 받게 하는 용도.
 3. `GAME_RULES.md` 갱신(규칙이 바뀐 경우).
 4. 커밋 → `git push -u origin claude/tapwar-review-c45ygv` → PR(base main) 생성 → **바로 머지**(사용자 지시: 매번 머지). PR 본문 끝에 Claude Code 꼬리말.
 5. 아티팩트 갱신: `tools/make_artifact.sh <출력경로>`로 index.html에서 아티팩트용 html을 만들고, Artifact 도구로 **기존 URL** `https://claude.ai/artifact/B7TasT5a1TiX2ihVvpXGV7` 에 publish(`files`에 `game.js`, `audio.js`, 필요 시 `assets/earth.png`). 새 세션이면 먼저 `read`로 그 URL을 읽어야 publish가 허용됨.
@@ -48,6 +48,7 @@
 - 시작 연출 지구본(`traceOrthoRing`): 지구 반대편 정중앙이 육지 안에 들어가면(한국 볼 때 남미) 바다가 땅색으로 뒤집힘 → 반대 방향 원으로 상쇄 (v64).
 - 아이템 밸런스(v65): 파워샷 20%, 속사는 발사 간격도 절반, 버프샷·저주샷 10%, 철벽은 완전 차단, 튕기기 1번(v66). 수치는 `ITEM_BAL` 한곳.
 - 아이템 카드 10번 + 겹치기(v67): 같은 카드 2장째부터 확률 +10%p, 최대 3장(장거리 1장). `itemCount/itemStackBonus/itemCanTake`, 카드 칸은 ×n 표시, 고르기 제목 옆 "n/10". 카드 칸은 테두리 상자 없음 유지.
+- 카드 고르기 유령 클릭(v68): 지도를 누르고 있는 사이 카드 창이 뜨면 손을 뗄 때 클릭이 그 자리 카드를 골라 버림 → 카드 위에서 pointerdown 한 경우만 선택.
 
 ## 그래픽 구조 (v59, 자세한 설계는 GAME_RULES.md '그래픽' 절)
 - CSS 토큰은 `index.html` `:root`(남색 `--navy-*`, 돌색 `--line/--muted...`, 노랑 `--accent/--accent-ground`, 반지름 `--r-*`). 홈·스플래시는 남색 우주, 지도는 밝은 종이.
