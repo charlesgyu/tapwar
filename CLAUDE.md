@@ -13,7 +13,7 @@
 
 ## 매번 하는 배포 순서 (사용자 요청: 바꿀 때마다 전부)
 1. `node --check game.js`
-2. `index.html`의 `game.js?v=20261012_items_vNN` / `audio.js?v=...` **버전 숫자 +1** (현재 v62). 휴대폰이 새 파일을 받게 하는 용도.
+2. `index.html`의 `game.js?v=20261012_items_vNN` / `audio.js?v=...` **버전 숫자 +1** (현재 v63). 휴대폰이 새 파일을 받게 하는 용도.
 3. `GAME_RULES.md` 갱신(규칙이 바뀐 경우).
 4. 커밋 → `git push -u origin claude/tapwar-review-c45ygv` → PR(base main) 생성 → **바로 머지**(사용자 지시: 매번 머지). PR 본문 끝에 Claude Code 꼬리말.
 5. 아티팩트 갱신: `tools/make_artifact.sh <출력경로>`로 index.html에서 아티팩트용 html을 만들고, Artifact 도구로 **기존 URL** `https://claude.ai/artifact/B7TasT5a1TiX2ihVvpXGV7` 에 publish(`files`에 `game.js`, `audio.js`, 필요 시 `assets/earth.png`). 새 세션이면 먼저 `read`로 그 URL을 읽어야 publish가 허용됨.
@@ -44,6 +44,7 @@
 - 총알 효과음 없음. 음악은 점령전 행진곡 풍.
 - 미니맵·아이템 카드 칸은 테두리 상자 없이 지도 위에 바로 놓음. 아이템 카드 고르기 제목 옆 진행 점(•••••) 없음 (v61).
 - 홈 하늘 별: `game.js` 끝 `homeSky()`가 `#sky-stars` 캔버스에 그림. 4~10초 주기로 천천히 은은하게 밝아졌다 어두워짐, 7~16초마다 별똥별 하나 (v62). 경박하게 빠른 반짝임은 금지.
+- 아이폰 길게 누르기 돋보기: CSS user-select 만으로는 안 막힘. 길게 누르는 UI(아이템 카드 칸)는 `touchstart`에 `preventDefault`(passive:false) 필요 (v63).
 
 ## 그래픽 구조 (v59, 자세한 설계는 GAME_RULES.md '그래픽' 절)
 - CSS 토큰은 `index.html` `:root`(남색 `--navy-*`, 돌색 `--line/--muted...`, 노랑 `--accent/--accent-ground`, 반지름 `--r-*`). 홈·스플래시는 남색 우주, 지도는 밝은 종이.

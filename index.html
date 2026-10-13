@@ -1002,6 +1002,7 @@
     #surrender-btn { left: max(16px, env(safe-area-inset-left)); }
     #speed-group { right: max(16px, env(safe-area-inset-right)); }
     #item-bar[hidden] { display: none; }
+    #item-bar, #item-tip { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
     .item-side { display: flex; gap: 6px; padding-left: 9px; position: relative; }
     .item-side::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; border-radius: 10px; background: #60a5fa; }
     .item-side.theirs::before { background: #f87171; }
@@ -1275,7 +1276,7 @@
     <div class="end-confetti" id="end-confetti" aria-hidden="true"></div>
   </div>
 
-  <script src="audio.js?v=20261012_items_v62"></script>
-  <script src="game.js?v=20261012_items_v62"></script>
+  <script src="audio.js?v=20261012_items_v63"></script>
+  <script src="game.js?v=20261012_items_v63"></script>
 </body>
 </html>
