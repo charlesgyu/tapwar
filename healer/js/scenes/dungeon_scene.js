@@ -271,7 +271,8 @@ const DungeonScene = (() => {
     const spot = goal || AIParty.behindSpot(battle, HEALER_BACK, 0, player.radius);
     if (!spot) return;
     const d = dist(player, spot);
-    if (d < 6 || (player.cast && d < 3 * TILE)) { if (route && route.kind === 'lead') route = null; return; }
+    // 시전 중엔 많이 처지지 않는 한(7타일) 서서 마저 시전한다 — 움직이면 주문이 끊긴다
+    if (d < 6 || (player.cast && d < FOLLOW_FORCE)) { if (route && route.kind === 'lead') route = null; return; }
     if (canStandLine(player, spot, player.radius)) {
       if (route && route.kind === 'lead') route = null;
       battle.moveTo(player, spot.x, spot.y, dt, d < 24 ? 0.9 : 1);
@@ -289,7 +290,12 @@ const DungeonScene = (() => {
     if (route && route.kind !== 'lead') route = null;
     // 많이 다쳤거나 마나가 바닥이면 잠깐(최대 8초) 다 같이 멈춰 숨을 고른다
     const low = battle.allies().some((e) => e.hp / e.maxHp < 0.45) || (p.maxMp > 0 && p.mp / p.maxMp < 0.2);
-    if (low && explore.rest < 8) { explore.rest += dt; explore.status = '🍃 숨 고르는 중…'; holdLead(); explore.target = null; healerFollow(dt); return; }
+    if (low && explore.rest < 8) {
+      explore.rest += dt; explore.status = '🍃 숨 고르는 중…'; holdLead(); explore.target = null;
+      const spot = AIParty.behindSpot(battle, HEALER_BACK, 0, player.radius);
+      if (spot && dist(player, spot) > 3 * TILE) healerFollow(dt);   // 쉬는 동안엔 멀 때만 움직인다(힐 시전이 끊기지 않게)
+      return;
+    }
     if (!low) explore.rest = 0;
     let L = battle.lead;
     if (!L || !explore.target || explore.leadUid !== ld.uid || !L.pts.length && L.state === 'hold') {
