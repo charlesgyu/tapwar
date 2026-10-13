@@ -13,7 +13,7 @@
 
 ## 매번 하는 배포 순서 (사용자 요청: 바꿀 때마다 전부)
 1. `node --check game.js`
-2. `index.html`의 `game.js?v=20261012_items_vNN` / `audio.js?v=...` **버전 숫자 +1** (현재 v60). 휴대폰이 새 파일을 받게 하는 용도.
+2. `index.html`의 `game.js?v=20261012_items_vNN` / `audio.js?v=...` **버전 숫자 +1** (현재 v61). 휴대폰이 새 파일을 받게 하는 용도.
 3. `GAME_RULES.md` 갱신(규칙이 바뀐 경우).
 4. 커밋 → `git push -u origin claude/tapwar-review-c45ygv` → PR(base main) 생성 → **바로 머지**(사용자 지시: 매번 머지). PR 본문 끝에 Claude Code 꼬리말.
 5. 아티팩트 갱신: `tools/make_artifact.sh <출력경로>`로 index.html에서 아티팩트용 html을 만들고, Artifact 도구로 **기존 URL** `https://claude.ai/artifact/B7TasT5a1TiX2ihVvpXGV7` 에 publish(`files`에 `game.js`, `audio.js`, 필요 시 `assets/earth.png`). 새 세션이면 먼저 `read`로 그 URL을 읽어야 publish가 허용됨.
@@ -42,6 +42,7 @@
 - 배속 버튼은 ×1/×2 두 개, ×2는 유료. 구매 전 나라는 '둘러보기'로 맵을 잠긴 모습으로 구경, 그 화면에서 '구매하기'.
 - 홈 국가 카드 마지막은 'Earth'(지구본 그림), 들어가면 전세계 맵 카드 + 순위 카드.
 - 총알 효과음 없음. 음악은 점령전 행진곡 풍.
+- 미니맵·아이템 카드 칸은 테두리 상자 없이 지도 위에 바로 놓음. 아이템 카드 고르기 제목 옆 진행 점(•••••) 없음 (v61).
 
 ## 그래픽 구조 (v59, 자세한 설계는 GAME_RULES.md '그래픽' 절)
 - CSS 토큰은 `index.html` `:root`(남색 `--navy-*`, 돌색 `--line/--muted...`, 노랑 `--accent/--accent-ground`, 반지름 `--r-*`). 홈·스플래시는 남색 우주, 지도는 밝은 종이.
