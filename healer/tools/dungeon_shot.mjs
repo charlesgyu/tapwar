@@ -42,6 +42,8 @@ const info = await page.evaluate(({ floor, level }) => {
   const G = State.newGame('리프');
   window.__counts = {};
   Events.on('*', (p, name) => { window.__counts[name] = (window.__counts[name] || 0) + 1; });
+  window.__cancels = {};
+  Events.on('cast_cancel', (p) => { if (p.uid === 'player') window.__cancels[p.reason] = (window.__cancels[p.reason] || 0) + 1; });
   if (level > 1) Level.addXp(G.player, Level.totalXpTo(level) - Level.totalXpTo(1) + 1, G);
   const rng = RNG.make(11);
   for (const [cls, role] of [['warrior', 'tank'], ['rogue', 'melee'], ['hunter', 'ranged'], ['mage', 'ranged']]) Party.add(G, Party.generateMember(rng, level, { cls, role }));
@@ -68,7 +70,7 @@ shots.push(await shot('lead_walk'));
 const leadInfo = await page.evaluate(() => { const D = window.__healer.dungeon, B = D.battle, L = B.lead, ld = L && L.leader, p = D.player;
   return { state: L && L.state, leader: ld && ld.name, role: ld && ld.role, leaderToHealer: ld ? Math.round(Math.hypot(ld.x - p.x, ld.y - p.y)) : null,
     order: B.party().map((e) => `${e.role}:${Math.round(e.x)},${Math.round(e.y)}`) }; });
-console.log('lead', JSON.stringify(leadInfo));
+console.log('lead', JSON.stringify(leadInfo), 'cancels', JSON.stringify(await page.evaluate(() => window.__cancels)));
 let pullShot = null;
 for (let k = 0; k < 160 && !pullShot; k++) {
   await wait(120);
@@ -174,7 +176,7 @@ for (let k = 0; k < 16 && !bossTg; k++) { await wait(500); bossTg = await page.e
 await page.evaluate(() => { document.querySelector('#dhud .dh-mapbtn').click(); });   // 미니맵 열기
 await wait(300);
 shots.push(await shot('boss'));
-const end = await page.evaluate(() => ({ fps: Scenes.fps(), counts: window.__counts, bossHp: Math.round(window.__healer.dungeon.fs.boss.hp), result: window.__healer.dungeon.fs.result }));
+const end = await page.evaluate(() => ({ cancels: window.__cancels, fps: Scenes.fps(), counts: window.__counts, bossHp: Math.round(window.__healer.dungeon.fs.boss.hp), result: window.__healer.dungeon.fs.result }));
 console.log('end', JSON.stringify(end));
 console.log('SHOTS', JSON.stringify(shots));
 await browser.close();
