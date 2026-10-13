@@ -162,7 +162,7 @@ const Monsters = (() => {
 
   // ---------------------------------------------------------------------------
   // 층 보스. abilities 전체 ≥ 4(10층 ≥ 5), summon 필수, phases 로 HP 구간별 능력 세트 전환.
-  // base.hp 는 "1층 기준값" — 실제 = base × Floors.mult (파티 DPS 기준 40~75초 전투가 되게 잡았다).
+  // base.hp 는 "1층 기준값" — 실제 = base × Floors.mult (빠른 템포의 파티 DPS 기준 45~90초 전투가 되게 잡았다).
   // ---------------------------------------------------------------------------
   function boss(id, name, family, biome, s, o) {
     const base = { hp: s.hp, atk: s.atk, def: s.def, spd: s.spd, aspd: s.aspd, range: s.range || 40 };
@@ -176,52 +176,52 @@ const Monsters = (() => {
   }
   const P = (hpBelow, abilities) => ({ hpBelow, abilities });
   const BOSSES = [
-    boss('boss_goblin_king', '고블린 왕 그락', 'goblin', ['forest'], { hp: 3500, atk: 34, def: 8, spd: 95, aspd: 0.7 }, {
+    boss('boss_goblin_king', '고블린 왕 그락', 'goblin', ['forest'], { hp: 17000, atk: 34, def: 8, spd: 95, aspd: 0.7 }, {
       tags: ['humanoid'], abilities: ['aoe_medium', 'summon_goblins', 'charge', 'enrage'],
       phases: [P(1.0, ['aoe_medium', 'summon_goblins']), P(0.6, ['aoe_medium', 'summon_goblins', 'charge']), P(0.3, ['aoe_medium', 'summon_goblins', 'charge', 'enrage'])],
       xp: 30, gold: [80, 140], title: '1층 보스', desc: '엘다의 종을 왕관에 단 고블린 왕. 부하를 부를 때 멈춘다.',
     }),
-    boss('boss_spider_queen', '거대 거미 여왕', 'spider', ['forest'], { hp: 4600, atk: 44, def: 9, spd: 110, aspd: 0.8 }, {
+    boss('boss_spider_queen', '거대 거미 여왕', 'spider', ['forest'], { hp: 19400, atk: 44, def: 9, spd: 110, aspd: 0.8 }, {
       tags: ['beast'], abilities: ['puddle_poison_large', 'summon_spiders', 'curse_volley', 'aoe_small'],
       phases: [P(1.0, ['puddle_poison_large', 'aoe_small']), P(0.7, ['puddle_poison_large', 'summon_spiders', 'aoe_small']), P(0.35, ['puddle_poison_large', 'summon_spiders', 'curse_volley', 'aoe_small'])],
       curses: [{ id: 'dot', chance: 0.35 }], xp: 30, gold: [110, 190], title: '2층 보스', desc: '기도서를 삼킨 여왕. 보라색 원이 다 차기 전에 나와야 한다.',
     }),
-    boss('boss_werewolf_chief', '늑대인간 족장 루가', 'werewolf', ['forest'], { hp: 5800, atk: 42, def: 10, spd: 150, aspd: 0.9 }, {
+    boss('boss_werewolf_chief', '늑대인간 족장 루가', 'werewolf', ['forest'], { hp: 22200, atk: 42, def: 10, spd: 150, aspd: 0.9 }, {
       tags: ['beast', 'humanoid'], abilities: ['charge', 'aoe_medium', 'summon_wolves', 'enrage', 'roar'],
       phases: [P(1.0, ['charge', 'aoe_medium']), P(0.65, ['charge', 'aoe_medium', 'summon_wolves']), P(0.3, ['charge', 'aoe_medium', 'summon_wolves', 'enrage', 'roar'])],
       curses: [{ id: 'dot', chance: 0.2 }], xp: 32, gold: [140, 240], title: '3층 보스', desc: '하얀 사제의 이름을 아는 늑대인간. 달빛 제단에서 울부짖는다.',
     }),
-    boss('boss_siren_queen', '세이렌 여왕 네레아', 'siren', ['forest'], { hp: 6400, atk: 52, def: 9, spd: 100, aspd: 0.8, range: 180 }, {
+    boss('boss_siren_queen', '세이렌 여왕 네레아', 'siren', ['forest'], { hp: 23800, atk: 52, def: 9, spd: 100, aspd: 0.8, range: 180 }, {
       tags: ['caster'], abilities: ['curse_volley', 'aoe_medium', 'summon_sirens', 'puddle_poison_large', 'heal_self'],
       phases: [P(1.0, ['curse_volley', 'aoe_medium']), P(0.7, ['curse_volley', 'aoe_medium', 'summon_sirens']), P(0.4, ['curse_volley', 'puddle_poison_large', 'summon_sirens', 'heal_self'])],
       curses: [{ id: 'heal_down', chance: 0.3 }, { id: 'spd_down', chance: 0.2 }], xp: 32, gold: [170, 280], title: '4층 보스', desc: '호수의 거짓 노래. 치유를 막는 저주가 끊이지 않는다.',
     }),
-    boss('boss_troll_chief', '트롤 족장 모르그', 'troll', ['forest'], { hp: 7400, atk: 60, def: 12, spd: 85, aspd: 0.6, range: 44 }, {
+    boss('boss_troll_chief', '트롤 족장 모르그', 'troll', ['forest'], { hp: 25200, atk: 60, def: 12, spd: 85, aspd: 0.6, range: 44 }, {
       tags: ['giant'], abilities: ['aoe_large', 'summon_trolls', 'enrage', 'heal_self', 'charge'],
       phases: [P(1.0, ['aoe_large', 'charge']), P(0.7, ['aoe_large', 'charge', 'summon_trolls']), P(0.4, ['aoe_large', 'summon_trolls', 'heal_self']), P(0.2, ['aoe_large', 'summon_trolls', 'enrage', 'charge'])],
       curses: [{ id: 'def_down', chance: 0.2 }], xp: 34, gold: [220, 360], title: '5층 보스', desc: '엘다를 가둔 트롤 족장. 재생을 끊지 못하면 끝이 없다.',
     }),
-    boss('boss_golem_lord', '돌 골렘 군주', 'golem', ['cave'], { hp: 8900, atk: 56, def: 20, spd: 70, aspd: 0.5, range: 48 }, {
+    boss('boss_golem_lord', '돌 골렘 군주', 'golem', ['cave'], { hp: 25000, atk: 56, def: 20, spd: 70, aspd: 0.5, range: 48 }, {
       tags: ['construct'], abilities: ['aoe_healer_large', 'aoe_large', 'summon_golems', 'aoe_random', 'enrage'],
       phases: [P(1.0, ['aoe_large', 'aoe_random']), P(0.7, ['aoe_large', 'aoe_healer_large', 'summon_golems']), P(0.35, ['aoe_large', 'aoe_healer_large', 'summon_golems', 'aoe_random', 'enrage'])],
       curses: [{ id: 'spd_down', chance: 0.3 }], xp: 34, gold: [300, 480], title: '6층 보스', desc: '아셀의 돌판을 가슴에 품은 파수꾼. 바위는 힐러 자리에 떨어진다.',
     }),
-    boss('boss_naga_priestess', '나가 여사제 샤일라', 'naga', ['cave'], { hp: 8600, atk: 50, def: 14, spd: 100, aspd: 0.8, range: 180 }, {
+    boss('boss_naga_priestess', '나가 여사제 샤일라', 'naga', ['cave'], { hp: 23600, atk: 50, def: 14, spd: 100, aspd: 0.8, range: 180 }, {
       tags: ['humanoid', 'aquatic', 'caster'], abilities: ['curse_volley_healer', 'puddle_poison_large', 'summon_naga', 'heal_self', 'aoe_medium'],
       phases: [P(1.0, ['curse_volley_healer', 'aoe_medium']), P(0.7, ['curse_volley_healer', 'aoe_medium', 'summon_naga']), P(0.4, ['curse_volley_healer', 'puddle_poison_large', 'summon_naga', 'heal_self'])],
       curses: [{ id: 'heal_down', chance: 0.35 }, { id: 'root', chance: 0.15 }], xp: 36, gold: [340, 560], title: '7층 보스', desc: '깊은 물의 예언자. 힐러를 침묵시키고 스스로 회복한다.',
     }),
-    boss('boss_orc_warchief', '오크 대족장 가르돈', 'orc', ['cave'], { hp: 8400, atk: 44, def: 16, spd: 105, aspd: 0.9, range: 44 }, {
+    boss('boss_orc_warchief', '오크 대족장 가르돈', 'orc', ['cave'], { hp: 23100, atk: 44, def: 16, spd: 105, aspd: 0.9, range: 44 }, {
       tags: ['humanoid'], abilities: ['charge_random', 'roar', 'summon_orcs', 'aoe_large', 'aoe_healer_large', 'enrage'],
       phases: [P(1.0, ['charge_random', 'aoe_large']), P(0.7, ['charge_random', 'aoe_large', 'summon_orcs']), P(0.4, ['charge_random', 'aoe_large', 'summon_orcs', 'roar', 'aoe_healer_large']), P(0.2, ['charge_random', 'aoe_large', 'summon_orcs', 'roar', 'aoe_healer_large', 'enrage'])],
       curses: [{ id: 'def_down', chance: 0.25 }, { id: 'atk_down', chance: 0.15 }], xp: 36, gold: [400, 640], title: '8층 보스', desc: '망령 왕에게 고용된 대족장. 북소리와 함께 머릿수로 밀어붙인다.',
     }),
-    boss('boss_wraith_king', '망령 왕 아셀', 'wraith', ['cave'], { hp: 8000, atk: 42, def: 14, spd: 120, aspd: 0.8, range: 170 }, {
+    boss('boss_wraith_king', '망령 왕 아셀', 'wraith', ['cave'], { hp: 22200, atk: 42, def: 14, spd: 120, aspd: 0.8, range: 170 }, {
       tags: ['undead', 'spirit', 'caster'], abilities: ['curse_volley_healer', 'summon_undead', 'aoe_healer_large', 'puddle_shadow', 'heal_self', 'enrage'],
       phases: [P(1.0, ['curse_volley_healer', 'puddle_shadow']), P(0.7, ['curse_volley_healer', 'puddle_shadow', 'summon_undead']), P(0.4, ['curse_volley_healer', 'aoe_healer_large', 'summon_undead', 'heal_self']), P(0.15, ['aoe_healer_large', 'summon_undead', 'enrage', 'puddle_shadow'])],
       curses: [{ id: 'heal_down', chance: 0.35 }, { id: 'dot', chance: 0.2 }], xp: 38, gold: [460, 720], title: '9층 보스', desc: '백 년 전의 대사제. "너를 치유해 주마, 영원히 아프지 않도록." 성스러운 일격이 통한다.',
     }),
-    boss('boss_dragon', '잿빛 드래곤 바르가', 'dragon', ['cave'], { hp: 8900, atk: 45, def: 22, spd: 110, aspd: 0.8, range: 56 }, {
+    boss('boss_dragon', '잿빛 드래곤 바르가', 'dragon', ['cave'], { hp: 22500, atk: 45, def: 22, spd: 110, aspd: 0.8, range: 56 }, {
       tags: ['dragon', 'flying'], abilities: ['cone_breath_large', 'puddle_fire_large', 'summon_drakes', 'aoe_healer_large', 'charge_random', 'roar', 'enrage'],
       phases: [P(1.0, ['cone_breath_large', 'puddle_fire_large']), P(0.75, ['cone_breath_large', 'puddle_fire_large', 'summon_drakes']), P(0.5, ['cone_breath_large', 'puddle_fire_large', 'summon_drakes', 'aoe_healer_large', 'roar']), P(0.25, ['cone_breath_large', 'puddle_fire_large', 'summon_drakes', 'aoe_healer_large', 'charge_random', 'enrage'])],
       curses: [{ id: 'dot', chance: 0.3 }, { id: 'def_down', chance: 0.2 }], xp: 40, gold: [600, 1000], loot: 'dragon', title: '10층 보스', desc: '탑의 첫 번째 수호자. 브레스는 옆으로, 용암은 밖으로, 새끼는 탱커가.',
@@ -249,12 +249,18 @@ const Monsters = (() => {
   function hasTag(def, tag) { return !!def && (def.tags || []).includes(tag); }
 
   // 몬스터 1마리가 특정 층에서 쓰는 전투 수치. perFloor 는 첫 등장 층(floorBase: 숲 1, 동굴 6)부터 층마다 누적, 그 위에 Floors.mult 를 곱한다.
+  // 빠른 전투 템포: 일반 몬스터는 딜러 한두 대(×0.45), 중간보스는 몇 초(×3) 버티게 등급별 HP 배수를 곱한다.
+  // 보스는 base.hp 자체를 45~90초 전투가 되게 잡았다(×1).
+  const TIER_HP = { normal: 0.45, miniboss: 3, boss: 1 };
+  // 교전(aggro) 중 이동속도 배수 — 무리가 우르르 달려든다(AIMonster 가 moveTo 에 넘긴다)
+  const AGGRO_SPEED = 1.35;
   function statsAt(def, floor) {
     const f = Floors.get(floor) || Floors.get(1);
     const n = Math.max(0, (floor || 1) - (def.floorBase || 1));
     const b = def.base, p = def.perFloor || { hp: 0, atk: 0, def: 0 };
+    const tierHp = TIER_HP[def.tier] || 1;
     const out = {
-      hp: Math.max(1, Math.round((b.hp + p.hp * n) * f.mult.hp)),
+      hp: Math.max(1, Math.round((b.hp + p.hp * n) * f.mult.hp * tierHp)),
       atk: Math.max(1, Math.round((b.atk + p.atk * n) * f.mult.atk)),
       def: Math.max(0, Math.round((b.def + p.def * n) * f.mult.def)),
       spd: b.spd, aspd: b.aspd, range: b.range,
@@ -300,7 +306,7 @@ const Monsters = (() => {
   }
 
   return { get, list, all, byTier, bosses, minibosses, normals, families, ability, abilities, forFloor, isBoss, isElite, hasTag,
-    statsAt, phaseFor, abilitiesFor, curseChance, validate, ABILITIES, TILE };
+    statsAt, phaseFor, abilitiesFor, curseChance, validate, ABILITIES, TILE, TIER_HP, AGGRO_SPEED };
 })();
 
 // ---------------------------------------------------------------------------

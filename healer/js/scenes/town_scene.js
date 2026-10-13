@@ -376,6 +376,8 @@ const TownScene = (() => {
   function onPromptClick() { if (nearDoor) enterBuilding(nearDoor); }
 
   const scene = {
+    // 배율: 마을은 던전보다 가깝게(가로 약 14타일 목표 — 실제 배율은 Scenes.applyZoom 이 0.25/0.5 단위로 맞춘다)
+    zoomDivisor: 14 * 32,
     enter(params = {}) {
       ensureWorld();
       // 탑에서 돌아오면 성문 앞, 그 외(새 게임·이어하기)는 마을 중앙 광장

@@ -30,6 +30,7 @@ const Combat = (() => {
     get AIHealer() { return typeof AIHealer !== 'undefined' ? AIHealer : null; },
     get RNG() { return typeof RNG !== 'undefined' ? RNG : null; },
     get State() { return typeof State !== 'undefined' ? State : null; },
+    get Classes() { return typeof Classes !== 'undefined' ? Classes : null; },
   };
   const has = (name) => !!Mods[name];
   const emit = (name, payload) => { if (has('Events')) Events.emit(name, payload); };
@@ -54,6 +55,9 @@ const Combat = (() => {
       entities: [player, ...members, ...monsters].filter(Boolean),
       telegraphs: [], groundHeals: [], log: [], result: null,
       autoLoot: opts.autoLoot !== false, driveHealer: opts.driveHealer !== false, aiEnabled: opts.ai !== false,
+      // deferGold: 씬이 바닥에 떨어진 동전을 주워 담는 경우 true — 처치 골드를 즉시 더하지 않고 'monster_killed'/'loot' 의 gold·x·y 로만 알린다.
+      // 씬은 동전을 주울 때 battle.collectGold(amount) 를 부른다. 기본 false(테스트·시뮬은 예전처럼 즉시 적용).
+      deferGold: !!opts.deferGold,
       beltCooldowns: {}, _tgSeq: 0, _belt: 0, _refresh: 0,
     };
     const party = () => B.entities.filter(isParty);
@@ -71,11 +75,12 @@ const Combat = (() => {
       else if (dy !== 0) ent.dir = dy < 0 ? 'up' : 'down';
     }
     // 목표 쪽으로 speed×dt 만큼. 막히면 축 하나씩 미끄러진다. 플레이어는 움직이면 시전이 끊긴다.
-    function moveTo(ent, x, y, dt) {
+    // speedMult(선택): 교전 중 몬스터 돌진(×1.35)·뒤처진 파티원 따라잡기처럼 잠깐 빠르게 움직일 때.
+    function moveTo(ent, x, y, dt, speedMult) {
       if (!alive(ent) || !(ent.speed > 0) || (ent.stats && ent.stats.rooted)) return false;
       const dx = x - ent.x, dy = y - ent.y, d = Math.hypot(dx, dy);
       if (d < 0.5) return false;
-      const step = Math.min(d, ent.speed * dt);
+      const step = Math.min(d, ent.speed * (speedMult > 0 ? speedMult : 1) * dt);
       const nx = ent.x + (dx / d) * step, ny = ent.y + (dy / d) * step;
       let moved = false;
       if (canStand(nx, ny, ent.radius)) { ent.x = nx; ent.y = ny; moved = true; }
@@ -172,12 +177,15 @@ const Combat = (() => {
     function byUid(uid) { return B.entities.find((e) => e.uid === uid) || null; }
 
     // ---------------- 피해·힐 ----------------
+    // 파티(플레이어·파티원)의 공격력에는 Classes.DMG_MULT(빠른 전투 템포 보정)를 곱한다. 몬스터는 그대로.
+    function partyDmgMult(src) { return isParty(src) && has('Classes') && Classes.DMG_MULT ? Classes.DMG_MULT : 1; }
     function attackPower(src, dmgType) {
       const s = src.stats || {};
       const kind = dmgType || src.dmgStat || 'atk';
-      if (kind === 'magic' || kind === 'matk') return s.matk || s.atk || 0;
-      if (kind === 'hybrid') return ((s.atk || 0) + (s.matk || 0)) / 2;
-      return s.atk || 0;
+      const m = partyDmgMult(src);
+      if (kind === 'magic' || kind === 'matk') return (s.matk || s.atk || 0) * m;
+      if (kind === 'hybrid') return (((s.atk || 0) + (s.matk || 0)) / 2) * m;
+      return (s.atk || 0) * m;
     }
     // 피해 = max(1, atk×mult − def×0.5) × (0.9~1.1). opts: { mult, crit(강제), noEvade, noDef, noThreat, type, skillId, abilityId, amount(고정) }
     function damage(src, dst, amount, o = {}) {
@@ -237,10 +245,14 @@ const Combat = (() => {
       const d = ent.def || {};
       for (const m of B.monsters) delete m.threat[ent.uid];
       if (G) { G.counters.kills = (G.counters.kills || 0) + 1; if (d.tier === 'boss') G.counters.bossKills = (G.counters.bossKills || 0) + 1; }
-      emit('monster_killed', { id: d.id, family: d.family, tags: d.tags || [], tier: d.tier, floor: B.floor, uid: ent.uid, ent, x: ent.x, y: ent.y, killer: killer ? killer.uid : null });
+      // 드랍을 먼저 굴려 처치 이벤트에 골드·위치를 싣는다(씬이 그 자리에 동전을 뿌린다). deferGold 면 골드는 씬이 collectGold 로 더한다.
+      const loot = has('Loot') && Loot.roll && d.id ? Loot.roll(d, B.floor, rng) : null;
+      const gold = loot ? (loot.gold || 0) : 0;
+      emit('monster_killed', { id: d.id, family: d.family, tags: d.tags || [], tier: d.tier, floor: B.floor, uid: ent.uid, ent, x: ent.x, y: ent.y,
+        killer: killer ? killer.uid : null, gold, goldDeferred: B.deferGold && gold > 0 });
       if (d.tier === 'boss') emit('boss_killed', { id: d.id, floor: B.floor, uid: ent.uid });
       grantXp(ent.xp || 0);
-      if (has('Loot') && Loot.roll && d.id) dropLoot(ent, Loot.roll(d, B.floor, rng));
+      if (loot) dropLoot(ent, loot);
     }
     function grantXp(xp) {
       if (!(xp > 0) || !has('Level') || !Level.addXp) return;
@@ -253,10 +265,19 @@ const Combat = (() => {
     function dropLoot(ent, loot) {
       const added = [], lost = [];
       if (B.autoLoot && G) {
-        G.player.gold = (G.player.gold || 0) + (loot.gold || 0);
+        if (!B.deferGold) G.player.gold = (G.player.gold || 0) + (loot.gold || 0);
         for (const it of loot.items) { if (has('Inventory') && Inventory.add && Inventory.add(G, it)) added.push(it); else lost.push(it); }
       }
-      emit('loot', { gold: loot.gold, items: loot.items, added, lost, uid: ent.uid, monsterId: ent.def && ent.def.id, x: ent.x, y: ent.y, applied: B.autoLoot && !!G });
+      emit('loot', { gold: loot.gold, items: loot.items, added, lost, uid: ent.uid, monsterId: ent.def && ent.def.id, x: ent.x, y: ent.y,
+        applied: B.autoLoot && !!G, goldDeferred: B.deferGold && (loot.gold || 0) > 0 });
+    }
+    // deferGold 일 때 씬이 동전을 주우면 부른다. G.player.gold 에 더하고 'gold_changed' { source: 'pickup' } 를 낸다.
+    function collectGold(amount, x, y) {
+      const n = Math.max(0, Math.round(amount || 0));
+      if (!G || !n) return 0;
+      G.player.gold = (G.player.gold || 0) + n;
+      emit('gold_changed', { gold: G.player.gold, delta: n, source: 'pickup', x, y });
+      return n;
     }
 
     // ---------------- 시전(스킬) ----------------
@@ -634,7 +655,7 @@ const Combat = (() => {
     Object.assign(B, {
       update, useSkill, cancelCast, moveTo, canStand, inCombat, activeMonsters, engagedMonsters: engaged,
       allies, party, byUid, damage, heal, applyCurse, cleanse, addBuff, revive, taunt, addThreat, topThreat,
-      castAbility, addMonster, inTelegraph, summonCount, log: B.log, logMsg,
+      castAbility, addMonster, inTelegraph, summonCount, log: B.log, logMsg, collectGold,
     });
     return B;
   }

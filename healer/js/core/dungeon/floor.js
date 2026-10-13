@@ -4,7 +4,7 @@
 //         + 보스 처치 → 출구 활성 + 출구 도달 → cleared. 쓰러진 힐러는 전투가 끝나면 파티원이 일으켜 세운다.
 //         + 길이 막혀 대상에 못 가는 몬스터는 포기하고 집으로(evade) — 몬스터·파티원 AI 에 길찾기가 없어 호수 너머로 영원히 제자리걸음을 하기 때문.
 // leave: 피로(걸음·무리·보스·사망)·탑 기록·클리어 보너스 XP·마을 복귀 정리(Party.heal). wipe 면 내구도 -20%.
-// 골드·아이템·경험치의 처치 보상은 Combat(autoLoot) 이 이미 적용하므로 여기서는 상자 보상만 다룬다.
+// 골드·아이템·경험치의 처치 보상은 Combat(autoLoot) 이 이미 적용하므로 여기서는 상자 보상만 다룬다(deferGold 면 처치 골드는 씬이 주워 담는다).
 const Floor = (() => {
   const TILE = 32;
   const CHEST_OPEN_R = 1.5 * TILE, HIDDEN_REVEAL_R = 2 * TILE, EXIT_R = 1.5 * TILE;
@@ -78,13 +78,14 @@ const Floor = (() => {
   }
 
   // opts.rng: 전투·상자용 난수(시뮬레이션 재현용). 생략 시 RNG.global().
+  // opts.deferGold: 처치 골드를 즉시 더하지 않고 씬이 동전을 주울 때 battle.collectGold 로 더한다(나중에 fs.battle.deferGold = true 로 켜도 된다).
   function start(G, floor, opts = {}) {
     const map = DungeonGen.generate(floor);
     const rng = opts.rng || (has('RNG') ? RNG.global() : null);
     const player = Entities.fromPlayer(G);
     const members = (has('Party') ? Party.members(G) : G.party || []).map((m) => Entities.fromMember(G, m));
     const { monsters, boss } = spawnMonsters(map, floor, rng);
-    const battle = Combat.create({ map, player, members, monsters, rng, G, floor });
+    const battle = Combat.create({ map, player, members, monsters, rng, G, floor, deferGold: !!opts.deferGold });
     placeParty(battle, player, members, map.spawn);
     const fs = {
       floor, map, battle, boss, steps: 0, startedAt: Date.now(), time: 0,

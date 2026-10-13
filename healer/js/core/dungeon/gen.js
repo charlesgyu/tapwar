@@ -6,7 +6,9 @@
 const DungeonGen = (() => {
   const COLS = 160, ROWS = 160, TILE = 32, N = COLS * ROWS;
   const T = { WALL: 0, FLOOR: 1, WATER: 2, DECO: 3, BUSH: 4 };
-  const REQ = { walkable: 10000, monsters: 300, chests: 16, hidden: 6, groups: [60, 80], arenaR: 6 };
+  const REQ = { walkable: 10000, monsters: 300, chests: 16, hidden: 6, groups: [18, 40], arenaR: 6 };
+  // 무리 크기: 대부분 8~15마리, 15% 는 20마리 넘는 떼(레퍼런스처럼 "한 덩어리를 베어 넘기는" 전투). 중간보스는 호위 6~10.
+  const PACK = { normal: [8, 15], swarm: [20, 26], swarmChance: 0.15, escort: [6, 10], max: 28, sep: [10, 8, 6] };
   const INF = 0x3fffffff;
   const DX = [1, -1, 0, 0], DY = [0, 0, 1, -1], OFF4 = [1, -1, COLS, -COLS];
   const TURN = [[2, 3], [2, 3], [0, 1], [0, 1]]; // 방향 q 에서 좌우로 꺾는 방향
@@ -548,15 +550,22 @@ const DungeonGen = (() => {
     forDisc(ci(center), cj(center), r, (cell, d2) => { if (walkT(c.tiles[cell])) spots.push({ cell, d2 }); });
     return spots.sort((a, b) => a.d2 - b.d2).map((s) => s.cell);
   }
-  function makeGroup(c, cell, minibossId) {
-    const { rng, info } = c, n = info.biome === 'forest' ? rng.int(3, 5) : rng.int(4, 6);
+  // 무리원 수만큼 설 자리가 나오도록 반경을 2→5 타일로 넓혀 가며 고른다(가까운 순)
+  function packSpots(c, cell, n) {
+    let spots = [];
+    for (let r = 2; r <= 5; r++) { spots = spotsAround(c, cell, r); if (spots.length >= n) break; }
+    return spots;
+  }
+  function makeGroup(c, cell, minibossId, size) {
+    const { rng, info } = c;
+    const n = size || (minibossId ? rng.int(PACK.escort[0], PACK.escort[1]) : rng.int(PACK.normal[0], PACK.normal[1]));
     let lead = rng.weighted(info.pool).id;
     const waterMon = info.pool.find((p) => /siren|naga/.test(p.id));
     if (waterMon && c.distWater && c.distWater[cell] <= 3 && rng.next() < 0.7) lead = waterMon.id; // 물가 무리는 세이렌/나가
     const members = minibossId ? [minibossId] : [];
     for (let k = 0; k < n; k++) members.push(rng.next() < 0.6 ? lead : rng.weighted(info.pool).id); // 같은 종류가 많아야 "무리"답다
     const id = minibossId ? `f${c.floor}_mb${c.groups.length + 1}` : `f${c.floor}_g${c.groups.length - 2}`;
-    return { id, cell, members, minibossId, spots: spotsAround(c, cell, 2) };
+    return { id, cell, members, minibossId, spots: packSpots(c, cell, members.length) };
   }
   // 중간보스: 시작→보스 경로의 30/55/80% 지점 중 가장 트인 곳(주요 분기)
   function placeMinibosses(c) {
@@ -569,37 +578,62 @@ const DungeonGen = (() => {
       c.groups.push(makeGroup(c, best, info.minibosses[k]));
     });
   }
-  function groupSpotOk(c, cell, sep) {
+  // minWall: 큰 떼는 벽에서 3칸 이상 떨어진 트인 곳을 먼저 찾는다
+  function groupSpotOk(c, cell, sep, minWall = 2) {
     const { tiles, distS, distW } = c;
-    if (!walkT(tiles[cell]) || distS[cell] === INF || distS[cell] < 16 || distW[cell] < 2) return false;
+    if (!walkT(tiles[cell]) || distS[cell] === INF || distS[cell] < 16 || distW[cell] < minWall) return false;
     if (cheb(cell, c.boss) <= REQ.arenaR + 6) return false;
     for (const g of c.groups) if (cheb(cell, g.cell) < sep) return false;
     return true;
   }
+  // 일반 무리 크기 목록: 합이 (층 몬스터 수 − 중간보스 무리) 가 될 때까지 뽑는다
+  function packSizes(c) {
+    const { rng, info } = c;
+    const need = info.monsterCount - c.groups.reduce((s, g) => s + g.members.length, 0);
+    const sizes = [];
+    for (let total = 0; total < need;) {
+      const swarm = rng.next() < PACK.swarmChance;
+      const n = Math.min(need - total, swarm ? rng.int(PACK.swarm[0], PACK.swarm[1]) : rng.int(PACK.normal[0], PACK.normal[1]));
+      if (n < PACK.normal[0] && sizes.length) { const lo = sizes.indexOf(Math.min(...sizes)); sizes[lo] += n; break; }   // 자투리는 가장 작은 무리에 얹는다
+      sizes.push(n); total += n;
+    }
+    return rng.shuffle(sizes);
+  }
   function placeGroups(c) {
-    const { rng } = c, target = rng.int(66, 76), block = 16, blocks = [];
-    for (let bj = 0; bj < ROWS / block; bj++) for (let bi = 0; bi < COLS / block; bi++) blocks.push([bi, bj]);
+    const { rng } = c, sizes = packSizes(c), block = 24, blocks = [];
+    for (let bj = 0; bj < Math.ceil(ROWS / block); bj++) for (let bi = 0; bi < Math.ceil(COLS / block); bi++) blocks.push([bi, bj]);
+    let k = 0;
     for (const [bi, bj] of rng.shuffle(blocks)) { // 격자마다 한 무리 → 맵 전체에 고르게
-      if (c.groups.length >= target) break;
-      for (let tries = 0; tries < 12; tries++) {
-        const cell = idx(bi * block + rng.int(0, block - 1), bj * block + rng.int(0, block - 1));
-        if (groupSpotOk(c, cell, 7)) { c.groups.push(makeGroup(c, cell, null)); break; }
+      if (k >= sizes.length) break;
+      const n = sizes[k], wall = n >= PACK.swarm[0] ? 3 : 2;
+      for (let tries = 0; tries < 16; tries++) {
+        const i = Math.min(COLS - 1, bi * block + rng.int(0, block - 1)), j = Math.min(ROWS - 1, bj * block + rng.int(0, block - 1));
+        const cell = idx(i, j);
+        if (groupSpotOk(c, cell, PACK.sep[0], wall)) { c.groups.push(makeGroup(c, cell, null, n)); k++; break; }
       }
     }
-    for (const sep of [7, 5]) for (let tries = 0; c.groups.length < target && tries < 3000; tries++) {
-      const cell = rng.int(0, N - 1);
-      if (groupSpotOk(c, cell, sep)) c.groups.push(makeGroup(c, cell, null));
+    for (; k < sizes.length; k++) {
+      let placed = false;
+      for (const sep of PACK.sep) {
+        for (let tries = 0; !placed && tries < 3000; tries++) {
+          const cell = rng.int(0, N - 1);
+          if (groupSpotOk(c, cell, sep)) { c.groups.push(makeGroup(c, cell, null, sizes[k])); placed = true; }
+        }
+        if (placed) break;
+      }
     }
     topUpMonsters(c);
   }
+  // 자리를 못 찾은 무리의 몫은 기존 무리에 나눠 얹는다(무리당 최대 PACK.max). 최소 몬스터 수는 반드시 맞춘다.
   function topUpMonsters(c) {
     const { rng, info } = c, normal = c.groups.filter((g) => !g.minibossId);
     let total = c.groups.reduce((s, g) => s + g.members.length, 0);
-    for (let guard = 0; total < info.monsterCount && guard < 2000; guard++) {
+    for (let guard = 0; total < info.monsterCount && guard < 5000; guard++) {
       const g = rng.pick(normal);
-      if (g.members.length >= 7) continue;
+      if (g.members.length >= PACK.max) continue;
       g.members.push(rng.next() < 0.6 ? g.members[0] : rng.weighted(info.pool).id); total++;
     }
+    for (const g of normal) if (g.spots.length < g.members.length) g.spots = packSpots(c, g.cell, g.members.length);
     c.monsterCount = total;
   }
 

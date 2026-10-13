@@ -9,8 +9,9 @@ const FX = (() => {
   // 타입별 기본 지속시간(초). 0 = 씬이 제거할 때까지 지속(장판/성역/시전 광)
   const DUR = {
     heal_sparkle: 0.8, aoe_ring: 0, puddle_circle: 0, ground_heal: 0, hit: 0.25, projectile: 0.3,
-    levelup: 1.2, cast_glow: 0, summon_puff: 0.6, revive: 1.0, damage_number: 0.9, curse_icon: 0,
+    levelup: 1.2, cast_glow: 0, summon_puff: 0.6, revive: 1.0, damage_number: 0.9, curse_icon: 0, coin_sparkle: 0.35,
   };
+  const MAX_FX = 260;              // 월드 이펙트 상한(대규모 전투에서 프레임 유지 — 넘치면 오래된 것부터 버린다)
   // 전투 모듈의 텔레그래프 객체({type:'circle'|'puddle'|'cone'|'line'})를 그대로 drawOne 에 넘길 수 있도록 별칭
   const ALIAS = { circle: 'aoe_ring', puddle: 'puddle_circle', cone: 'aoe_cone', line: 'aoe_line', gh: 'ground_heal' };
 
@@ -19,6 +20,7 @@ const FX = (() => {
   function spawn(type, x, y, opts = {}) {
     const fx = Object.assign({ type, x, y, t: 0, duration: DUR[type] !== undefined ? DUR[type] : 0.5, id: ++seq, seed: (seq * 7919) & 0xffff }, opts);
     if (fx.duration === undefined || fx.duration === null) fx.duration = DUR[type] || 0.5;
+    if (list.length >= MAX_FX) { const k = list.findIndex((f) => f.duration > 0); list.splice(k >= 0 ? k : 0, 1); }
     list.push(fx);
     return fx;
   }
@@ -30,7 +32,7 @@ const FX = (() => {
       else if (f.duration <= 0 && f.until !== undefined && f.t >= f.until) list.splice(i, 1);
     }
   }
-  function clear() { list.length = 0; }
+  function clear() { list.length = 0; for (const n of nums) numPool.push(n); nums.length = 0; }
   function remove(fx) { const i = list.indexOf(fx); if (i >= 0) list.splice(i, 1); }
   function draw(ctx, cam) { for (const f of list) drawOne(ctx, f, cam); }
 
@@ -321,6 +323,14 @@ const FX = (() => {
       ctx.fillStyle = col; ctx.fillText(text, 0, 0);
       ctx.restore();
     },
+    // 동전 흡수: 작은 금빛 반짝 몇 개(소리 없는 "찰랑")
+    coin_sparkle(ctx, f, p, t) {
+      const cx = R(f.x), cy = R(f.y);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2 + hash(i, f.seed), d = 2 + p * 9;
+        sparkle(ctx, cx + R(Math.cos(a) * d), cy + R(Math.sin(a) * d) - R(p * 4), p < 0.5 ? 2 : 1, i % 2 ? '#fff6c0' : '#ffd040', '#ffffff');
+      }
+    },
     // 머리 위 보라 해골 점멸(저주 표시)
     curse_icon(ctx, f, p, t) {
       if ((Math.floor(t * 3) % 3) === 2) return;   // 점멸
@@ -381,6 +391,83 @@ const FX = (() => {
     fn(ctx, fx, p, t);
   }
 
-  return { spawn, update, draw, drawOne, types, clear, remove, list: () => list, DUR };
+  // ================= 화면 공간 큰 숫자(데미지·힐·알림) =================
+  // 월드 좌표에 붙어 있지만 글자는 화면 공간(device px)에 그려 배율과 상관없이 크고 또렷하다.
+  // 객체는 풀에서 꺼내 쓰고, 글자 그림(외곽선 포함)은 스타일+문자열별 캔버스로 캐시해 프레임마다 strokeText 를 하지 않는다.
+  const NUM_MAX = 110;
+  const nums = [], numPool = [];
+  const glyphs = new Map();       // 'style|D|text' → canvas
+  const NFONT = '"Arial Black", "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", Impact, sans-serif';
+  // size: CSS px, fill: 글자색, top: 위쪽 밝은 색(그라데이션), life: 초, rise: CSS px
+  const NSTYLE = {
+    dmg:   { size: 14, fill: '#ffffff', top: '#ffffff', life: 0.8, rise: 22 },
+    crit:  { size: 21, fill: '#ffc21a', top: '#fff27a', life: 1.0, rise: 30 },
+    big:   { size: 17, fill: '#ffe14a', top: '#fff6b0', life: 0.9, rise: 26 },
+    hurt:  { size: 13, fill: '#ff5a4a', top: '#ff9a8a', life: 0.8, rise: 20 },
+    heal:  { size: 13, fill: '#5cf06a', top: '#c8ffb8', life: 0.9, rise: 22 },
+    miss:  { size: 11, fill: '#cfe8ff', top: '#ffffff', life: 0.7, rise: 16 },
+    info:  { size: 12, fill: '#ffb060', top: '#ffe0b0', life: 1.3, rise: 14 },
+    curse: { size: 12, fill: '#d89aff', top: '#f0d8ff', life: 1.2, rise: 14 },
+    gold:  { size: 14, fill: '#ffd040', top: '#fff2a0', life: 1.1, rise: 26 },
+  };
+  function glyph(style, text, D) {
+    const key = style + '|' + D + '|' + text;
+    let g = glyphs.get(key);
+    if (g) return g;
+    if (glyphs.size > 700) glyphs.clear();
+    const st = NSTYLE[style] || NSTYLE.dmg, fs = Math.round(st.size * D), ow = Math.max(2, Math.round(fs * 0.2));
+    const c = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+    if (!c) return null;
+    const x = c.getContext('2d');
+    x.font = `900 ${fs}px ${NFONT}`;
+    const w = Math.ceil(x.measureText(text).width) + ow * 2 + 2, h = Math.ceil(fs * 1.25) + ow * 2;
+    c.width = w; c.height = h;
+    x.font = `900 ${fs}px ${NFONT}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+    x.lineWidth = ow * 2; x.strokeStyle = '#1e1014'; x.strokeText(text, w / 2, h / 2);
+    const gr = x.createLinearGradient(0, h / 2 - fs / 2, 0, h / 2 + fs / 2);
+    gr.addColorStop(0, st.top); gr.addColorStop(0.55, st.fill); gr.addColorStop(1, st.fill);
+    x.fillStyle = gr; x.fillText(text, w / 2, h / 2);
+    glyphs.set(key, c);
+    return c;
+  }
+  // num(wx, wy, text, style, { spread }) — wx, wy 는 월드 좌표(머리 위)
+  function num(wx, wy, text, style = 'dmg', opts = {}) {
+    let n;
+    if (nums.length >= NUM_MAX) n = nums.shift();          // 가장 오래된 것 재활용
+    else n = numPool.pop() || {};
+    const st = NSTYLE[style] || NSTYLE.dmg, sp = opts.spread == null ? 10 : opts.spread;
+    n.wx = wx; n.wy = wy; n.text = String(text); n.style = style; n.t = 0; n.life = opts.life || st.life; n.rise = st.rise;
+    n.ox = (Math.random() - 0.5) * 2 * sp; n.oy = (Math.random() - 0.5) * sp * 0.6; n.vx = (Math.random() - 0.5) * 16;
+    nums.push(n);
+    return n;
+  }
+  function updateNums(dt) {
+    let w = 0;
+    for (let i = 0; i < nums.length; i++) { const n = nums[i]; n.t += dt; if (n.t < n.life) nums[w++] = n; else numPool.push(n); }
+    nums.length = w;
+  }
+  // toScreen(wx, wy) → device px. D = DPR. W, H = 캔버스 크기(화면 밖은 건너뜀)
+  function drawNums(ctx, toScreen, D, W, H) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    const o = ctx.globalAlpha;
+    for (const n of nums) {
+      const p = toScreen(n.wx, n.wy);
+      const k = n.t / n.life;
+      // 팡! 하고 커졌다가 → 위로 떠오르며 → 끝에서 사라짐
+      const pop = n.t < 0.08 ? 0.6 + (n.t / 0.08) * 0.9 : n.t < 0.18 ? 1.5 - ((n.t - 0.08) / 0.1) * 0.5 : 1;
+      const ease = 1 - Math.pow(1 - Math.min(1, k * 1.3), 3);
+      const x = p.x + (n.ox + n.vx * k) * D, y = p.y + (n.oy - ease * n.rise) * D;
+      if (x < -80 * D || x > W + 80 * D || y < -40 * D || y > H + 40 * D) continue;
+      const g = glyph(n.style, n.text, D); if (!g) continue;
+      ctx.globalAlpha = o * (k > 0.7 ? Math.max(0, (1 - k) / 0.3) : 1);
+      const w = g.width * pop, h = g.height * pop;
+      ctx.drawImage(g, Math.round(x - w / 2), Math.round(y - h / 2), Math.round(w), Math.round(h));
+    }
+    ctx.globalAlpha = o;
+    ctx.imageSmoothingEnabled = false;
+  }
+
+  return { spawn, update, draw, drawOne, types, clear, remove, list: () => list, DUR, num, updateNums, drawNums, nums: () => nums, NSTYLE };
 })();
 if (typeof module !== 'undefined') module.exports = FX;

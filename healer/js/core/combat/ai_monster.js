@@ -1,5 +1,6 @@
 // 몬스터 AI — DESIGN.md §8.3
-// 순찰(home 반경 3타일) → 어그로 범위(7타일) 안의 파티 발견 시 같은 무리 전체 교전 → 리쉬(25타일) 넘으면 복귀+회복.
+// 순찰(home 반경 3타일) → 어그로 범위(7타일) 안의 파티 발견 시 같은 무리 전체 + 4타일 안 이웃 무리까지 교전 → 리쉬(25타일) 넘으면 복귀+회복.
+// 교전 중에는 Monsters.AGGRO_SPEED(×1.35)로 달려든다.
 // 대상은 위협표 1위(10% 히스테리시스). 능력은 쿨마다 Combat.castAbility 로(대상 선택·텔레그래프·효과는 Combat 담당).
 // 보스는 HP 비율에 따라 Monsters.abilitiesFor 가 주는 페이즈 능력 세트를 쓰고, summon 은 Combat 의 동시 6마리 상한을 따른다.
 const AIMonster = (() => {
@@ -7,6 +8,9 @@ const AIMonster = (() => {
   const PATROL_RADIUS = 3 * TILE, PATROL_WAIT = [1.5, 4], HOME_SLACK = 10;
   const HYSTERESIS = 1.1, ABILITY_REACH = 8 * TILE, FIRST_USE_DELAY = [0.5, 2.0];
   const HEAL_SELF_BELOW = 0.7, GROUP_CALL_RANGE = 10 * TILE;
+  // 눈덩이 어그로: 무리가 덤비면 무리원 주변 4타일 안의 다른 몬스터(와 그 무리)까지 함께 달려든다(한 단계만 번진다).
+  const NEIGHBOR_CALL_RANGE = 4 * TILE;
+  const aggroSpeed = () => (mons() && mons().AGGRO_SPEED) || 1.35;
 
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   const alive = (e) => !!e && e.alive;
@@ -37,10 +41,20 @@ const AIMonster = (() => {
     const found = battle.allies().find((e) => dist(e, ent) <= ent.aggroRange);
     if (found) aggroGroup(ent, battle, found);
   }
-  // 한 마리가 발견하면 같은 무리(groupId)가 함께 덤빈다
+  // 한 마리가 발견하면 같은 무리(groupId)가 함께 덤비고, 무리원 4타일 안의 이웃 몬스터와 그 무리도 한 번 더 끌려온다(눈덩이).
   function aggroGroup(ent, battle, found) {
-    const mates = ent.groupId == null ? [ent] : battle.monsters.filter((m) => alive(m) && m.groupId === ent.groupId && dist(m, ent) <= GROUP_CALL_RANGE);
-    for (const m of mates.concat(ent)) engage(m, battle, found);
+    const mates = groupMates(ent, battle).concat(ent);
+    const near = battle.activeMonsters ? battle.activeMonsters() : battle.monsters.filter(alive);
+    const pulled = new Set(mates);
+    for (const n of near) {
+      if (pulled.has(n) || n.aggro || n.returning) continue;
+      if (!mates.some((m) => dist(m, n) <= NEIGHBOR_CALL_RANGE)) continue;
+      for (const x of groupMates(n, battle).concat(n)) pulled.add(x);
+    }
+    for (const m of pulled) engage(m, battle, found);
+  }
+  function groupMates(ent, battle) {
+    return ent.groupId == null ? [ent] : battle.monsters.filter((m) => alive(m) && m.groupId === ent.groupId && dist(m, ent) <= GROUP_CALL_RANGE);
   }
   function engage(m, battle, found) {
     if (m.aggro || m.returning) return;
@@ -60,7 +74,7 @@ const AIMonster = (() => {
     if (!tgt) return leash(ent, battle);
     ent.target = tgt.uid;
     if (tryAbility(ent, battle, tgt)) return;
-    if (!inRange(ent, tgt, ent.range || 28)) { battle.moveTo(ent, tgt.x, tgt.y, dt); separate(ent, battle); }
+    if (!inRange(ent, tgt, ent.range || 28)) { battle.moveTo(ent, tgt.x, tgt.y, dt, aggroSpeed()); separate(ent, battle); }
   }
   // 위협 1위. 현재 대상이 1위의 90% 이상이면 그대로(왔다갔다 방지). 위협표가 비면 가장 가까운 아군.
   function chooseTarget(ent, battle) {
@@ -120,6 +134,6 @@ const AIMonster = (() => {
     if (typeof Events !== 'undefined') Events.emit('boss_phase', { uid: ent.uid, ent, id: ent.def.id, hpBelow: ph.hpBelow, abilities: ph.abilities.slice() });
   }
 
-  return { update, chooseTarget, aggroGroup, PATROL_RADIUS, HYSTERESIS };
+  return { update, chooseTarget, aggroGroup, PATROL_RADIUS, HYSTERESIS, NEIGHBOR_CALL_RANGE };
 })();
 if (typeof module !== 'undefined') module.exports = AIMonster;

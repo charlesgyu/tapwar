@@ -1,5 +1,7 @@
 // 씬 관리자 — 캔버스/DPR/배율, 카메라, 입력(탭·조이스틱·키보드), 게임 루프, 화면 공간 그리기 헬퍼.
-// 각 씬: { enter(params), exit(), update(dt), draw(ctx, view), onTap?(wx, wy, sx, sy), onJoyStart?(), onJoyEnd?(), updateWhileUI?: bool }
+// 각 씬: { enter(params), exit(), update(dt), draw(ctx, view), onTap?(wx, wy, sx, sy), onJoyStart?(), onJoyEnd?(), updateWhileUI?: bool,
+//          zoomDivisor?: number  — 캔버스(device px) 가로 ÷ 이 값 = 배율. 월드 가로 px 목표치(타일 수 × 32). 기본 384(약 12타일)
+//          joyRest?: { bottom: number } — 고정 조이스틱: 화면 아래 중앙(bottom = CSS px)에 늘 흐릿하게 보이고, 그 근처를 누르면 그 자리가 원점 }
 const Scenes = (() => {
   const view = { canvas: null, ctx: null, DPR: 1, zoom: 2, viewW: 0, viewH: 0, cam: { x: 0, y: 0 }, cssW: 0, cssH: 0 };
   const joy = { active: false, id: null, ox: 0, oy: 0, dx: 0, dy: 0, moved: false, startT: 0 };
@@ -21,15 +23,21 @@ const Scenes = (() => {
     c.addEventListener('pointerdown', (e) => {
       if (joy.id !== null) return;
       if (typeof UI !== 'undefined' && UI.isOpen()) return;
-      joy.id = e.pointerId; joy.ox = e.clientX; joy.oy = e.clientY; joy.dx = 0; joy.dy = 0; joy.moved = false; joy.active = false; joy.startT = performance.now();
+      joy.id = e.pointerId; joy.ox = e.clientX; joy.oy = e.clientY; joy.dx = 0; joy.dy = 0; joy.moved = false; joy.active = false; joy.startT = performance.now(); joy.fixed = false;
+      // 고정 조이스틱 받침 근처를 누르면 받침 중심이 원점(누르자마자 그 방향으로 걷는다)
+      const rest = joyRestPos();
+      if (rest && Math.hypot(e.clientX - rest.x, e.clientY - rest.y) <= JOY_R * 1.5) {
+        joy.ox = rest.x; joy.oy = rest.y; joy.fixed = true; joy.moved = true; joy.active = true;
+        if (current && current.onJoyStart) current.onJoyStart();
+        joyAim(e.clientX, e.clientY);
+      }
       try { c.setPointerCapture(e.pointerId); } catch (err) {}
     });
     c.addEventListener('pointermove', (e) => {
       if (e.pointerId !== joy.id) return;
-      const dx = e.clientX - joy.ox, dy = e.clientY - joy.oy;
-      const d = Math.hypot(dx, dy);
+      const d = Math.hypot(e.clientX - joy.ox, e.clientY - joy.oy);
       if (d > 10 && !joy.active) { joy.moved = true; joy.active = true; if (current && current.onJoyStart) current.onJoyStart(); }
-      if (joy.active) { const k = Math.min(1, d / JOY_R); joy.dx = d ? (dx / d) * k : 0; joy.dy = d ? (dy / d) * k : 0; }
+      if (joy.active) joyAim(e.clientX, e.clientY);
     });
     const end = (e) => {
       if (e.pointerId !== joy.id) return;
@@ -45,14 +53,33 @@ const Scenes = (() => {
     requestAnimationFrame(loop);
   }
 
+  function joyAim(x, y) {
+    const dx = x - joy.ox, dy = y - joy.oy, d = Math.hypot(dx, dy);
+    const k = joy.fixed && d < 6 ? 0 : Math.min(1, d / JOY_R);   // 받침 한가운데는 데드존
+    joy.dx = d ? (dx / d) * k : 0; joy.dy = d ? (dy / d) * k : 0;
+  }
+  // 고정 조이스틱 받침 위치(CSS px). 씬이 joyRest 를 선언했을 때만
+  function joyRestPos() {
+    if (!current || !current.joyRest) return null;
+    return { x: view.cssW / 2, y: view.cssH - (current.joyRest.bottom || 110) };
+  }
+  // 배율: 씬마다 zoomDivisor(월드 가로 px 목표). 정수 배율이 목표에서 많이 벗어나는 폰(DPR 2 등)을 위해
+  // 2 미만은 0.25 단위, 그 이상은 0.5 단위로 맞춘다(최근접 샘플링이라 픽셀은 또렷하고, 1 device px 미만의 고르지 않음만 생긴다).
+  function applyZoom() {
+    const c = view.canvas; if (!c) return;
+    const div = (current && current.zoomDivisor) || 384;
+    const raw = c.width / div, step = raw < 2 ? 0.25 : 0.5;
+    view.zoom = Math.max(1, Math.round(raw / step) * step);
+    view.viewW = c.width / view.zoom; view.viewH = c.height / view.zoom;
+  }
+
   function resize() {
     const c = view.canvas; if (!c) return;
     view.DPR = Math.min(window.devicePixelRatio || 1, 3);
     view.cssW = window.innerWidth; view.cssH = window.innerHeight;
     c.width = Math.round(view.cssW * view.DPR); c.height = Math.round(view.cssH * view.DPR);
     c.style.width = view.cssW + 'px'; c.style.height = view.cssH + 'px';
-    view.zoom = Math.max(2, Math.round(c.width / 384)); // 폰에서 가로 약 12타일
-    view.viewW = c.width / view.zoom; view.viewH = c.height / view.zoom;
+    applyZoom();
     if (current && current.onResize) current.onResize(view);
   }
 
@@ -63,13 +90,17 @@ const Scenes = (() => {
     if (current && current.exit) { try { current.exit(); } catch (e) { console.error(e); } }
     joy.id = null; joy.active = false; joy.dx = 0; joy.dy = 0;
     current = next; currentName = name;
+    applyZoom();
     if (typeof Events !== 'undefined') Events.emit('scene_change', { name, params });
     try { current.enter(params || {}); } catch (e) { console.error('[Scenes] enter', name, e); }
   }
 
   // 좌표 변환: CSS px ↔ 월드 px, 월드 → 캔버스(device) px
-  function screenToWorld(sx, sy) { return { x: (sx * view.DPR) / view.zoom + view.cam.x, y: (sy * view.DPR) / view.zoom + view.cam.y }; }
-  function worldToScreen(wx, wy) { return { x: (wx - Math.round(view.cam.x)) * view.zoom, y: (wy - Math.round(view.cam.y)) * view.zoom }; }
+  // 카메라는 device px 정수에 맞춘다(배율이 소수여도 타일·스프라이트가 흔들리지 않게)
+  function camX() { return Math.round(view.cam.x * view.zoom) / view.zoom; }
+  function camY() { return Math.round(view.cam.y * view.zoom) / view.zoom; }
+  function screenToWorld(sx, sy) { return { x: (sx * view.DPR) / view.zoom + camX(), y: (sy * view.DPR) / view.zoom + camY() }; }
+  function worldToScreen(wx, wy) { return { x: (wx - camX()) * view.zoom, y: (wy - camY()) * view.zoom }; }
 
   // 카메라: target 을 따라가며 월드 경계 안으로 클램프 (worldW/H 가 없으면 클램프 없음)
   function followCamera(target, worldW, worldH, snap = false, offsetY = 20, lerp = 0.22) {
@@ -94,16 +125,16 @@ const Scenes = (() => {
     return { x: (vx / len) * k, y: (vy / len) * k, len: k };
   }
 
-  // 월드 변환 시작/끝 (픽셀 또렷하게: 정수 카메라)
+  // 월드 변환 시작/끝 (픽셀 또렷하게: device px 정수 카메라)
   function beginWorld(ctx) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = false;
-    const cx = Math.round(view.cam.x), cy = Math.round(view.cam.y);
-    ctx.setTransform(view.zoom, 0, 0, view.zoom, -cx * view.zoom, -cy * view.zoom);
+    const cx = camX(), cy = camY();
+    ctx.setTransform(view.zoom, 0, 0, view.zoom, -Math.round(cx * view.zoom), -Math.round(cy * view.zoom));
     return { cx, cy };
   }
   function endWorld(ctx) { ctx.setTransform(1, 0, 0, 1, 0, 0); }
-  function visible(x, y, w, h) { const cx = Math.round(view.cam.x), cy = Math.round(view.cam.y); return !(x + w < cx || x > cx + view.viewW || y + h < cy || y > cy + view.viewH); }
+  function visible(x, y, w, h) { const cx = camX(), cy = camY(); return !(x + w < cx || x > cx + view.viewW || y + h < cy || y > cy + view.viewH); }
 
   // ---------- 화면 공간 그리기 헬퍼 ----------
   const FONT = '-apple-system, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
@@ -144,6 +175,15 @@ const Scenes = (() => {
     ctx.fillStyle = opts.color || '#e04a4a'; ctx.fillRect(p.x - w / 2, p.y, w * Math.max(0, Math.min(1, max ? value / max : 0)), h);
   }
   function drawJoystick(ctx) {
+    const rest = joyRestPos();
+    if (rest && !joy.active) {
+      // 쉬는 중인 고정 조이스틱: 흐릿한 받침 + 가운데 손잡이
+      const D = view.DPR, ox = rest.x * D, oy = rest.y * D, R = JOY_R * D;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.beginPath(); ctx.arc(ox, oy, R, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,0.32)'; ctx.lineWidth = 1.5 * D; ctx.stroke();
+      ctx.beginPath(); ctx.arc(ox, oy, R * 0.42, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.32)'; ctx.fill();
+      return;
+    }
     if (!joy.active) return;
     const D = view.DPR, ox = joy.ox * D, oy = joy.oy * D, R = JOY_R * D;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -164,6 +204,6 @@ const Scenes = (() => {
   }
   function setPaused(p) { paused = !!p; }
 
-  return { init, register, go, current: () => current, name: () => currentName, view, joy, keys, screenToWorld, worldToScreen, followCamera, moveAxis, beginWorld, endWorld, visible, roundRect, drawLabel, drawBubble, drawMiniBar, drawJoystick, setPaused, fps: () => fps, FONT };
+  return { init, register, go, current: () => current, name: () => currentName, view, joy, keys, screenToWorld, worldToScreen, followCamera, moveAxis, beginWorld, endWorld, visible, camX, camY, roundRect, drawLabel, drawBubble, drawMiniBar, drawJoystick, setPaused, fps: () => fps, FONT };
 })();
 if (typeof module !== 'undefined') module.exports = Scenes;

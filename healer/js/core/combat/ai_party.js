@@ -1,12 +1,15 @@
 // 파티원 AI — DESIGN.md §8.1
 // 탱커: 힐러를 노리는 놈 우선 → 가장 가까운 교전 몬스터, 도발 쿨마다. 근딜: 탱커의 대상을 뒤에서. 원딜: 150~220px 유지.
-// 비전투: 플레이어 뒤를 대형으로 따라간다. 텔레그래프 안이면 확률(숲 90%, 동굴 2/3)로 빠져나온다.
+// 비전투: 플레이어 주위 1.5타일 안 대형으로 바짝 붙어 따라간다(멀어지면 빠르게 따라잡음). 탐색 중 8타일 안의 몬스터는 바로 덮친다.
+// 텔레그래프 안이면 확률(숲 90%, 동굴 2/3)로 빠져나온다.
 // 실제 피해·위협은 Combat 이 처리하므로 여기서는 대상·위치·스킬 요청만 한다.
 const AIParty = (() => {
   const TILE = 32;
   const DODGE_FOREST = 0.9, DODGE_CAVE = 2 / 3, DODGE_MARGIN = 16;
   const RANGED_MIN = 150, RANGED_MAX = 220;
-  const FOLLOW_SLACK = 28, ENGAGE_RANGE = 6 * TILE, MAX_CHASE = 15 * TILE, RETREAT_LEASH = 8 * TILE;
+  const FOLLOW_SLACK = 16, ENGAGE_RANGE = 8 * TILE, MAX_CHASE = 15 * TILE, RETREAT_LEASH = 8 * TILE;
+  // 빠른 템포: 파티는 힐러 주위 1.5타일 안에 덩어리로 붙어 다니고(뒤처지면 ×1.5 로 따라잡음), 적에게는 ×1.25 로 달려든다.
+  const CATCHUP_DIST = 1.5 * TILE, CATCHUP_SPEED = 1.5, CHASE_SPEED = 1.25;
   const DIRS = { down: [0, 1], up: [0, -1], left: [-1, 0], right: [1, 0] };
 
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -71,7 +74,8 @@ const AIParty = (() => {
     const p = battle.player;
     if (!alive(p)) { ent.state = 'idle'; return; }
     const spot = formationSpot(ent, battle, p);
-    if (dist(ent, spot) > FOLLOW_SLACK) { ent.target = null; battle.moveTo(ent, spot.x, spot.y, dt); }
+    const d = dist(ent, spot);
+    if (d > FOLLOW_SLACK) { ent.target = null; battle.moveTo(ent, spot.x, spot.y, dt, d > CATCHUP_DIST ? CATCHUP_SPEED : 1.1); }
     else ent.state = 'idle';
   }
   function formationSpot(ent, battle, p) {
@@ -79,9 +83,10 @@ const AIParty = (() => {
     const px = -dy, py = dx;                                    // 진행 방향의 수직
     const same = battle.members.filter((m) => m.role === ent.role);
     const side = same.indexOf(ent) % 2 === 0 ? 1 : -1, lane = Math.floor(same.indexOf(ent) / 2) + 1;
-    if (ent.role === 'tank') return { x: p.x + dx * 48 * lane + px * 20 * side * (lane - 1), y: p.y + dy * 48 * lane + py * 20 * side * (lane - 1) };
-    if (ent.role === 'ranged') return { x: p.x - dx * 44 + px * 28 * side * lane, y: p.y - dy * 44 + py * 28 * side * lane };
-    return { x: p.x + dx * 16 + px * 40 * side * lane, y: p.y + dy * 16 + py * 40 * side * lane };
+    // 전부 힐러에게서 1.5타일(48px) 안: 탱커 앞 36, 근딜 옆 30, 원딜 뒤 30 + 옆 20
+    if (ent.role === 'tank') return { x: p.x + dx * 36 + px * 20 * side * (lane - 1), y: p.y + dy * 36 + py * 20 * side * (lane - 1) };
+    if (ent.role === 'ranged') return { x: p.x - dx * 30 + px * 20 * side * lane, y: p.y - dy * 30 + py * 20 * side * lane };
+    return { x: p.x + dx * 12 + px * 30 * side * lane, y: p.y + dy * 12 + py * 30 * side * lane };
   }
 
   // ---- 역할별 전투 ----
@@ -109,7 +114,7 @@ const AIParty = (() => {
     if (inRange(ent, tgt, ent.range || 40)) { useAttackSkills(ent, battle, tgt); return; }
     if (useAttackSkills(ent, battle, tgt)) return;                 // 돌진기는 멀리서도 쓴다
     const spot = rearSpot(ent, battle, tgt);
-    if (!battle.moveTo(ent, spot.x, spot.y, dt)) approach(ent, battle, tgt, dt);
+    if (!battle.moveTo(ent, spot.x, spot.y, dt, CHASE_SPEED)) approach(ent, battle, tgt, dt);
   }
   function ranged(ent, battle, foes, dt) {
     const tgt = sharedTarget(battle, foes) || nearest(foes, ent);
@@ -134,7 +139,7 @@ const AIParty = (() => {
   function approach(ent, battle, tgt, dt, stopAt) {
     const d = dist(ent, tgt), stop = stopAt != null ? stopAt : 0;
     if (d <= stop) return;
-    battle.moveTo(ent, tgt.x, tgt.y, dt);
+    battle.moveTo(ent, tgt.x, tgt.y, dt, CHASE_SPEED);
   }
   function retreat(ent, battle, tgt, dt) {
     const d = dist(ent, tgt) || 1;
