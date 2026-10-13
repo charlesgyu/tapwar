@@ -75,7 +75,7 @@ module.exports = {
     assert.strictEqual(ctx.AIParty.leaderOf(battle), tank, '탱커가 앞장');
     const pts = []; for (let x = 7; x <= 24; x++) pts.push({ x: (x + 0.5) * T, y: 10.5 * T });
     ctx.AIParty.lead(battle, pts, { kind: 'group', id: 'pack' });
-    let readyAt = null, readyDist = null, aggroAt = null, still = true, readyPos = null;
+    let readyAt = null, readyDist = null, aggroAt = null, still = true, readyPos = null, order = null;
     run(battle, 14, () => {
       // 씬처럼 힐러는 앞장이 뒤 2.7타일을 따라간다
       const spot = ctx.AIParty.behindSpot(battle, 2.7 * T, 0, player.radius);
@@ -85,7 +85,10 @@ module.exports = {
         if (readyAt == null) { readyAt = battle.time; readyDist = Math.hypot(trolls[0].x - tank.x, trolls[0].y - tank.y); readyPos = { x: tank.x, y: tank.y }; }
         else if (Math.hypot(tank.x - readyPos.x, tank.y - readyPos.y) > 2) still = false;
       }
-      if (aggroAt == null && trolls.some((m) => m.aggro)) aggroAt = battle.time;
+      if (aggroAt == null && trolls.some((m) => m.aggro)) {
+        aggroAt = battle.time;
+        order = { tank: Math.hypot(tank.x - trolls[0].x, tank.y - trolls[0].y), healer: Math.hypot(player.x - trolls[0].x, player.y - trolls[0].y) };
+      }
     });
     assert.ok(readyAt != null, '풀링 준비 상태가 있어야 한다');
     assert.ok(readyDist >= 7 * T, '어그로 범위 밖에서 멈춘다 ' + (readyDist / T).toFixed(1));
@@ -95,7 +98,7 @@ module.exports = {
     assert.ok(pull, '탱커 외침: ' + JSON.stringify(says.map((s) => s.kind)));
     assert.ok(pull.t <= aggroAt, '외침이 어그로보다 먼저');
     // 탱커가 먼저, 힐러는 뒤
-    assert.ok(Math.hypot(tank.x - trolls[0].x, tank.y - trolls[0].y) < Math.hypot(player.x - trolls[0].x, player.y - trolls[0].y), '탱커가 앞, 힐러가 뒤');
+    assert.ok(order.tank + 2 * T < order.healer, '탱커가 앞, 힐러가 뒤 ' + JSON.stringify(order));
     assert.ok(trolls.every((m) => m.aggro), '교전 시작');
   },
 

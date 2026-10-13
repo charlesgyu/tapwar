@@ -180,7 +180,7 @@ const Chatter = (() => {
       if (e.wantsHeal && (r >= 0.7 || e.wantsHeal < now)) e.wantsHeal = 0;
       // 위험했다가 회복 → 고맙다
       if (r < THANKS_FROM) es.low = true;
-      else if (es.low && r >= THANKS_AT) { es.low = false; if (chatty(st, e)) propose(st, battle, e, 'thanks', { delay: 0.3 }); }
+      else if (es.low && r >= THANKS_AT) { es.low = false; if (chatty(st, e)) propose(st, battle, e, 'thanks', { delay: 0.3, life: 4 }); }
       // 저주
       if (e.curses.length > es.curses) {
         const ids = e.curses.map((c) => c.id);
@@ -189,7 +189,7 @@ const Chatter = (() => {
       es.curses = e.curses.length;
       // 후퇴·복귀(ai_party 의 ent.retreat / ent.lastReturn)
       if (!es.retreat && e.retreat) propose(st, battle, e, 'retreat');
-      if (e.lastReturn && e.lastReturn !== es.ret) { es.ret = e.lastReturn; if (e.lastReturn.recovered && inCombat) propose(st, battle, e, 'return', { delay: 0.2 }); }
+      if (e.lastReturn && e.lastReturn !== es.ret) { es.ret = e.lastReturn; if (e.lastReturn.recovered && inCombat) propose(st, battle, e, 'return', { delay: 0.2, life: 3 }); }
       es.retreat = !!e.retreat;
     }
   }
