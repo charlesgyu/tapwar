@@ -13,7 +13,7 @@
 
 ## 매번 하는 배포 순서 (사용자 요청: 바꿀 때마다 전부)
 1. `node --check game.js`
-2. `index.html`의 `game.js?v=20261012_items_vNN` / `audio.js?v=...` **버전 숫자 +1** (현재 v59). 휴대폰이 새 파일을 받게 하는 용도.
+2. `index.html`의 `game.js?v=20261012_items_vNN` / `audio.js?v=...` **버전 숫자 +1** (현재 v60). 휴대폰이 새 파일을 받게 하는 용도.
 3. `GAME_RULES.md` 갱신(규칙이 바뀐 경우).
 4. 커밋 → `git push -u origin claude/tapwar-review-c45ygv` → PR(base main) 생성 → **바로 머지**(사용자 지시: 매번 머지). PR 본문 끝에 Claude Code 꼬리말.
 5. 아티팩트 갱신: `tools/make_artifact.sh <출력경로>`로 index.html에서 아티팩트용 html을 만들고, Artifact 도구로 **기존 URL** `https://claude.ai/artifact/B7TasT5a1TiX2ihVvpXGV7` 에 publish(`files`에 `game.js`, `audio.js`, 필요 시 `assets/earth.png`). 새 세션이면 먼저 `read`로 그 URL을 읽어야 publish가 허용됨.
@@ -38,7 +38,7 @@
 - 연결선 없음. 지역 중심 점 + 파문으로 표시. 지역 이름은 점 위에.
 - 카드 5장(모든 맵). 컨셉: 나라 50초마다, 전세계 15초 후 1분마다. 필사즉생 4배.
 - 속사·보급·버프·저주의 "다음 5공격"은 터진 지역에서만.
-- 긴 안내문(적 카드 선택, 집중포화 경보 등)은 화면에 띄우지 않음(`statusQuiet`).
+- 게임 중 상단 안내문은 전부 띄우지 않음(`statusQuiet`). 적 카드·경보뿐 아니라 "피가 가득"·"충전 중" 같은 짧은 문구도 (v60). 본진 선택 안내만 남김.
 - 배속 버튼은 ×1/×2 두 개, ×2는 유료. 구매 전 나라는 '둘러보기'로 맵을 잠긴 모습으로 구경, 그 화면에서 '구매하기'.
 - 홈 국가 카드 마지막은 'Earth'(지구본 그림), 들어가면 전세계 맵 카드 + 순위 카드.
 - 총알 효과음 없음. 음악은 점령전 행진곡 풍.
