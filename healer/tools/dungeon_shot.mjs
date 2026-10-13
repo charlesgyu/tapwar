@@ -92,7 +92,7 @@ await page.evaluate(() => {
   // 탱커를 무리 쪽으로 조금 앞세워 교전을 빨리 연다
 });
 await wait(1600);
-const fight = await page.evaluate(() => ({ fps: Scenes.fps(), inCombat: window.__healer.dungeon.battle.inCombat(), counts: window.__counts, cast: !!window.__healer.dungeon.player.cast }));
+const fight = await page.evaluate(() => ({ cancels: JSON.stringify(window.__cancels), fps: Scenes.fps(), inCombat: window.__healer.dungeon.battle.inCombat(), counts: window.__counts, cast: !!window.__healer.dungeon.player.cast }));
 console.log('fight', JSON.stringify(fight));
 shots.push(await shot('fight'));
 
@@ -118,7 +118,7 @@ if (!comboShot) {
   for (let k = 0; k < 20 && !comboShot; k++) { await wait(150); if (await page.evaluate(() => !!document.querySelector('#dhud .dh-combo.show'))) comboShot = await shot('combo_forced'); }
 }
 if (comboShot) shots.push(comboShot);
-console.log('combo', JSON.stringify(await page.evaluate(() => ({ combo: window.__healer.dungeon.combo, coins: window.__healer.dungeon.coins, corpses: window.__healer.dungeon.corpses, nums: FX.nums().length, fps: Scenes.fps() }))), 'fpsMin', fpsMin.toFixed(1));
+console.log('combo', JSON.stringify(await page.evaluate(() => ({ cancels: window.__cancels, combo: window.__healer.dungeon.combo, coins: window.__healer.dungeon.coins, corpses: window.__healer.dungeon.corpses, nums: FX.nums().length, fps: Scenes.fps() }))), 'fpsMin', fpsMin.toFixed(1));
 
 // 일시정지 메뉴
 await page.evaluate(() => document.querySelector('#dhud .dh-pausebtn').click());
@@ -140,6 +140,7 @@ await page.evaluate(() => {
 });
 let tgSeen = false;
 for (let k = 0; k < 16 && !tgSeen; k++) { await wait(500); tgSeen = await page.evaluate(() => window.__healer.dungeon.battle.telegraphs.length > 0); }
+console.log('mb cancels', JSON.stringify(await page.evaluate(() => window.__cancels)));
 shots.push(await shot('miniboss'));
 
 // 생존 AI: 딜러 HP 를 22% 로 떨어뜨리면(자동 힐 잠시 끔) 힐러 쪽으로 빠지며 💨 + 힐 요청 말풍선

@@ -176,6 +176,7 @@ const DungeonScene = (() => {
     if (followMoving) { if (d < FOLLOW_STOP) { followMoving = false; route = null; return; } }
     else if ((d > FOLLOW_START && !player.cast) || d > FOLLOW_FORCE) followMoving = true;
     if (!followMoving) return;
+    if (player.cast && d < FOLLOW_FORCE) return;     // 걷다가 힐을 시작했으면 마저 시전한다(움직이면 끊긴다) — 아주 멀 때만 끊고 따라간다
     if (canStandLine(player, spot, player.radius)) { route = null; battle.moveTo(player, spot.x, spot.y, dt); return; }
     if (!route || route.kind !== 'follow' || time - route.at > 1) {
       const pts = findPath(player.x, player.y, spot.x, spot.y, 4000);
