@@ -6,7 +6,7 @@ const Entities = (() => {
   const TILE = 32;
   const AGGRO_RANGE = 7 * TILE, LEASH_RANGE = 25 * TILE;
   const RADIUS_BY_SIZE = { 1: 12, 2: 18, 3: 28 };
-  const PARTY_RADIUS = 12;
+  const PARTY_RADIUS = 8;
 
   const hasStats = () => typeof Stats !== 'undefined' && !!Stats.derive;
   function newUid(prefix) {

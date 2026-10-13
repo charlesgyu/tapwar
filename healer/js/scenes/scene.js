@@ -72,7 +72,7 @@ const Scenes = (() => {
   function worldToScreen(wx, wy) { return { x: (wx - Math.round(view.cam.x)) * view.zoom, y: (wy - Math.round(view.cam.y)) * view.zoom }; }
 
   // 카메라: target 을 따라가며 월드 경계 안으로 클램프 (worldW/H 가 없으면 클램프 없음)
-  function followCamera(target, worldW, worldH, snap = false, offsetY = 20, lerp = 0.12) {
+  function followCamera(target, worldW, worldH, snap = false, offsetY = 20, lerp = 0.22) {
     let tx = target.x - view.viewW / 2, ty = target.y - offsetY - view.viewH / 2;
     if (worldW) { tx = Math.max(0, Math.min(worldW - view.viewW, tx)); if (worldW < view.viewW) tx = (worldW - view.viewW) / 2; }
     if (worldH) { ty = Math.max(0, Math.min(worldH - view.viewH, ty)); if (worldH < view.viewH) ty = (worldH - view.viewH) / 2; }

@@ -275,7 +275,7 @@ module.exports = {
     const S = setup(ctx, { level: 3, monsters: pack, seed: 13, at: { x: 10 * T, y: 10 * T } });
     const { battle, player, members } = S;
     // 파티가 멀리 있으면 순찰만: 플레이어를 근처로 옮겨 활성화시키되 어그로 범위(7타일) 밖에
-    player.x = 30 * T; player.y = 40 * T; for (const m of members) { m.x = 29 * T; m.y = 40 * T; }
+    player.x = 28 * T; player.y = 40 * T; for (const m of members) { m.x = 27 * T; m.y = 40 * T; } // 순찰 반경(3)+어그로(7) 경계에서 1타일 이상 떨어뜨림
     sim(battle, 8);
     for (const m of S.monsters) { assert.ok(!m.aggro, '순찰 중'); assert.ok(Math.hypot(m.x - m.home.x, m.y - m.home.y) <= 3 * T + 2, '순찰 반경'); }
     // 한 마리 어그로 범위에 들어가면 무리 전체

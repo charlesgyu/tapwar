@@ -368,7 +368,7 @@ const DungeonScene = (() => {
 
   function draw(ctx, view) {
     if (!fs) return;
-    Scenes.followCamera(player, map.cols * TILE, map.rows * TILE, false, -28, 0.16);
+    Scenes.followCamera(player, map.cols * TILE, map.rows * TILE, false, -28, 0.24);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = map.biome === 'cave' ? '#141018' : '#14200f';
     ctx.fillRect(0, 0, view.canvas.width, view.canvas.height);

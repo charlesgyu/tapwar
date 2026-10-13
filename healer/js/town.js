@@ -137,7 +137,7 @@ const Town = (() => {
   }
   // 좌표(px)의 발 상자(폭 14, 높이 8)가 통행 가능한지
   function canStand(px, py) {
-    const hw = 7, top = py - 8, bottom = py;
+    const hw = 5, top = py - 6, bottom = py; // 발 상자를 작게 해 좁은 틈도 시원하게 통과
     const x0 = Math.floor((px - hw) / TILE), x1 = Math.floor((px + hw - 1) / TILE);
     const y0 = Math.floor(top / TILE), y1 = Math.floor((bottom - 1) / TILE);
     for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) if (isSolidTile(i, j)) return false;
@@ -148,18 +148,18 @@ const Town = (() => {
   const PROP_FOOT = {
     well: { w: 3, h: 2, ox: -1.5, oy: -2 },
     cart: { w: 3, h: 1, ox: -1.5, oy: -1 },
-    board: { w: 1, h: 1, ox: -0.5, oy: -1 },
+    board: null, // 지나갈 수 있게(이동 쾌적성)
     stall: { w: 4, h: 2, ox: -2, oy: -2 },
-    buntingpole: { w: 1, h: 1, ox: -0.5, oy: -1 },
-    tree: { w: 1, h: 1, ox: -0.5, oy: -1 },
-    barrel: { w: 1, h: 1, ox: -0.5, oy: -1 },
-    crate: { w: 1, h: 1, ox: -0.5, oy: -1 },
-    bench: { w: 2, h: 1, ox: -1, oy: -1 },
-    cratestack: { w: 2, h: 1, ox: -1, oy: -1 },
-    flowerbed: { w: 2, h: 1, ox: -1, oy: -1 },
-    haybale: { w: 1, h: 1, ox: -0.5, oy: -1 },
-    lamp: { w: 1, h: 1, ox: -0.5, oy: -1 },     // 기둥 밑단 타일
-    planter: { w: 1, h: 1, ox: -0.5, oy: -1 },
+    buntingpole: null, // 지나갈 수 있게(이동 쾌적성)
+    tree: null, // 지나갈 수 있게(이동 쾌적성)
+    barrel: null, // 지나갈 수 있게(이동 쾌적성)
+    crate: null, // 지나갈 수 있게(이동 쾌적성)
+    bench: null, // 지나갈 수 있게(이동 쾌적성)
+    cratestack: null, // 지나갈 수 있게(이동 쾌적성)
+    flowerbed: null, // 지나갈 수 있게(이동 쾌적성)
+    haybale: null, // 지나갈 수 있게(이동 쾌적성)
+    lamp: null, // 지나갈 수 있게(이동 쾌적성)
+    planter: null, // 지나갈 수 있게(이동 쾌적성)
     sign: null, clothesline: null, bucket: null,
   };
 

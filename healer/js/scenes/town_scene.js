@@ -52,7 +52,7 @@ const TownScene = (() => {
   function ensureWorld() {
     if (world) return;
     world = Town.build();
-    player = makeActor('player', 12 * TILE, 36 * TILE, { speed: 120, name: '리프' });
+    player = makeActor('player', 12 * TILE, 36 * TILE, { speed: 210, name: '리프' });
     npcs = NPC_LAYOUT.map((L) => {
       const info = Dialogue.npc(L.id) || { name: L.id, sprite: 'villagerA' };
       let x = L.x * TILE, y = L.y * TILE;
