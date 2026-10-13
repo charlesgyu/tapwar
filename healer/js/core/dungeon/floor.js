@@ -28,6 +28,7 @@ const Floor = (() => {
     get Loot() { return typeof Loot !== 'undefined' ? Loot : null; },
     get Inventory() { return typeof Inventory !== 'undefined' ? Inventory : null; },
     get Party() { return typeof Party !== 'undefined' ? Party : null; },
+    get Recruit() { return typeof Recruit !== 'undefined' ? Recruit : null; },
     get Level() { return typeof Level !== 'undefined' ? Level : null; },
     get Stats() { return typeof Stats !== 'undefined' ? Stats : null; },
     get Skills() { return typeof Skills !== 'undefined' ? Skills : null; },
@@ -334,11 +335,13 @@ const Floor = (() => {
     const record = recordRun(fs, G, cleared);
     const xpBonus = cleared ? clearBonusXp(fs, G) : 0;
     G.playTime = (G.playTime || 0) + fs.time;
+    // 구인구직 파티는 한 판이 끝나면 해산(돌파면 보상 분배). 회복 전에 원래 파티로 돌려놔야 그들도 회복된다
+    const recruit = has('Recruit') ? Recruit.finishRun(G, { floor: fs.floor, reason, cleared }) : null;
     returnToTown(G);
     const summary = {
       floor: fs.floor, reason, cleared, time: Math.round(fs.time * 10) / 10, steps: fs.steps, kills: fs.kills, chests: fs.chestsOpened,
       playerDeaths: fs.playerDeaths, memberDeaths: fs.memberDeaths, groupsFought: fs.groupsFought.size, bossDefeated: fs.bossDefeated, bossPhase: bossPhase(fs),
-      fatigueGained, xpBonus, record: Object.assign({}, record),
+      fatigueGained, xpBonus, record: Object.assign({}, record), recruit,
     };
     fs.summary = summary;
     emit('floor_left', summary);

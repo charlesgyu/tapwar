@@ -10,7 +10,7 @@ const ORDER = [
   'core/data_classes.js', 'core/data_skills.js', 'core/data_items.js', 'core/data_monsters.js',
   'core/data_dialogue.js', 'core/data_quests.js', 'core/data_story.js',
   'core/state.js', 'core/stats.js', 'core/level.js', 'core/inventory.js',
-  'core/economy.js', 'core/facilities.js', 'core/party.js', 'core/quests.js',
+  'core/economy.js', 'core/facilities.js', 'core/party.js', 'core/recruit.js', 'core/quests.js',
   'core/combat/entities.js', 'core/combat/combat.js', 'core/combat/ai_party.js',
   'core/combat/ai_healer.js', 'core/combat/ai_monster.js', 'core/combat/loot.js',
   'core/dungeon/gen.js', 'core/dungeon/floor.js',

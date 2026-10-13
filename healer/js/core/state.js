@@ -30,6 +30,8 @@ const State = (() => {
       tower: { highestCleared: 0, records: {} },
       auction: { hourIndex: 0, listings: [], mine: [], resetTickets: 1 },
       adventurer: { day: 0, candidates: [] },
+      // 구인구직 게시판(Recruit): 시장 모집글·지원 대기·합류/모집 중인 파티
+      recruit: { market: null, pending: null, applied: {}, joined: null, posting: null, leading: null, history: [] },
       counters: { steps: 0, kills: 0, bossKills: 0, chests: 0, heals: 0 },
       day: 1, playTime: 0,
     };
