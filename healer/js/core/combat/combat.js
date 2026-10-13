@@ -48,7 +48,9 @@ const Combat = (() => {
     const monsters = (opts.monsters || []).slice();
     const floor = opts.floor || (monsters[0] && monsters[0].floor) || 1;
     const B = {
-      time: 0, map, rng, G, floor, player, members, monsters,
+      // 전투 시계는 G.playTime 에서 시작한다 — 음식 버프 until 이 마을에서 playTime 기준으로 찍히므로(Facilities.inn.eat·Inventory.useConsumable)
+      // 0 에서 시작하면 오래 플레이한 저장일수록 음식 버프가 던전에서 몇 시간씩 지속됐다. Floor.leave 가 playTime += fs.time 으로 이어 붙인다.
+      time: typeof opts.time === 'number' ? opts.time : ((G && typeof G.playTime === 'number') ? G.playTime : 0), map, rng, G, floor, player, members, monsters,
       entities: [player, ...members, ...monsters].filter(Boolean),
       telegraphs: [], groundHeals: [], log: [], result: null,
       autoLoot: opts.autoLoot !== false, driveHealer: opts.driveHealer !== false, aiEnabled: opts.ai !== false,

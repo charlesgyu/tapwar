@@ -66,7 +66,10 @@ const State = (() => {
   function migrate(g) {
     // 누락 필드 보강 (이전 저장 호환)
     const base = (() => { const keep = G; const fresh = newGame(g.player && g.player.name); G = keep; return fresh; })();
-    const deep = (dst, src) => { for (const k of Object.keys(src)) { if (dst[k] === undefined) dst[k] = src[k]; else if (dst[k] && typeof dst[k] === 'object' && !Array.isArray(dst[k]) && typeof src[k] === 'object' && !Array.isArray(src[k])) deep(dst[k], src[k]); } return dst; };
+    // src[k] 가 null(새 게임의 빈 장비 칸·guild 등)이면 내려가지 않는다 — typeof null === 'object' 라
+    // 장비를 낀 저장을 불러올 때 Object.keys(null) 로 로드 전체가 실패하던 버그(E2E 이어하기에서 발견)
+    const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+    const deep = (dst, src) => { for (const k of Object.keys(src)) { if (dst[k] === undefined) dst[k] = src[k]; else if (isObj(dst[k]) && isObj(src[k])) deep(dst[k], src[k]); } return dst; };
     return deep(g, base);
   }
 

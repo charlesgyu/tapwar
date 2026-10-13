@@ -39,7 +39,9 @@ async function until(fn, arg, ms = 10000, every = 100) {
 // 맨 위 오버레이(시설 화면·확인창·대화창) 안에서 글자가 맞는 버튼을 누른다
 async function clickBtn(text, { exact = false, scope = '#ui-root .ui-overlay', nth = 0 } = {}) {
   const top = page.locator(scope).last();
-  const loc = exact ? top.locator('button:not([disabled])', { hasText: new RegExp(`^\\s*${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`) }) : top.locator('button:not([disabled])', { hasText: text });
+  // 탭(.ui-tab)과 글자가 같은 버튼이 많아(예: '고용' 탭과 '고용' 버튼) 실제 동작 버튼(.btn)만 본다
+  const sel = 'button.btn:not([disabled])';
+  const loc = exact ? top.locator(sel, { hasText: new RegExp(`^\\s*${text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`) }) : top.locator(sel, { hasText: text });
   const n = await loc.count();
   if (n <= nth) return false;
   await loc.nth(nth).click();
@@ -77,9 +79,8 @@ async function talk(npcId) {
 }
 
 // ============ 1. 새 게임 → 프롤로그 ============
+// 새 브라우저 컨텍스트라 저장이 비어 있다(지우고 새로고침하면 pagehide 자동 저장이 다시 써 버리므로 그러지 않는다)
 await page.goto(URL);
-await ev(() => { try { localStorage.clear(); } catch (e) { /* 저장 불가 환경 */ } });
-await page.reload();
 const story = await until(() => !!document.querySelector('.ui-overlay.story'), null, 5000);
 await shot('prologue');
 step('새 게임 → 프롤로그 표시', story);
@@ -87,7 +88,7 @@ await skipStory();
 const inTown = await until(() => Scenes.name() === 'town' && !UI.isOpen(), null, 5000);
 await wait(600);
 await shot('town');
-step('프롤로그 건너뛰기 → 마을', inTown, await ev(() => `fps ${Scenes.fps().toFixed(0)}`));
+step('프롤로그 건너뛰기 → 마을(기본 장비)', inTown && await ev(() => !!(window.__healer.G().player.equipment.main && window.__healer.G().player.equipment.body)), await ev(() => { const e = window.__healer.G().player.equipment; return `fps ${Scenes.fps().toFixed(0)} · 무기 ${e.main && e.main.id} · 옷 ${e.body && e.body.id}`; }));
 
 // 테스트 준비: 4명 고용·구매·강화 비용(새 게임 골드 300 으로는 부족) — 치트는 이것과 던전 순간이동/보스 HP 뿐
 await ev(() => { window.__healer.G().player.gold = 6000; window.__healer.TownScene.updateHud(true); });
@@ -122,8 +123,18 @@ await talk('guard1'); await finishDialogs();
 // ============ 4. 모험가 사무소: 4명 고용 ============
 ok = await visit('adventurer', 'adventurer');
 await wait(200);
-let hired = 0;
-for (let k = 0; k < 4; k++) { if (await clickBtn('고용', { exact: true })) hired++; await wait(150); }
+// 역할이 고르게: 탱커 1 → 원딜 → 근딜 → 나머지(힐러 후보는 빼고) 순으로 이름을 골라 그 카드의 '고용' 버튼을 누른다
+const picks = await ev(() => {
+  const c = Facilities.adventurer.candidates(window.__healer.G()).filter((m) => m.role !== 'healer');
+  const out = [];
+  for (const role of ['tank', 'ranged', 'melee', 'ranged', 'melee', 'tank']) { const m = c.find((x) => x.role === role && !out.includes(x)); if (m && out.length < 4) out.push(m); }
+  for (const m of c) if (out.length < 4 && !out.includes(m)) out.push(m);
+  return out.map((m) => m.name);
+});
+for (const nm of picks) {
+  const card = page.locator('#ui-root .ui-overlay').last().locator('div', { hasText: nm }).filter({ has: page.locator('button.btn', { hasText: /^\s*고용\s*$/ }) }).last();
+  await card.locator('button.btn', { hasText: /^\s*고용\s*$/ }).first().click(); await wait(150);
+}
 await shot('adventurer_hired');
 const partyN = await ev(() => window.__healer.G().party.length);
 step('모험가 사무소 4명 고용', ok && partyN === 4, `파티 ${partyN}명 · 퀘스트 ${await ev(() => Quests.status(window.__healer.G(), 'main_01_prepare'))}`);
@@ -131,7 +142,7 @@ await closeScreen();
 
 // ============ 5. 상인: 포션·장비 구매 ============
 ok = await visit('shop', 'shop');
-await clickBtn('10개', { exact: true });
+await page.locator('#ui-root .shop-seg button', { hasText: '10개' }).click(); await wait(120);
 const potionName = await ev(() => Items.get('hp_potion_s').name);
 const buyPotion = page.locator('#ui-root .ui-overlay').last().locator('.item-card', { hasText: potionName }).first().locator('button', { hasText: '구매' });
 await buyPotion.click(); await wait(150);
@@ -219,8 +230,8 @@ await skipStory();
 const inDungeon = await until(() => Scenes.name() === 'dungeon' && !document.querySelector('.ui-overlay.story') && window.__healer.dungeon && window.__healer.dungeon.fs, null, 5000);
 step('1층 입장(인트로 건너뛰기)', intro && inDungeon, await ev(() => window.__healer.dungeon.fs.map.name));
 
-// 이벤트 기록(페이지 안에서 누적)
-await ev(() => {
+// 이벤트 기록(페이지 안에서 누적) — 새로고침 뒤 다시 건다
+const installRecorder = () => ev(() => {
   const L = (window.__e2e = { heal: 0, damage: 0, telegraph: 0, summon: 0, chest: [], boss: 0, cleared: 0, healerAoe: [], casts: [] });
   const on = Events.on;
   on('heal', () => L.heal++); on('damage', () => L.damage++); on('telegraph', () => L.telegraph++);
@@ -229,6 +240,7 @@ await ev(() => {
   on('cast_start', (p) => { if (p.abilityId && /healer/.test(p.abilityId)) L.healerAoe.push(p.abilityId); });
   on('telegraph', (p) => { const t = p && (p.tg || p.telegraph || p); if (t && t.abilityId && /healer/.test(t.abilityId)) L.healerAoe.push('tg:' + t.abilityId); });
 });
+await installRecorder();
 
 // ============ 14. 5초 플레이(자동 탐험 버튼) ============
 await page.locator('#dhud .dh-sk', { hasText: '자동 탐험' }).click();
@@ -256,9 +268,15 @@ for (let t = 0; t < 16; t++) {
 }
 let L = await ev(() => window.__e2e);
 // 일반 무리에 광역기가 없으면 중간보스 무리에서 텔레그래프를 본다(1층 일반 몬스터는 능력이 거의 없다)
-if (!tgShot) {
-  await ev(() => { const D = window.__healer.dungeon, fs = D.fs; const g = fs.map.groups.find((g) => g.minibossId && fs.battle.monsters.some((m) => m.groupId === g.id && m.alive)); if (g) D.teleport(g.x + 3 * 32, g.y + 2 * 32); });
-  for (let t = 0; t < 40 && !tgShot; t++) { await wait(300); if (await ev(() => window.__healer.dungeon.battle.telegraphs.some((t) => !t.done))) tgShot = await shot('combat_telegraph'); }
+// 1층 일반 고블린은 파티가 맞기도 전에 녹는 일이 많아(힐이 필요 없음) 힐 이벤트가 없을 수도 있다 → 중간보스 무리에서 이어서 확인
+if (!tgShot || L.heal < 1) {
+  await ev(() => { const D = window.__healer.dungeon, fs = D.fs, p = D.player; const gs = fs.map.groups.filter((g) => g.minibossId && fs.battle.monsters.some((m) => m.groupId === g.id && m.alive)).sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y)); if (gs[0]) D.teleport(gs[0].x + 3 * 32, gs[0].y + 2 * 32); });
+  for (let t = 0; t < 60; t++) {
+    await wait(300);
+    const s = await ev(() => ({ tg: window.__healer.dungeon.battle.telegraphs.some((t) => !t.done), heal: window.__e2e.heal, end: !!window.__healer.dungeon.fs.result }));
+    if (s.tg && !tgShot) tgShot = await shot('combat_telegraph');
+    if ((tgShot && s.heal >= 1) || s.end) break;
+  }
 }
 const fpsMin = Math.min(...fpsSamples.slice(2)), fpsAvg = fpsSamples.reduce((a, b) => a + b, 0) / fpsSamples.length;
 L = await ev(() => window.__e2e);
@@ -332,6 +350,7 @@ await shot('town_continued');
 step('저장 → 새로고침 → 이어하기 → 같은 상태', !!title && !!cont && before === after, before === after ? before.slice(0, 120) + '…' : `before ${before}\nafter  ${after}`);
 
 // ============ 21. 2~10층 입장(각 2초) · 6층 힐러 저격 ============
+await installRecorder();
 for (let f = 2; f <= 10; f++) {
   const r = await ev((f) => {
     const G = window.__healer.G();
@@ -351,10 +370,14 @@ for (let f = 2; f <= 10; f++) {
       const m = fs.battle.monsters.filter((m) => m.alive && has(m) && m.tier !== 'boss').sort((a, b) => Math.hypot(a.x - D.player.x, a.y - D.player.y) - Math.hypot(b.x - D.player.x, b.y - D.player.y))[0];
       if (!m) return null;
       window.__e2e.healerAoe = [];
+      // 확인용 버팀목: 2레벨 파티는 6층에서 몇 초 만에 전멸해 시전을 못 볼 수 있어 확인하는 동안만 아군 HP 를 0.2초마다 채운다
+      // (Entities.refresh 가 maxHp 를 다시 계산하므로 maxHp 를 키우는 방식은 버프 한 번에 풀린다). 데미지·AI 는 그대로.
+      window.__e2eTopUp = setInterval(() => { for (const e of D.battle.party()) if (e.alive) e.hp = e.maxHp; }, 200);
       D.teleport(m.x + 3 * 32, m.y + 2 * 32);
       return m.def.id + ' ' + (m.abilities || m.def.abilities).map((a) => (typeof a === 'string' ? a : a.id)).join('/');
     });
-    const seen = await until(() => window.__e2e.healerAoe.length > 0, null, 25000, 200);
+    const seen = await until(() => window.__e2e.healerAoe.length > 0, null, 30000, 200);
+    await ev(() => clearInterval(window.__e2eTopUp));
     await shot('floor6_healer_aoe');
     const lst = await ev(() => window.__e2e.healerAoe.slice(0, 6));
     step('6층 힐러 노리는 광역기', !!seen, `${target || '대상 몬스터 없음'} → ${lst.join(', ')}`);

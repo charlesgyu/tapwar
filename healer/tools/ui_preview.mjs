@@ -42,7 +42,7 @@ const info = await page.evaluate(({ screen, params, stateJs }) => {
   } catch (e) { console.warn('party sample skipped', e.message); }
   G.player.gold = 2500; G.player.level = 5; G.player.statPoints = 10;
   try {
-    for (const id of ['potion_hp_s', 'potion_mp_s']) { const inst = Items.make ? Items.make(id, 5) : null; if (inst) Inventory.add(G, inst); }
+    for (const id of ['hp_potion_s', 'mp_potion_s']) { const inst = Items.make ? Items.make(id, 5) : null; if (inst) Inventory.add(G, inst); }
     for (let i = 0; i < 6; i++) { const inst = Items.generate({ floor: 2, rng: RNG.make(100 + i) }); if (inst) Inventory.add(G, inst); }
   } catch (e) { console.warn('items sample skipped', e.message); }
   if (stateJs) { try { new Function('G', stateJs)(G); } catch (e) { console.warn('stateJs error', e.message); } }

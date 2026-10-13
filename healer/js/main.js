@@ -12,11 +12,22 @@ const Boot = (() => {
   // 새 게임: 상태 생성 → 프롤로그 → 마을. 타이틀 화면의 "새 게임"도 이걸 써도 된다.
   async function startNewGame(name) {
     State.reset();
-    State.newGame(name || '리프');
+    const G = State.newGame(name || '리프');
+    giveStarterGear(G);
     started = true;
     State.save();
     if (!skipIntro() && typeof Story !== 'undefined' && Story.prologue) await UI.story(Story.prologue, '프롤로그');
     Scenes.go('town');
+  }
+  // 기본 장비(DESIGN §2 "기본 장비"): 나무 완드 + 천 로브(일반). State.newGame 은 코어 테스트들이 빈 장비를 전제로 계산하므로
+  // 실제 게임의 새 게임 경로(여기)에서만 입힌다. 빈손이면 파티 화면이 "장착한 장비가 없어요" 를 띄우고 1층 첫 전투가 너무 빡빡했다.
+  function giveStarterGear(G) {
+    if (typeof Items === 'undefined' || !Items.make) return;
+    for (const [slot, id] of [['main', 'wand_wood'], ['body', 'cloth_body_1']]) {
+      if (G.player.equipment[slot]) continue;
+      try { const inst = Items.make(id, 1); if (inst) { inst.grade = 'common'; G.player.equipment[slot] = inst; } } catch (e) { /* 데이터에 없는 id 면 빈손 유지 */ }
+    }
+    try { const d = Stats.derive(G.player, G); G.player.hp = d.maxHp; G.player.mp = d.maxMp; } catch (e) { /* 최대치 계산 실패 시 newGame 값 유지 */ }
   }
   // 이어하기: 저장 불러오기 → 마을. 불러오기에 실패하면 새 게임으로.
   function continueGame() {
@@ -34,6 +45,25 @@ const Boot = (() => {
     // 퀘스트 엔진은 이벤트로 진행되므로 어떤 화면보다 먼저 구독(멱등)
     if (typeof Quests !== 'undefined' && Quests.init) Quests.init();
     saveTimer = setInterval(save, AUTOSAVE_MS);
+    // 마을에서 보낸 시간도 플레이 시간(G.playTime)으로 센다. 음식 버프 until·상태 화면 "플레이 N분"이 이 시계를 쓰고
+    // 던전 시간은 Floor.leave 가 더하며 전투 시계도 playTime 에서 시작하므로(combat.js) 두 시계가 끊김 없이 이어진다.
+    // 탭이 숨겨졌을 때는 세지 않는다(백그라운드에 둔 사이 버프가 다 끝나 버리지 않게).
+    setInterval(() => {
+      if (!started || document.hidden || Scenes.name() !== 'town') return;
+      const G = State.get(); G.playTime = (G.playTime || 0) + 1;
+    }, 1000);
+    // 경매장 판매 정산은 경매장 화면이 열려 있을 때만 돌아서(ui_auction.js) 닫혀 있으면 팔린 소식을 모른다.
+    // 1분마다 여기서도 굴려 마을·던전 어디서든 토스트로 알린다(경매장 화면이 열려 있으면 그쪽 타이머에 맡긴다).
+    setInterval(() => {
+      if (!started || typeof Facilities === 'undefined' || !Facilities.auction) return;
+      const cur = UI.current && UI.current();
+      if (cur && cur.name === 'auction') return;
+      let r = null; try { r = Facilities.auction.tick(State.get()); } catch (e) { return; }
+      if (!r || !r.ok || !r.sold.length) return;
+      const total = r.sold.reduce((a, e) => a + (e.price || 0), 0);
+      UI.toast(`경매장: 물건 ${r.sold.length}개가 팔렸어요! +${total.toLocaleString('ko-KR')} 골드`, 2600);
+      State.save();
+    }, 60 * 1000);
     Events.on('scene_change', save);
     Events.on('ui_close', save);
     // 타이틀 화면(ui_title.js)이 State.load/newGame 후 마을로 보내면 그때부터 자동 저장 대상

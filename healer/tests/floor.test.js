@@ -217,4 +217,22 @@ module.exports = {
     ctx.Floor.update(fs, G, 0.1);
     assert.strictEqual(fs.fatigue, 2, '같은 무리는 한 번만');
   },
+  // 회귀(E2E 통합): 음식 버프 until 은 G.playTime 시계로 찍힌다 → 전투 시계도 playTime 에서 시작해야 지속시간이 맞는다
+  '전투 시계는 G.playTime 에서 시작하고 마을에서 먹은 음식 버프가 그 시간만큼만 간다'(assert) {
+    const ctx = load('all');
+    const { State, Floor, Facilities, RNG } = ctx;
+    const G = State.newGame('리프');
+    G.player.gold = 1000; G.playTime = 5000;
+    const meal = Facilities.inn.menu()[0];
+    assert.ok(Facilities.inn.eat(G, meal.id, G.playTime).ok);
+    const fs = Floor.start(G, 1, { rng: RNG.make(9) });
+    assert.strictEqual(fs.battle.time, 5000);
+    const food = () => fs.battle.player.buffs.find((b) => b.id === meal.id);
+    assert.ok(food(), '입장 직후 음식 버프 유지');
+    const dur = food().until - fs.battle.time;
+    assert.ok(dur > 0 && dur <= meal.buff.duration + 1e-6, '남은 시간 = 메뉴 지속시간 이하: ' + dur);
+    for (const m of fs.battle.monsters) { m.alive = false; m.hp = 0; m.state = 'dead'; }
+    for (let t = 0; t < dur + 2; t += 0.5) Floor.update(fs, G, 0.5);
+    assert.ok(!G.player.buffs.some((b) => b.id === meal.id), '지속시간이 지나면 사라짐');
+  },
 };

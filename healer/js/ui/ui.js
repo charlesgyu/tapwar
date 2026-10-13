@@ -183,7 +183,8 @@ const UI = (() => {
     const card = el('div', { class: 'item-card' + (opts.compact ? ' compact' : ''), style: { borderColor: gi.color } }, [
       el('div', { class: 'item-icon', text: def.icon || '📦' }),
       el('div', { class: 'item-main' }, [
-        el('div', { class: 'item-name', style: { color: gi.color }, text: `${def.name || def.id}${qty}` }),
+        // 일반 등급 색(#f2f2f2)은 흰 카드 위에서 안 읽혀 이름만 진한 글자색으로(테두리는 등급색 유지) — 여러 화면 담당자가 각자 덧칠하던 것을 여기서 한 번에
+        el('div', { class: 'item-name', style: { color: grade === 'common' ? '#4a3a30' : gi.color }, text: `${def.name || def.id}${qty}` }),
         el('div', { class: 'item-sub', text: [gi.name].concat(sub).join(' · ') }),
         statsText.length ? el('div', { class: 'item-stats', text: statsText.join(' / ') }) : null,
         opts.desc !== false && def.desc && !opts.compact ? el('div', { class: 'item-desc', text: def.desc }) : null,
