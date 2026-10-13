@@ -387,7 +387,7 @@ function useSpecialSkill(sourceZone) {
   const enemyZones = buildSkillTargetList(OWNER.ENEMY);
   const enemyMainAlive = !!(enemyMainZone && enemyMainZone.owner === OWNER.ENEMY);
   if (enemyZones.length === 0) {
-    showStatus('특수 기술로 공격할 적 지역이 없습니다! (적 메인 지역은 특수 기술 면역)');
+    statusQuiet('특수 기술로 공격할 적 지역이 없습니다! (적 메인 지역은 특수 기술 면역)');
     flashZone(sourceZone, SKILL_DENIED_FLASH);
     return;
   }
@@ -2095,7 +2095,7 @@ function handleZoneDoubleClick(targetZone) {
 
   // [방어 지원]: 내 점령지역에 집중 포격하면 아군 구슬이 들어가 피를 회복(최대 50)
   if (targetZone.owner === OWNER.PLAYER && targetZone.orbs >= targetZone.maxOrbs) {
-    showStatus(`[${targetZone.name}]은(는) 이미 피가 가득 찼습니다!`);
+    statusQuiet(`[${targetZone.name}]은(는) 이미 피가 가득 찼습니다!`);
     return;
   }
 
@@ -2103,7 +2103,7 @@ function handleZoneDoubleClick(targetZone) {
   // [실험] 적 완전점령 지역은 내 완전점령 지역만 사격에 참여
   const targetIsFortress = targetZone.owner === OWNER.ENEMY && isFullyConquered(targetZone);
   if (targetIsFortress && !EXPERIMENT_NO_SKILL) {
-    showStatus(`[${targetZone.name}]은(는) 완전 점령된 철벽 기지입니다!`);
+    statusQuiet(`[${targetZone.name}]은(는) 완전 점령된 철벽 기지입니다!`);
     return;
   }
 
@@ -2113,7 +2113,7 @@ function handleZoneDoubleClick(targetZone) {
     (canRangeAttack(z) || z.neighbors.includes(targetZone))); // 원거리 불가 지역은 맞닿은 경우만 참여
 
   if (allPlayerZones.length === 0) {
-    showStatus(`출격 가능한 전선 아군 점령지가 없습니다! (완전점령지역은 집중포화 제외)`);
+    statusQuiet(`출격 가능한 전선 아군 점령지가 없습니다! (완전점령지역은 집중포화 제외)`);
     return;
   }
 
@@ -2149,7 +2149,7 @@ function handleZoneDoubleClick(targetZone) {
   // 집중 포화 지정 순간: 목표 지역 테두리 번쩍 (내 지역 보급이면 초록)
   flashZone(targetZone, targetZone.owner === OWNER.PLAYER ? ZONE_COLORS.playerFullCharged : ZONE_COLORS.playerStroke);
 
-  showStatus(targetZone.owner === OWNER.PLAYER
+  statusQuiet(targetZone.owner === OWNER.PLAYER
     ? `[${targetZone.name}] 방어 지원! 아군 ${allPlayerZones.length}개 거점에서 피가 찰 때까지 보급!`
     : `[${targetZone.name}] 집중 포화! 아군 ${allPlayerZones.length}개 거점에서 점령할 때까지 일제 사격!`);
 }
@@ -2270,18 +2270,18 @@ function onPointerUp(e) {
     if (!EXPERIMENT_NO_SKILL && endZone === dragSourceZone && isFullyConquered(endZone)) {
       if (!skillUnlocked[OWNER.PLAYER]) {
         const n = rawZones.filter(z => z.owner === OWNER.PLAYER && isFullyConquered(z)).length;
-        showStatus(`특수 기술은 완전점령 지역 ${SKILL_UNLOCK_FULL_COUNT}곳을 처음 확보하면 열립니다 (${n}/${SKILL_UNLOCK_FULL_COUNT})`);
+        statusQuiet(`특수 기술은 완전점령 지역 ${SKILL_UNLOCK_FULL_COUNT}곳을 처음 확보하면 열립니다 (${n}/${SKILL_UNLOCK_FULL_COUNT})`);
         flashZone(endZone, SKILL_DENIED_FLASH);
       } else if (endZone.chargeState === 'ready' && gameElapsedTime < playerSkillGcdUntil) {
-        showStatus(`특수 기술 글로벌 쿨타임 (${Math.ceil(playerSkillGcdUntil - gameElapsedTime)}초 남음)`);
+        statusQuiet(`특수 기술 글로벌 쿨타임 (${Math.ceil(playerSkillGcdUntil - gameElapsedTime)}초 남음)`);
         flashZone(endZone, SKILL_DENIED_FLASH);
       } else if (endZone.chargeState === 'ready') {
         useSpecialSkill(endZone);
       } else if (endZone.chargeState === 'charging') {
-        showStatus(`[${endZone.name}] 특수 기술 충전 중 (${Math.max(1, Math.ceil(SKILL_CHARGE_SEC - endZone.chargeTime))}초 남음)`);
+        statusQuiet(`[${endZone.name}] 특수 기술 충전 중 (${Math.max(1, Math.ceil(SKILL_CHARGE_SEC - endZone.chargeTime))}초 남음)`);
         flashZone(endZone, SKILL_DENIED_FLASH);
       } else if (endZone.chargeState === 'spent') {
-        showStatus(`[${endZone.name}] 특수 기술 사용 완료. 이제 메인처럼 공격해요.`);
+        statusQuiet(`[${endZone.name}] 특수 기술 사용 완료. 이제 메인처럼 공격해요.`);
       }
     }
 
@@ -2296,7 +2296,7 @@ function onPointerUp(e) {
         // 원거리 지정은 완전점령 지역만 가능: 맞닿지 않은 곳은 무시
         flashZone(dragSourceZone, SKILL_DENIED_FLASH);
       } else if (!canAttackTarget(dragSourceZone, endZone)) {
-        showStatus(`[${endZone.name}]은(는) 완전 점령된 철벽 기지입니다! [즉시 점령] 아이템으로만 공략 가능합니다.`);
+        statusQuiet(`[${endZone.name}]은(는) 완전 점령된 철벽 기지입니다! [즉시 점령] 아이템으로만 공략 가능합니다.`);
         createImmuneShieldParticles(endZone.cx, endZone.cy);
       } else {
         dragSourceZone.isManualTarget = true;
