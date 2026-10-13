@@ -16,31 +16,32 @@ const TownScene = (() => {
   // 직전 씬 이름 — 탑(던전)에서 돌아오면 성문 앞에 세우기 위해. 'scene_change' 는 enter 직전에 발행된다.
   let sceneNow = null, scenePrev = null;
   if (typeof Events !== 'undefined') Events.on('scene_change', (p) => { scenePrev = sceneNow; sceneNow = p && p.name; });
-  const clouds = [{ x: 120, y: 400, r: 80 }, { x: 600, y: 1000, r: 110 }, { x: 360, y: 1640, r: 96 }];
+  const clouds = [{ x: 120, y: 240, r: 80 }, { x: 600, y: 560, r: 110 }, { x: 360, y: 880, r: 96 }];
 
   // ---------- NPC 배치 ----------
   // 시설 담당 NPC 는 문 옆(문 앞 칸을 막지 않게 1~2타일 옆)에 서 있고, 주민·아이는 home 반경 안을 배회한다.
   // id 는 Dialogue 의 npcId 와 1:1 — 이름·스프라이트·대사는 전부 Dialogue 에서 가져온다.
   const NPC_LAYOUT = [
-    { id: 'guard1', x: 10, y: 8.5, ai: 'stand' },
-    { id: 'guard2', x: 14, y: 8.5, ai: 'stand' },
-    { id: 'priest_elder', x: 6.3, y: 14.3, ai: 'stand', facility: 'temple' },
-    { id: 'guildmaster', x: 21.4, y: 14.3, ai: 'stand', facility: 'guild' },
-    { id: 'adventurer_clerk', x: 6.4, y: 22.3, ai: 'stand', facility: 'adventurer' },
-    { id: 'engraver', x: 21.9, y: 22.3, ai: 'stand', facility: 'engraver' },
-    { id: 'smith', x: 6.5, y: 30, ai: 'stand', facility: 'smithy' },
-    { id: 'banker', x: 21.9, y: 30.3, ai: 'stand', facility: 'bank' },
-    { id: 'innkeeper', x: 7.3, y: 43.3, ai: 'stand', facility: 'inn' },
-    { id: 'auctioneer', x: 21.2, y: 43.3, ai: 'stand', facility: 'auction' },
-    { id: 'merchant1', x: 6.2, y: 54.3, ai: 'stand', facility: 'shop' },
-    { id: 'merchant2', x: 14.5, y: 47.3, ai: 'stand' },
-    { id: 'villager_a', x: 12, y: 15, ai: 'wander', home: { x: 12, y: 16, r: 5 }, speed: 60 },
-    { id: 'villager_b', x: 14, y: 31, ai: 'wander', home: { x: 12, y: 31, r: 5 }, speed: 56 },
-    { id: 'villager_c', x: 10, y: 33, ai: 'wander', home: { x: 12, y: 33, r: 5 }, speed: 64 },
-    { id: 'villager_d', x: 12, y: 43, ai: 'wander', home: { x: 12, y: 43, r: 4 }, speed: 46 },
-    { id: 'villager_e', x: 13, y: 23, ai: 'wander', home: { x: 12, y: 23, r: 4 }, speed: 58 },
-    { id: 'child_a', x: 13, y: 51, ai: 'wander', home: { x: 12, y: 52, r: 4 }, speed: 88 },
-    { id: 'child_b', x: 10, y: 58, ai: 'wander', home: { x: 12, y: 57, r: 4 }, speed: 80 },
+    { id: 'guard1', x: 10, y: 8.3, ai: 'stand' },
+    { id: 'guard2', x: 14, y: 8.3, ai: 'stand' },
+    { id: 'priest_elder', x: 6.0, y: 9.5, ai: 'stand', facility: 'temple' },
+    { id: 'guildmaster', x: 21.9, y: 9.5, ai: 'stand', facility: 'guild' },
+    { id: 'adventurer_clerk', x: 6.0, y: 16.5, ai: 'stand', facility: 'adventurer' },
+    { id: 'engraver', x: 21.9, y: 16.5, ai: 'stand', facility: 'engraver' },
+    { id: 'smith', x: 2.2, y: 23.5, ai: 'stand', facility: 'smithy' },
+    { id: 'banker', x: 21.9, y: 23.5, ai: 'stand', facility: 'bank' },
+    { id: 'innkeeper', x: 6.0, y: 30.5, ai: 'stand', facility: 'inn' },
+    { id: 'auctioneer', x: 21.9, y: 30.5, ai: 'stand', facility: 'auction' },
+    { id: 'merchant1', x: 14.2, y: 30.5, ai: 'stand', facility: 'shop' },
+    // 시장 상인: 좌판 뒤에 서면 차양·진열대에 가려지므로 좌판 오른쪽 옆(가운데 통로 쪽)에 세운다
+    { id: 'merchant2', x: 11.35, y: 22.6, ai: 'stand' },
+    { id: 'villager_a', x: 12, y: 11, ai: 'wander', home: { x: 12, y: 11, r: 3 }, speed: 60 },
+    { id: 'villager_b', x: 14, y: 18, ai: 'wander', home: { x: 12, y: 18, r: 3 }, speed: 56 },
+    { id: 'villager_c', x: 9, y: 15, ai: 'wander', home: { x: 10, y: 15, r: 3 }, speed: 64 },
+    { id: 'villager_d', x: 12, y: 24, ai: 'wander', home: { x: 12, y: 24, r: 2 }, speed: 46 },
+    { id: 'villager_e', x: 15, y: 14, ai: 'wander', home: { x: 14, y: 14, r: 3 }, speed: 58 },
+    { id: 'child_a', x: 13, y: 19, ai: 'wander', home: { x: 12, y: 19, r: 3 }, speed: 88 },
+    { id: 'child_b', x: 9, y: 31.5, ai: 'wander', home: { x: 12, y: 31, r: 4 }, speed: 80 },
   ];
   // 시설 건물 key → UI 화면 이름. 민가(houseA~C)는 들어갈 수 없다.
   const FACILITY_SCREENS = { shop: 'shop', auction: 'auction', bank: 'bank', smithy: 'smithy', inn: 'inn', engraver: 'engraver', temple: 'temple', adventurer: 'adventurer', guild: 'guild' };
@@ -52,7 +53,7 @@ const TownScene = (() => {
   function ensureWorld() {
     if (world) return;
     world = Town.build();
-    player = makeActor('player', 12 * TILE, 36 * TILE, { speed: 210, name: '리프' });
+    player = makeActor('player', 12 * TILE, 18.5 * TILE, { speed: 210, name: '리프' });
     npcs = NPC_LAYOUT.map((L) => {
       const info = Dialogue.npc(L.id) || { name: L.id, sprite: 'villagerA' };
       let x = L.x * TILE, y = L.y * TILE;
@@ -381,8 +382,8 @@ const TownScene = (() => {
     enter(params = {}) {
       ensureWorld();
       // 탑에서 돌아오면 성문 앞, 그 외(새 게임·이어하기)는 마을 중앙 광장
-      if (params.from === 'dungeon' || params.from === 'tower' || scenePrev === 'dungeon') { player.x = 12 * TILE; player.y = 10 * TILE; player.dir = 'down'; }
-      else if (!entered) { player.x = 12 * TILE; player.y = 36 * TILE; }
+      if (params.from === 'dungeon' || params.from === 'tower' || scenePrev === 'dungeon') { player.x = 12 * TILE; player.y = 8.5 * TILE; player.dir = 'down'; }
+      else if (!entered) { player.x = 12 * TILE; player.y = 18.5 * TILE; }
       player.path = null; player.onArrive = null; nearDoor = null;
       Scenes.followCamera(player, Town.W, Town.H, true);
       const hud = $('hud'); if (hud) hud.classList.remove('hidden');

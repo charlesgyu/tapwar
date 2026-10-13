@@ -10,6 +10,8 @@ page.on('pageerror', e => { failed = true; console.log('PAGEERROR', e.message); 
 page.on('console', m => { if (m.type() === 'error') console.log('CONSOLE', m.text()); });
 await page.goto('file://' + dir.replace(/\/$/, '') + '/index.html');
 await page.waitForTimeout(700);
+// 새 게임이면 프롤로그가 뜬다 → 건너뛰고 마을이 열릴 때까지 대기
+{ const b = page.locator('.ui-overlay.story .story-skip'); if (await b.count()) { await b.first().click(); await page.waitForTimeout(1200); } }
 await page.screenshot({ path: `${prefix}_app_start.png` });
 const goDoor = async (key, wait) => {
   await page.evaluate((key) => { const T = window.__healer.Town; const b = T.BUILDINGS.find(b => b.key === key); const d = T.doorPoint(b); window.__healer.goTo(d.x, d.y); }, key);
@@ -19,7 +21,7 @@ await goDoor('tower', 9000);
 await page.screenshot({ path: `${prefix}_app_gate.png` });
 await goDoor('bank', 9000);
 await page.screenshot({ path: `${prefix}_app_bank.png` });
-await page.evaluate(() => { const T = window.__healer.Town; window.__healer.goTo(12 * T.TILE + 8, 60 * T.TILE); });
+await page.evaluate(() => { const T = window.__healer.Town; window.__healer.goTo(12 * T.TILE + 8, (T.ROWS - 1.5) * T.TILE); });
 await page.waitForTimeout(12000);
 await page.screenshot({ path: `${prefix}_app_bottom.png` });
 // 걷는 중 프레임 (조이스틱 드래그)

@@ -27,7 +27,7 @@ const result = await page.evaluate(() => {
     for (const [kind, key] of [['player', 'smithy'], ['villagerA', 'bank'], ['priest', 'temple'], ['knight', 'tower']]) {
       const d = doorOf(key); if (d) { try { const s = Sprites.get(kind); actors.push({ s, x: d.x, y: d.y, dir: 'down' }); } catch (e) {} }
     }
-    place('villagerB', 13.5, 33.5, 'left'); place('child', 11, 47, 'right'); place('merchant', 9.5, 45.7, 'down');
+    place('villagerB', 13.5, 14.5, 'left'); place('child', 12, 24, 'right'); place('merchant', 11.35, 22.6, 'down');
   }
   function renderView(camX, camY, zoom, vw, vh) {
     c.width = vw; c.height = vh;
@@ -61,8 +61,8 @@ const result = await page.evaluate(() => {
   const cx = Math.max(0, Math.min(Town.W - viewW, 12 * T - viewW / 2));
   const views = {
     gate: renderView(cx, 0, zoom, vw, vh),
-    plaza: renderView(cx, Math.max(0, 32 * T - viewH / 2), zoom, vw, vh),
-    market: renderView(cx, Math.max(0, 46 * T - viewH / 2), zoom, vw, vh),
+    plaza: renderView(cx, Math.max(0, Math.min(Town.H - viewH, 15 * T - viewH / 2)), zoom, vw, vh),
+    market: renderView(cx, Math.max(0, Math.min(Town.H - viewH, 22 * T - viewH / 2)), zoom, vw, vh),
     bottom: renderView(cx, Town.H - viewH, zoom, vw, vh),
   };
   // 전체 맵 축소본

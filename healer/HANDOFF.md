@@ -84,5 +84,5 @@ Playwright 는 `/opt/node-tools/node_modules/playwright/index.mjs` 에서 import
 - 컨테이너 CPU 4개라 동시 에이전트는 2개. 사용량 한도에 걸리면 완료된 파일은 디스크에 남으므로 `git add -A healer && git commit` 후 이어서 하면 된다.
 - `tools/load.js` 의 ORDER 에 새 core 파일을 추가해야 노드 테스트에서 로드된다(현재 core 는 전부 포함).
 - `MonsterSprites.get` 은 미등록 id 에 보라색 대체 스프라이트를 돌려주므로 그래픽이 없어도 게임은 돈다. `DungeonTiles.chunk` 도 바이옴 미등록 시 단색 대체.
-- 시장 상인 2명이 좌판 뒤에 서서 가려지는 문제(town_scene 에서 y 를 45.2 타일로 올리면 해결).
+- 마을은 24×34 타일로 압축(좌·우 4층 시설 + 가운데 성문→광장→시장→잡화상 대로). 시장 상인은 좌판 옆 통로(11.35, 22.6)에 서 있어 가려지지 않는다.
 - 저장 키 `localStorage['healer.save']`, 버전 1.

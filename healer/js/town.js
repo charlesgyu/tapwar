@@ -2,25 +2,25 @@
 // 스타일: 선명한 클래식 RPG 타일셋. 강한 외곽선(따뜻한 갈색) + 3톤 명암, 광원은 좌상단.
 const Town = (() => {
   const TILE = 32;
-  const COLS = 24, ROWS = 64;
+  const COLS = 24, ROWS = 34;
   const W = COLS * TILE, H = ROWS * TILE;
 
-  // ---------- 지도 정의 (단위: 타일, 중앙 대로 = 9~14열) ----------
+  // ---------- 지도 정의 (단위: 타일) ----------
+  // 압축 배치: 좌(1~6열)·우(17~22열) 두 줄에 시설이 4층으로 쌓이고, 가운데(7~16열)는 성문 앞마당 → 광장(우물) → 시장 → 잡화상으로 이어지는 넓은 대로.
+  // 위아래 건물 사이는 2줄(문 앞 한 줄 + 아래 건물 지붕 여유 한 줄).
+  // 맨 아래 문 줄(30행) 밑에 2줄 여유(31~32행 산책길)를 둬서, 카메라가 끝까지 내려가도 하단 버튼 바에 플레이어가 가리지 않게 한다.
   // 건물: x,y,w,h = 발자국(충돌 영역). 문은 아래쪽 중앙. roof: 지붕색, wall: 벽색
   const BUILDINGS = [
     { key: 'tower', name: '탑 입구', kind: 'gate', x: 7, y: 1, w: 10, h: 6 },
-    { key: 'temple', name: '신전', kind: 'temple', x: 1, y: 7, w: 7, h: 6, roof: '#cfae6c', wall: '#f6f0e4' },
-    { key: 'guild', name: '길드', kind: 'house', x: 16, y: 7, w: 7, h: 6, roof: '#6f7f98', wall: '#efe4cb', banner: '#b8706a', icon: 'shield', gable: true },
-    { key: 'adventurer', name: '모험가 사무소', kind: 'house', x: 1, y: 16, w: 7, h: 5, roof: '#b4756c', wall: '#f1e5cb', icon: 'sword', awning: '#c8d8e2' },
-    { key: 'engraver', name: '각인사', kind: 'house', x: 17, y: 16, w: 6, h: 5, roof: '#8f7f9f', wall: '#ece1d3', icon: 'rune', gable: true },
-    { key: 'smithy', name: '대장간', kind: 'house', x: 1, y: 24, w: 6, h: 5, roof: '#8b8f94', wall: '#dccdb4', chimney: true, icon: 'hammer', shop: true },
-    { key: 'bank', name: '은행', kind: 'house', x: 17, y: 24, w: 6, h: 5, roof: '#7e9a8c', wall: '#e8e1d2', stone: true, icon: 'coin', shop: true },
-    { key: 'inn', name: '여관', kind: 'house', x: 1, y: 36, w: 8, h: 6, roof: '#c48a66', wall: '#f1e4c8', icon: 'mug', awning: '#d9b48a', awningWide: true },
-    { key: 'auction', name: '경매장', kind: 'house', x: 15, y: 36, w: 8, h: 6, roof: '#b4756c', wall: '#efe3c8', banner: '#6f7f98', icon: 'gavel', gable: true },
-    { key: 'shop', name: '잡화상', kind: 'house', x: 1, y: 48, w: 6, h: 5, roof: '#6f7f98', wall: '#f1e4c8', icon: 'bag', awning: '#c9a06a', shop: true },
-    { key: 'houseA', name: '', kind: 'house', x: 17, y: 48, w: 6, h: 5, roof: '#b4756c', wall: '#efe3c8', gable: true },
-    { key: 'houseB', name: '', kind: 'house', x: 2, y: 57, w: 6, h: 5, roof: '#8b8f94', wall: '#f1e4c8' },
-    { key: 'houseC', name: '', kind: 'house', x: 16, y: 57, w: 6, h: 5, roof: '#6f7f98', wall: '#efe3c8' },
+    { key: 'temple', name: '신전', kind: 'temple', x: 1, y: 4, w: 6, h: 5, roof: '#cfae6c', wall: '#f6f0e4' },
+    { key: 'guild', name: '길드', kind: 'house', x: 17, y: 4, w: 6, h: 5, roof: '#6f7f98', wall: '#efe4cb', banner: '#b8706a', icon: 'shield', gable: true },
+    { key: 'adventurer', name: '모험가 사무소', kind: 'house', x: 1, y: 11, w: 6, h: 5, roof: '#b4756c', wall: '#f1e5cb', icon: 'sword', awning: '#c8d8e2' },
+    { key: 'engraver', name: '각인사', kind: 'house', x: 17, y: 11, w: 6, h: 5, roof: '#8f7f9f', wall: '#ece1d3', icon: 'rune', gable: true },
+    { key: 'smithy', name: '대장간', kind: 'house', x: 1, y: 18, w: 6, h: 5, roof: '#8b8f94', wall: '#dccdb4', chimney: true, icon: 'hammer', shop: true },
+    { key: 'bank', name: '은행', kind: 'house', x: 17, y: 18, w: 6, h: 5, roof: '#7e9a8c', wall: '#e8e1d2', stone: true, icon: 'coin', shop: true },
+    { key: 'inn', name: '여관', kind: 'house', x: 1, y: 25, w: 6, h: 5, roof: '#c48a66', wall: '#f1e4c8', icon: 'mug', awning: '#d9b48a', awningWide: true },
+    { key: 'auction', name: '경매장', kind: 'house', x: 17, y: 25, w: 6, h: 5, roof: '#b4756c', wall: '#efe3c8', banner: '#6f7f98', icon: 'gavel', gable: true },
+    { key: 'shop', name: '잡화상', kind: 'house', x: 9, y: 25, w: 6, h: 5, roof: '#6f7f98', wall: '#f1e4c8', icon: 'bag', awning: '#c9a06a', shop: true },
   ];
   // 성벽 (충돌만, 바닥 레이어에 그림)
   const WALLS = [
@@ -29,98 +29,56 @@ const Town = (() => {
   ];
   // 큰 소품(깊이 정렬 대상): type, x,y = 발 기준(타일, 소수 가능)
   const PROPS = [
-    { type: 'well', x: 12, y: 32 },
-    { type: 'stall', x: 9.5, y: 48, color: '#b8706a' },
-    { type: 'stall', x: 14.5, y: 48, color: '#6f9a7a' },
-    { type: 'tree', x: 8.5, y: 12.5, size: 'big' },
-    { type: 'tree', x: 14.5, y: 12.5, size: 'big' },
-    { type: 'tree', x: 8.5, y: 23.5, size: 'small' },
-    { type: 'tree', x: 15.5, y: 23.5, size: 'small' },
-    { type: 'tree', x: 9.5, y: 35.5, size: 'big' },
-    { type: 'tree', x: 14.5, y: 35.5, size: 'big' },
-    { type: 'tree', x: 8.5, y: 56.5, size: 'small' },
-    { type: 'tree', x: 14.5, y: 56.5, size: 'big' },
-    { type: 'tree', x: 12, y: 62.5, size: 'big' },
-    { type: 'tree', x: 1.5, y: 31.5, size: 'small' },
-    { type: 'tree', x: 21.5, y: 31.5, size: 'small' },
-    { type: 'tree', x: 1.5, y: 46.5, size: 'small' },
-    { type: 'tree', x: 22.5, y: 45.5, size: 'small' },
-    { type: 'lamp', x: 9, y: 20 },
-    { type: 'lamp', x: 15, y: 20 },
-    { type: 'lamp', x: 9.7, y: 38 },
-    { type: 'lamp', x: 14.3, y: 38 },
-    { type: 'lamp', x: 9, y: 53 },
-    { type: 'lamp', x: 15, y: 53 },
-    { type: 'lamp', x: 9.5, y: 29 },
-    { type: 'lamp', x: 14.5, y: 29 },
-    { type: 'barrel', x: 7.5, y: 27 },
-    { type: 'barrel', x: 8.4, y: 27.6 },
-    { type: 'crate', x: 16.4, y: 27 },
-    { type: 'crate', x: 9.5, y: 40.5 },
-    { type: 'barrel', x: 10.3, y: 41.2 },
-    { type: 'crate', x: 7.5, y: 47 },
-    { type: 'barrel', x: 16.6, y: 46.6 },
-    { type: 'barrel', x: 7.5, y: 14 },
-    { type: 'barrel', x: 1.5, y: 42.4 },
-    { type: 'barrel', x: 7.4, y: 42.4 },
-    { type: 'crate', x: 16.5, y: 14 },
-    { type: 'sign', x: 15.5, y: 8.5 },
-    // 추가 소품 — 생동감
-    { type: 'bench', x: 10.5, y: 30 },
-    { type: 'bench', x: 13.5, y: 30 },
-    { type: 'bench', x: 11.5, y: 15.5 },
-    { type: 'planter', x: 3.4, y: 21.4 },
-    { type: 'planter', x: 5.6, y: 21.4 },
-    { type: 'planter', x: 18.4, y: 29.4 },
-    { type: 'planter', x: 21.6, y: 29.4 },
-    { type: 'planter', x: 2.4, y: 53.4 },
-    { type: 'planter', x: 20.4, y: 13.4 },
-    { type: 'cratestack', x: 16.5, y: 43.2 },
-    { type: 'cratestack', x: 8.3, y: 44.0 },
-    { type: 'barrel', x: 20.5, y: 42.6 },
-    { type: 'barrel', x: 21.4, y: 43.2 },
-    { type: 'clothesline', x: 5, y: 56.4 },
-    { type: 'clothesline', x: 19, y: 56.4 },
-    { type: 'flowerbed', x: 2.5, y: 14.6 },
-    { type: 'flowerbed', x: 21.8, y: 53.6 },
-    { type: 'flowerbed', x: 3.2, y: 42.7 },
-    { type: 'bucket', x: 10.6, y: 32.6 },
-    { type: 'haybale', x: 22.4, y: 22.6 },
-    { type: 'haybale', x: 1.6, y: 59.6 },
-    { type: 'cart', x: 12.1, y: 47.1 },
-    { type: 'board', x: 12.5, y: 26.4 },
-    { type: 'crate', x: 11.6, y: 49.6 },
-    { type: 'barrel', x: 12.7, y: 49.4 },
-    { type: 'planter', x: 10.6, y: 37.5 },
-    { type: 'planter', x: 13.4, y: 37.5 },
+    { type: 'well', x: 12, y: 16 },
+    // 좌판 두 개 사이(11~12열)는 비워 둬서 대로가 끊기지 않게
+    { type: 'stall', x: 9, y: 22.5, color: '#b8706a' },
+    { type: 'stall', x: 15, y: 22.5, color: '#6f9a7a' },
+    { type: 'tree', x: 8, y: 8.6, size: 'small' },
+    { type: 'tree', x: 16, y: 8.6, size: 'small' },
+    { type: 'tree', x: 2.5, y: 32.4, size: 'small' },
+    { type: 'tree', x: 21.5, y: 32.4, size: 'small' },
+    { type: 'tree', x: 12, y: 32.6, size: 'big' },
+    { type: 'bench', x: 7.6, y: 32.2 },
+    { type: 'bench', x: 16.4, y: 32.2 },
+    { type: 'lamp', x: 7.6, y: 12.2 },
+    { type: 'lamp', x: 16.4, y: 12.2 },
+    { type: 'lamp', x: 7.6, y: 17.6 },
+    { type: 'lamp', x: 16.4, y: 17.6 },
+    { type: 'sign', x: 17.6, y: 7.8 },
+    { type: 'board', x: 12.5, y: 11.4 },
+    { type: 'bench', x: 10.2, y: 13.6 },
+    { type: 'bench', x: 13.8, y: 13.6 },
+    { type: 'bucket', x: 10.4, y: 16.6 },
+    { type: 'barrel', x: 6.5, y: 23.3 },
+    { type: 'crate', x: 7.5, y: 24.4 },
+    { type: 'barrel', x: 16.5, y: 24.4 },
+    { type: 'cratestack', x: 17.6, y: 23.4 },
+    { type: 'planter', x: 2.3, y: 16.4 },
+    { type: 'planter', x: 21.7, y: 16.4 },
+    { type: 'flowerbed', x: 2.4, y: 9.6 },
+    { type: 'flowerbed', x: 21.6, y: 9.6 },
+    { type: 'barrel', x: 1.5, y: 30.4 },
+    { type: 'haybale', x: 22.4, y: 30.5 },
     // 만국기 줄 끝 기둥(깊이 정렬 대상) — BUNTING 과 좌표를 맞춘다
-    { type: 'buntingpole', x: 7.4, y: 21.0 }, { type: 'buntingpole', x: 16.6, y: 21.0 },
-    { type: 'buntingpole', x: 6.9, y: 44.4 }, { type: 'buntingpole', x: 17.1, y: 44.4 },
+    { type: 'buntingpole', x: 7.3, y: 10.0 }, { type: 'buntingpole', x: 16.7, y: 10.0 },
+    { type: 'buntingpole', x: 7.3, y: 19.4 }, { type: 'buntingpole', x: 16.7, y: 19.4 },
   ];
   // 잔디밭 (fence: 울타리, 울타리가 있으면 통행 불가)
   const GRASS = [
-    { x: 1, y: 30, w: 5, h: 4, fence: true, flowers: true },
-    { x: 18, y: 30, w: 5, h: 4, fence: true, flowers: true },
-    { x: 0, y: 13, w: 3, h: 2, fence: false },
-    { x: 21, y: 13, w: 3, h: 2, fence: false },
-    { x: 8, y: 11, w: 2, h: 3, fence: false },
-    { x: 14, y: 11, w: 2, h: 3, fence: false },
-    { x: 9, y: 35, w: 2, h: 2, fence: false },
-    { x: 13, y: 35, w: 2, h: 2, fence: false },
-    { x: 0, y: 44, w: 3, h: 3, fence: false, flowers: true },
-    { x: 21, y: 43, w: 3, h: 3, fence: false, flowers: true },
-    { x: 8, y: 55, w: 2, h: 3, fence: false },
-    { x: 14, y: 55, w: 2, h: 3, fence: false },
-    { x: 10, y: 61, w: 4, h: 2, fence: false },
+    { x: 7, y: 7, w: 2, h: 2, fence: false },
+    { x: 15, y: 7, w: 2, h: 2, fence: false },
+    { x: 1, y: 31, w: 3, h: 2, fence: false, flowers: true },
+    { x: 10, y: 31, w: 4, h: 2, fence: false },
+    { x: 20, y: 31, w: 3, h: 2, fence: false, flowers: true },
   ];
   // 광장 (큰 포석)
-  const PLAZA = { x: 7, y: 26, w: 10, h: 10 };
+  const PLAZA = { x: 7, y: 10, w: 10, h: 10 };
   // 시장 바닥
-  const MARKET = { x: 7, y: 45, w: 10, h: 5 };
+  const MARKET = { x: 7, y: 20, w: 10, h: 5 };
   // 만국기 (y: 타일, x0~x1)
   const BUNTING = [
-    { y: 21.0, x0: 7.4, x1: 16.6, colors: ['#d98a7a', '#e3c46a', '#7d94b8', '#ede3cc'] },
-    { y: 44.4, x0: 6.9, x1: 17.1, colors: ['#e3c46a', '#d98a7a', '#7d94b8', '#ede3cc'] },
+    { y: 10.0, x0: 7.3, x1: 16.7, colors: ['#d98a7a', '#e3c46a', '#7d94b8', '#ede3cc'] },
+    { y: 19.4, x0: 7.3, x1: 16.7, colors: ['#e3c46a', '#d98a7a', '#7d94b8', '#ede3cc'] },
   ];
 
   // ---------- 충돌 격자 ----------
@@ -566,7 +524,7 @@ const Town = (() => {
     drawBoundaryWall(ctx, 0, H - TILE, W, TILE, 'bottom', rnd);
     drawMountains(ctx, rnd);
     for (const w of WALLS) drawWall(ctx, w, rnd);
-    for (const [mx, my] of [[10, 18], [13, 41], [11, 52], [12, 9]]) drawDrain(ctx, mx * TILE + 16, my * TILE + 16);
+    for (const [mx, my] of [[12, 8], [4, 17], [19, 24], [8, 31]]) drawDrain(ctx, mx * TILE + 16, my * TILE + 16);
     return c;
   }
 
