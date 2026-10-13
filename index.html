@@ -757,7 +757,9 @@
       transition: opacity 0.28s ease;
     }
     #start-modal.leaving { opacity: 0; pointer-events: none; }
-    #start-modal::before, #splash::before {
+    /* 홈 별: 캔버스(#sky-stars)가 은은하게 반짝임 + 가끔 별똥별. 스플래시는 정적 CSS 별 */
+    #sky-stars { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+    #splash::before {
       content: '';
       position: absolute;
       inset: 0;
@@ -1150,6 +1152,7 @@
 
     <!-- Start Choice Modal (Mini Metro Style) -->
     <div class="modal-overlay" id="start-modal">
+      <canvas id="sky-stars" aria-hidden="true"></canvas>
       <div class="modal-card start-card">
         <!-- 1단계: 국가 고르기 (맵 고르기처럼 가로 슬라이드) -->
         <div class="home-view" id="country-view">
@@ -1272,7 +1275,7 @@
     <div class="end-confetti" id="end-confetti" aria-hidden="true"></div>
   </div>
 
-  <script src="audio.js?v=20261012_items_v61"></script>
-  <script src="game.js?v=20261012_items_v61"></script>
+  <script src="audio.js?v=20261012_items_v62"></script>
+  <script src="game.js?v=20261012_items_v62"></script>
 </body>
 </html>

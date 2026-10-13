@@ -5671,3 +5671,90 @@ function maybeOpenTutorial() {
   };
   setTimeout(typeNext, 300);
 })();
+
+// ---------- 홈 하늘: 별이 천천히 은은하게 밝아졌다 어두워짐 + 가끔 별똥별 ----------
+(function homeSky() {
+  const cv = document.getElementById('sky-stars');
+  const modal = document.getElementById('start-modal');
+  if (!cv || !modal) return;
+  const ctx = cv.getContext('2d');
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let W = 0, H = 0, dpr = 1, stars = [], meteor = null, nextMeteor = 0;
+
+  function build() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = modal.clientWidth; H = modal.clientHeight;
+    if (!W || !H) return;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const n = Math.round(Math.min(160, Math.max(50, W * H / 5200)));
+    stars = Array.from({ length: n }, () => ({
+      x: Math.random() * W, y: Math.random() * H,
+      r: 0.5 + Math.random() * Math.random() * 1.2,
+      base: 0.25 + Math.random() * 0.45,          // 평소 밝기
+      amp: 0.15 + Math.random() * 0.4,            // 밝아지는 정도
+      period: 4 + Math.random() * 6,              // 4~10초에 한 번 천천히
+      phase: Math.random() * Math.PI * 2,
+      gold: Math.random() < 0.07
+    }));
+  }
+
+  function spawnMeteor(t) {
+    const fromLeft = Math.random() < 0.5;
+    const ang = (fromLeft ? 1 : -1) * (0.35 + Math.random() * 0.25); // 아래로 비스듬히
+    const speed = 380 + Math.random() * 220;
+    meteor = {
+      x: fromLeft ? Math.random() * W * 0.6 : W * 0.4 + Math.random() * W * 0.6,
+      y: Math.random() * H * 0.45,
+      vx: 0,
+      vy: Math.abs(Math.sin(ang)) * speed,
+      start: t, life: 0.9 + Math.random() * 0.5, len: 90 + Math.random() * 70
+    };
+    meteor.vx = (fromLeft ? 1 : -1) * Math.cos(Math.abs(ang)) * speed;
+  }
+
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (document.hidden || modal.hidden || getComputedStyle(modal).display === 'none') return;
+    if (modal.clientWidth !== W || modal.clientHeight !== H) build();
+    if (!W) return;
+    const t = now / 1000;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    for (const s of stars) {
+      const tw = reduce ? 0.5 : 0.5 + 0.5 * Math.sin(t * Math.PI * 2 / s.period + s.phase);
+      const a = Math.min(1, s.base + s.amp * tw * tw); // 제곱: 대부분 은은, 잠깐 밝게
+      ctx.globalAlpha = a;
+      ctx.fillStyle = s.gold ? '#fde68a' : '#ffffff';
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+      if (s.r > 1 && tw > 0.85) { // 큰 별만 가장 밝을 때 부드러운 빛
+        ctx.globalAlpha = a * 0.18;
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 3.2, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    if (reduce) return;
+    if (!nextMeteor) nextMeteor = t + 3 + Math.random() * 4;
+    if (!meteor && t >= nextMeteor) spawnMeteor(t);
+    if (meteor) {
+      const k = (t - meteor.start) / meteor.life;
+      if (k >= 1) { meteor = null; nextMeteor = t + 7 + Math.random() * 9; return; }
+      const el = t - meteor.start;
+      const hx = meteor.x + meteor.vx * el, hy = meteor.y + meteor.vy * el;
+      const sp = Math.hypot(meteor.vx, meteor.vy);
+      const tx = hx - meteor.vx / sp * meteor.len, ty = hy - meteor.vy / sp * meteor.len;
+      const fade = Math.sin(Math.PI * k); // 나타났다 사라짐
+      const g = ctx.createLinearGradient(hx, hy, tx, ty);
+      g.addColorStop(0, `rgba(255,255,255,${0.85 * fade})`);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.strokeStyle = g; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(tx, ty); ctx.stroke();
+      ctx.globalAlpha = fade;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(hx, hy, 1.4, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+  build();
+  window.addEventListener('resize', build);
+  requestAnimationFrame(frame);
+})();
