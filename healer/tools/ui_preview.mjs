@@ -25,7 +25,7 @@ let failed = false;
 page.on('pageerror', e => { failed = true; console.log('PAGEERROR', e.message); });
 page.on('console', m => { if (m.type() === 'error') console.log('CONSOLE', m.text()); });
 const css = existsSync(path.join(H, 'css/ui.css')) ? readFileSync(path.join(H, 'css/ui.css'), 'utf8') : '';
-const hud = existsSync(path.join(H, 'css/hud.css')) ? readFileSync(path.join(H, 'css/hud.css'), 'utf8') : '';
+const hud = ['css/hud.css', 'css/status.css'].map((f) => existsSync(path.join(H, f)) ? readFileSync(path.join(H, f), 'utf8') : '').join('\n');
 await page.setContent(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"><style>*{box-sizing:border-box;margin:0;padding:0}html,body{width:100%;height:100%;overflow:hidden;background:#cfe6f5;font-family:-apple-system,"Pretendard","Noto Sans KR",sans-serif}#game{position:relative;width:100%;height:100%}canvas{display:block;width:100%;height:100%}</style><style>${css}</style><style>${hud}</style></head><body><div id="game"><canvas id="view"></canvas></div></body></html>`);
 for (const f of ORDER) if (existsSync(path.join(H, f))) await page.addScriptTag({ path: path.join(H, f) });
 // ui_*.js 전부
