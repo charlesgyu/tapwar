@@ -647,24 +647,114 @@ const DungeonScene = (() => {
     FX.draw(ctx);
     Scenes.endWorld(ctx);
 
-    // 화면 공간: 머리 위 작은 HP 바(파티 전원 + 중간보스), 중간보스 이름표
+    // 화면 공간: 중간보스 머리 위 HP 바·이름표(보스는 상단 큰 바, 일반 몬스터는 숫자·번쩍임으로 충분 — 무리 위 바는 잡음)
     for (const it of list) {
-      const e = it.ent; if (!e || !e.alive) continue;
+      const e = it.ent; if (!e || !e.alive || e.kind !== 'monster' || e.tier !== 'miniboss') continue;
       const s = sheetFor(e), top = e.y - (s ? s.anchor.y : 30) - 3;
-      if (e.kind === 'monster') {
-        if (e.tier !== 'miniboss') continue;            // 보스는 상단 큰 바, 일반 몬스터는 숫자·번쩍임으로 충분(무리 위 바는 잡음)
-        Scenes.drawMiniBar(ctx, e.x, top, e.hp, e.maxHp, { w: 34, h: 3, color: '#e04a4a' });
-        Scenes.drawLabel(ctx, e.name, e.x, top - 8, { size: 9, bg: 'rgba(60,20,20,0.85)', color: '#ffcf9a', border: '#c04a3a' });
-      } else {
-        const r = e.hp / e.maxHp;
-        Scenes.drawMiniBar(ctx, e.x, top, e.hp, e.maxHp, { w: 18, h: 3, color: r < 0.35 ? '#ff5a4a' : r < 0.6 ? '#ffc04a' : '#5ad06a' });
-        if (e.kind === 'player' && e.maxMp) Scenes.drawMiniBar(ctx, e.x, top + 4.5, e.mp, e.maxMp, { w: 18, h: 2, color: '#4aa0ff' });
-      }
+      Scenes.drawMiniBar(ctx, e.x, top, e.hp, e.maxHp, { w: 34, h: 3, color: '#e04a4a' });
+      Scenes.drawLabel(ctx, e.name, e.x, top - 8, { size: 9, bg: 'rgba(60,20,20,0.85)', color: '#ffcf9a', border: '#c04a3a' });
     }
+    // 파티 전원(탱커·딜러·힐러): 발밑 그림자 바로 아래 HP 바 + MP 바(최대 MP 가 있을 때), 힐 요청 "+", 후퇴 💨
+    for (const it of list) { const e = it.ent; if (e && e.alive && e.kind !== 'monster') drawPartyMarks(ctx, e, view); }
     FX.drawNums(ctx, Scenes.worldToScreen, view.DPR, view.canvas.width, view.canvas.height);
+    drawSays(ctx, view);
     Scenes.drawJoystick(ctx);
   }
   const drawList = [];
+
+  // ---------------- 파티 표시: 발밑 HP/MP 바 · 힐 요청 "+" · 후퇴 💨 ----------------
+  // 화면 공간에서 기기 픽셀 정수 좌표로 그려 흐려지지 않게 한다(도트 느낌 유지).
+  function drawPartyMarks(ctx, e, view) {
+    const D = view.DPR, p = Scenes.worldToScreen(e.x, e.y + 4);
+    const u = Math.max(1, Math.round(D));                       // 기기 픽셀 단위(테두리 두께)
+    const w = Math.round(18 * D), hpH = Math.max(2, Math.round(3 * D)), mpH = Math.max(2, Math.round(2 * D));
+    const hasMp = e.maxMp > 0;
+    const x = Math.round(p.x - w / 2), y = Math.round(p.y), h = hpH + (hasMp ? u + mpH : 0);
+    if (x < -w || y < -h || x > view.canvas.width || y > view.canvas.height + h) return;
+    ctx.fillStyle = 'rgba(10,8,12,0.78)'; ctx.fillRect(x - u, y - u, w + 2 * u, h + 2 * u);
+    const r = Math.max(0, Math.min(1, e.maxHp ? e.hp / e.maxHp : 0));
+    ctx.fillStyle = '#3a2226'; ctx.fillRect(x, y, w, hpH);
+    ctx.fillStyle = r < 0.35 ? '#ff5a4a' : r < 0.6 ? '#ffc04a' : (e.kind === 'player' ? '#7fe07a' : '#5ad06a');
+    ctx.fillRect(x, y, Math.round(w * r), hpH);
+    ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fillRect(x, y, Math.round(w * r), u);   // 윗줄 하이라이트
+    if (hasMp) {
+      const my = y + hpH + u, mr = Math.max(0, Math.min(1, e.mp / e.maxMp));
+      ctx.fillStyle = '#1c2340'; ctx.fillRect(x, my, w, mpH);
+      ctx.fillStyle = '#4aa0ff'; ctx.fillRect(x, my, Math.round(w * mr), mpH);
+    }
+    // 힐 요청: 머리 오른쪽 위에 깜빡이는 초록 "+"(테두리 붉게)
+    if (e.wantsHeal > battle.time) {
+      const hp = Scenes.worldToScreen(e.x + 9, headY(e) - 2);
+      const k = Math.round((2 + (Math.sin(time * 12) > 0 ? 1 : 0)) * D / 2) * 2;   // 크기 맥동(짝수 기기 픽셀)
+      const cx = Math.round(hp.x), cy = Math.round(hp.y), a = k, t = Math.max(u, Math.round(k / 2.5));
+      ctx.fillStyle = '#c0282a'; ctx.fillRect(cx - a - u, cy - t / 2 - u, 2 * a + 2 * u, t + 2 * u); ctx.fillRect(cx - t / 2 - u, cy - a - u, t + 2 * u, 2 * a + 2 * u);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(cx - a, cy - t / 2, 2 * a, t); ctx.fillRect(cx - t / 2, cy - a, t, 2 * a);
+      ctx.fillStyle = '#5ad06a'; ctx.fillRect(cx - a + u, cy - t / 2 + Math.min(u, t / 3), 2 * a - 2 * u, Math.max(1, t - 2 * Math.min(u, t / 3))); ctx.fillRect(cx - t / 2 + Math.min(u, t / 3), cy - a + u, Math.max(1, t - 2 * Math.min(u, t / 3)), 2 * a - 2 * u);
+    }
+    // 후퇴 중: 등 뒤로 💨
+    if (e.retreat) {
+      const back = e.dir === 'left' ? 1 : e.dir === 'right' ? -1 : 0;
+      const q = Scenes.worldToScreen(e.x + back * 11 + (back ? 0 : 10), e.y - 7);
+      const o = ctx.globalAlpha; ctx.globalAlpha = 0.65 + 0.35 * Math.sin(time * 14);
+      ctx.font = `${Math.round(10 * D)}px ${Scenes.FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('💨', Math.round(q.x), Math.round(q.y));
+      ctx.globalAlpha = o;
+    }
+  }
+
+  // ---------------- 파티 말풍선(party_say) ----------------
+  // 말한 사람 머리 위에 1.8초. 화면에 최대 3개(급한 것 → 최신 순), 겹치면 위로 쌓는다.
+  // 탱커는 굵은 글씨·푸른 테두리, 힐 요청은 붉은 바탕에 깜빡이는 "+", 쓰러짐은 회색.
+  const says = [];
+  function onSay(p) {
+    const e = p.ent || byUid(p.uid); if (!e || !near(e)) return;
+    for (let k = says.length - 1; k >= 0; k--) if (says[k].uid === p.uid) says.splice(k, 1);
+    says.push({ uid: p.uid, text: p.text, kind: p.kind || '', prio: p.priority || 0, t: 0, tank: e.role === 'tank' });
+    if (says.length > 8) says.shift();
+  }
+  function updateSays(dt) { for (let k = says.length - 1; k >= 0; k--) { says[k].t += dt; if (says[k].t > SAY_LIFE) says.splice(k, 1); } }
+  function drawSays(ctx, view) {
+    if (!says.length) return;
+    const D = view.DPR;
+    const show = says.slice().sort((a, b) => b.prio - a.prio || a.t - b.t).slice(0, SAY_MAX);
+    const boxes = [];
+    for (const b of show) {
+      const e = byUid(b.uid); if (!e) continue;
+      const heal = b.kind.startsWith('heal_'), dead = b.kind === 'death';
+      const fsz = Math.round((b.tank ? 10.5 : 10) * D);
+      ctx.font = `${b.tank || heal ? 'bold ' : ''}${fsz}px ${Scenes.FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const icon = heal ? Math.round(9 * D) : 0;
+      const tw = Math.round(ctx.measureText(b.text).width + 12 * D + icon), th = Math.round(fsz + 8 * D);
+      const anchor = Scenes.worldToScreen(e.x, headY(e) - (e.curses && e.curses.length ? 12 : 4));
+      let bx = Math.round(anchor.x - tw / 2), by = Math.round(anchor.y - th - 5 * D);
+      bx = Math.max(Math.round(4 * D), Math.min(view.canvas.width - tw - Math.round(4 * D), bx));
+      // 이미 그린 말풍선과 겹치면 위로 올린다
+      for (let pass = 0; pass < 3; pass++) for (const o of boxes) if (bx < o.x + o.w && bx + tw > o.x && by < o.y + o.h && by + th > o.y) by = o.y - th - Math.round(2 * D);
+      boxes.push({ x: bx, y: by, w: tw, h: th });
+      const fade = Math.min(1, b.t / 0.12) * (b.t > SAY_LIFE - 0.3 ? Math.max(0, (SAY_LIFE - b.t) / 0.3) : 1);
+      const pop = b.t < 0.12 ? Math.round((1 - b.t / 0.12) * 3 * D) : 0;
+      const o = ctx.globalAlpha; ctx.globalAlpha = fade;
+      const bg = heal ? '#ffe4df' : dead ? '#d8d4d8' : b.tank ? '#f0f5ff' : 'rgba(255,255,255,0.96)';
+      const bd = heal ? '#d83a3a' : dead ? '#6a6070' : b.tank ? '#3a64c8' : 'rgba(70,56,44,0.75)';
+      const tx = heal ? '#a81818' : dead ? '#3a3440' : b.tank ? '#1c2c64' : '#3a2e26';
+      ctx.fillStyle = bg; Scenes.roundRect(ctx, bx, by - pop, tw, th, Math.round(5 * D)); ctx.fill();
+      ctx.strokeStyle = bd; ctx.lineWidth = Math.max(1, Math.round((b.tank || heal ? 1.5 : 1) * D)); ctx.stroke();
+      // 꼬리(말한 사람 쪽)
+      const tailX = Math.max(bx + Math.round(6 * D), Math.min(bx + tw - Math.round(6 * D), Math.round(anchor.x)));
+      if (!boxes.slice(0, -1).some((q) => q.y > by)) {
+        ctx.beginPath(); ctx.moveTo(tailX - Math.round(4 * D), by + th - pop - 1); ctx.lineTo(tailX, by + th + Math.round(5 * D) - pop); ctx.lineTo(tailX + Math.round(4 * D), by + th - pop - 1); ctx.closePath();
+        ctx.fillStyle = bg; ctx.fill(); ctx.strokeStyle = bd; ctx.stroke();
+        ctx.fillStyle = bg; ctx.fillRect(tailX - Math.round(3 * D), by + th - pop - Math.round(2 * D), Math.round(6 * D), Math.round(2 * D));
+      }
+      if (heal) {
+        // 깜빡이는 "+"
+        const on = Math.sin(time * 14) > -0.3, cx = bx + Math.round(8 * D), cy = Math.round(by + th / 2 - pop), a = Math.round(3 * D), t = Math.max(1, Math.round(1.6 * D));
+        ctx.fillStyle = on ? '#e02a2a' : '#ff9a8a'; ctx.fillRect(cx - a, cy - Math.floor(t / 2), 2 * a, t); ctx.fillRect(cx - Math.floor(t / 2), cy - a, t, 2 * a);
+      }
+      ctx.fillStyle = tx; ctx.fillText(b.text, Math.round(bx + tw / 2 + icon / 2), Math.round(by + th / 2 - pop + D * 0.5));
+      ctx.globalAlpha = o;
+    }
+  }
 
   // ---------------- 갱신 ----------------
   function updateAnims(dt) {
@@ -695,6 +785,7 @@ const DungeonScene = (() => {
     updateAnims(dt);
     updateCorpses(dt);
     updateCoins(dt);
+    updateSays(dt);
     if (combo.n && time - combo.last > COMBO_WIN) combo.n = 0;
     hudAcc += dt;
     if (hudAcc >= HUD_EVERY) { hudAcc = 0; hudTick(); }
@@ -825,6 +916,7 @@ const DungeonScene = (() => {
       if (ch && ch.outro) setTimeout(() => { if (fs && !ending) storyOnce('dungeon_outro_' + floorNo, ch.outro, `${ch.n}장 · ${ch.title}`); }, 1200);
     });
     on('chest_revealed', () => toast('덤불 뒤에 숨겨진 상자가 보여요!', 1600));
+    on('party_say', onSay);
     on('chest_opened', (p) => {
       const names = (p.items || []).map((it) => { const d = typeof Items !== 'undefined' ? Items.get(it.id) : null; return d ? d.name : it.id; });
       toast(`${p.hidden ? '숨겨진 ' : ''}상자: ${UI.gold(p.gold || 0)}${names.length ? ' · ' + names.slice(0, 2).join(', ') + (names.length > 2 ? ` 외 ${names.length - 2}` : '') : ''}`, 2000);
@@ -1187,7 +1279,7 @@ const DungeonScene = (() => {
     time = 0; hudAcc = 0; manualT = 99; ending = false; blockers = 0; route = null; followMoving = false; tapMark = null; selUid = null;
     explore.on = !!settings().autoExplore; explore.target = null; explore.done = new Set(); explore.unreachable = new Set(); explore.rest = 0; explore.wait = 0; explore.lead = 0; explore.status = '';
     chunks.clear(); anim.clear();
-    corpses.length = 0; coins.length = 0; pendingGold = 0; combo.n = 0; combo.last = -99; combo.best = 0;
+    corpses.length = 0; coins.length = 0; pendingGold = 0; combo.n = 0; combo.last = -99; combo.best = 0; says.length = 0; explore.leadUid = null;
     runStats = { gold: 0, items: [], levelUps: [], xp0: totalXp(G.player) };
     // 줌아웃 화면에서 안개가 너무 짙으면 "손전등 속 작은 방"처럼 보여서 조금 옅게
     fogStyle = map.biome === 'cave' ? 'rgba(6, 4, 12, 0.5)' : 'rgba(6, 12, 8, 0.42)';
@@ -1199,7 +1291,7 @@ const DungeonScene = (() => {
     // 디버그·E2E 용 핸들(main.js 의 window.__healer 를 덮어쓰지 않고 붙인다)
     if (typeof window !== 'undefined') {
       window.__healer = window.__healer || {};
-      window.__healer.dungeon = { get fs() { return fs; }, get battle() { return battle; }, get player() { return player; }, get combo() { return combo; }, get coins() { return coins.length; }, get corpses() { return corpses.length; }, teleport, cast, findPath, toggleExplore, finish, hudTick, openPause, closePause };
+      window.__healer.dungeon = { get fs() { return fs; }, get battle() { return battle; }, get player() { return player; }, get combo() { return combo; }, get coins() { return coins.length; }, get corpses() { return corpses.length; }, get says() { return says.slice(); }, get explore() { return explore; }, teleport, cast, findPath, toggleExplore, finish, hudTick, openPause, closePause };
     }
     const ch = chapterOf(floorNo);
     if (ch && ch.intro && ch.intro.length) storyOnce('dungeon_intro_' + floorNo, ch.intro, `${ch.n}장 · ${ch.title}`).then(() => toast(`${floorNo}층 · ${map.name}`, 1600));
@@ -1221,7 +1313,7 @@ const DungeonScene = (() => {
     if (fs && !fs.summary) { Floor.leave(fs, G, 'escape'); State.save(); }
     removeHud();
     if (typeof FX !== 'undefined') FX.clear();
-    chunks.clear(); anim.clear(); corpses.length = 0; coins.length = 0;
+    chunks.clear(); anim.clear(); corpses.length = 0; coins.length = 0; says.length = 0;
     fs = null; battle = null; player = null; map = null;
   }
 

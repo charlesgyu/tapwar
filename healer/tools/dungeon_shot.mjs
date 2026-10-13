@@ -1,7 +1,8 @@
 // 던전 씬 스크린샷: node healer/tools/dungeon_shot.mjs <floor> <outPrefix> [level]
 // ui_preview.mjs 처럼 모든 스크립트를 로드 → 새 게임 + 파티 4명(전사 탱커·도적·사냥꾼·마법사) → Scenes.go('dungeon', { floor })
 // → 탐험 시작 화면 → 가장 가까운 몬스터 무리 옆으로 순간이동 → 전투 3초 → 스크린샷 → 중간보스/보스 근처 → 스크린샷(텔레그래프·보스 바)
-// → 연속킬 보너스 순간 → 일시정지 메뉴 → 길게 누르기 메뉴 → 자동 탐험 몇 초. PAGEERROR/콘솔 오류가 있으면 종료 코드 1. fps 는 Scenes.fps().
+// → 연속킬 보너스 순간 → 일시정지 메뉴 → 길게 누르기 메뉴 → 자동 탐험 몇 초.
+// 추가: AUTO 탱커 앞장(lead_walk) → 풀링 "준비하세요!"(lead_pull) → 전투(lead_fight), 딜러 HP 22% 후퇴·힐 요청(retreat). 말풍선·발밑 HP/MP 바 확인용. PAGEERROR/콘솔 오류가 있으면 종료 코드 1. fps 는 Scenes.fps().
 // 환경 변수 DPR(기본 3 — 아이폰 기준; 2 로 주면 안드로이드 보급형 배율 확인)
 import { chromium } from '/opt/node-tools/node_modules/playwright/index.mjs';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -60,6 +61,26 @@ await page.evaluate(() => { const b = document.querySelector('.story-skip'); if 
 await wait(1500);
 shots.push(await shot('start'));
 
+// 자동 탐험(AUTO): 탱커가 앞장서고 딜러가 뒤따르며 힐러는 맨 뒤 → 무리 앞에서 탱커가 멈춰 "준비하세요!"(풀링) 하는 순간
+await page.evaluate(() => { if (!window.__healer.dungeon.explore.on) window.__healer.dungeon.toggleExplore(); });
+await wait(2600);
+shots.push(await shot('lead_walk'));
+const leadInfo = await page.evaluate(() => { const D = window.__healer.dungeon, B = D.battle, L = B.lead, ld = L && L.leader, p = D.player;
+  return { state: L && L.state, leader: ld && ld.name, role: ld && ld.role, leaderToHealer: ld ? Math.round(Math.hypot(ld.x - p.x, ld.y - p.y)) : null,
+    order: B.party().map((e) => `${e.role}:${Math.round(e.x)},${Math.round(e.y)}`) }; });
+console.log('lead', JSON.stringify(leadInfo));
+let pullShot = null;
+for (let k = 0; k < 160 && !pullShot; k++) {
+  await wait(120);
+  const st = await page.evaluate(() => { const B = window.__healer.dungeon.battle; return { st: B.lead && B.lead.state, says: window.__healer.dungeon.says.map((x) => x.text) }; });
+  if (st.st === 'ready') { await wait(350); pullShot = await shot('lead_pull'); console.log('pull says', JSON.stringify(await page.evaluate(() => window.__healer.dungeon.says.map((x) => x.text)))); }
+}
+if (pullShot) shots.push(pullShot);
+// 풀링 뒤 전투 2초
+await wait(2000);
+shots.push(await shot('lead_fight'));
+await page.evaluate(() => { if (window.__healer.dungeon.explore.on) window.__healer.dungeon.toggleExplore(); });
+
 // 가장 가까운 무리 옆(5타일 앞)으로 순간이동 → 전투 3초
 await page.evaluate(() => {
   const D = window.__healer.dungeon, fs = D.fs, p = D.player;
@@ -72,6 +93,30 @@ await wait(1600);
 const fight = await page.evaluate(() => ({ fps: Scenes.fps(), inCombat: window.__healer.dungeon.battle.inCombat(), counts: window.__counts, cast: !!window.__healer.dungeon.player.cast }));
 console.log('fight', JSON.stringify(fight));
 shots.push(await shot('fight'));
+
+// 생존 AI: 딜러 HP 를 22% 로 떨어뜨리면(자동 힐 잠시 끔) 힐러 쪽으로 빠지며 💨 + 힐 요청 말풍선
+const retreat = await page.evaluate(async () => {
+  const D = window.__healer.dungeon, B = D.battle, G = State.get();
+  const prevHeal = G.player.settings.autoHeal; G.player.settings.autoHeal = false;
+  const m = B.members.find((e) => e.alive && e.role !== 'tank' && B.engagedMonsters().length);
+  if (!m) { G.player.settings.autoHeal = prevHeal; return null; }
+  m.hp = Math.round(m.maxHp * 0.22);
+  window.__retreatUid = m.uid; window.__prevHeal = prevHeal;
+  return { name: m.name, role: m.role };
+});
+let retreatShot = null;
+if (retreat) {
+  for (let k = 0; k < 20 && !retreatShot; k++) {
+    await wait(100);
+    const st = await page.evaluate(() => { const B = window.__healer.dungeon.battle, m = B.byUid(window.__retreatUid); if (m && m.alive && m.hp / m.maxHp < 0.25) m.hp = Math.round(m.maxHp * 0.22); return { retreat: !!(m && m.retreat), wants: !!(m && m.wantsHeal > B.time), alive: !!(m && m.alive) }; });
+    if (st.retreat && (st.wants || k > 12)) { await wait(250); retreatShot = await shot('retreat'); }
+  }
+  // 회복시키면 "다시 갑니다!"
+  await page.evaluate(() => { const B = window.__healer.dungeon.battle, m = B.byUid(window.__retreatUid); State.get().player.settings.autoHeal = window.__prevHeal; if (m && m.alive) B.heal(B.player, m, m.maxHp); });
+  await wait(700);
+  console.log('retreat', JSON.stringify(retreat), 'after', JSON.stringify(await page.evaluate(() => { const B = window.__healer.dungeon.battle, m = B.byUid(window.__retreatUid); return { retreat: !!(m && m.retreat), says: window.__healer.dungeon.says.map((x) => x.text), log: (B.chatLog || []).slice(-6).map((x) => x.ent.name + ':' + x.text) }; })));
+}
+if (retreatShot) shots.push(retreatShot);
 
 // 연속킬 보너스: 무리를 차례로 찾아가며 10연속킬 배너가 뜨는 순간을 찍는다(최대 24초)
 const nextGroup = () => page.evaluate(() => {

@@ -201,6 +201,7 @@ const AIParty = (() => {
   function lead(battle, pts, goal) {
     const L = battle.lead && battle.lead.on ? battle.lead : (battle.lead = { on: true, pts: [], k: 0, goal: null, state: 'hold', leader: null, pull: null, stuck: 0 });
     L.pts = (pts || []).slice(); L.k = 0; L.goal = goal || null; L.stuck = 0;
+    if (!L.pts.length) L.pull = null;                            // 멈추라는데(휴식·전투) 준비 중이던 풀링은 취소
     L.state = L.pts.length ? 'walk' : 'hold';
     activeLead(battle);
     return L;
