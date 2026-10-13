@@ -25,7 +25,7 @@ js/core/data_classes.js  js/core/data_skills.js  js/core/data_items.js
 js/core/data_monsters.js  js/core/data_dialogue.js  js/core/data_quests.js  js/core/data_story.js
 js/core/state.js  js/core/stats.js  js/core/level.js  js/core/inventory.js
 js/core/economy.js  js/core/facilities.js  js/core/party.js  js/core/recruit.js  js/core/quests.js
-js/core/combat/entities.js  js/core/combat/combat.js  js/core/combat/ai_party.js
+js/core/combat/entities.js  js/core/combat/combat.js  js/core/combat/ai_party.js  js/core/combat/chatter.js
 js/core/combat/ai_healer.js  js/core/combat/ai_monster.js  js/core/combat/loot.js
 js/core/dungeon/gen.js  js/core/dungeon/floor.js
 js/sprites_monsters.js  js/sprites_monsters_forest.js  js/sprites_monsters_cave.js   (그래픽: 몬스터)
@@ -369,6 +369,8 @@ battle.addBuff(ent, buff) ; battle.revive(ent, pct, src?) ; battle.taunt(src, mo
 - 탱커: 가장 가까운 교전 몬스터(또는 힐러를 노리는 몬스터 우선)에게 접근·공격, 도발 쿨마다 사용, 몬스터가 여러 마리면 가장 위협 낮은 아군을 노리는 놈에게 도발.
 - 근딜: 탱커의 대상 공격(뒤쪽 위치), 스킬 쿨마다 사용. 원딜: 사거리 유지(대상과 150~220px), 너무 가까우면 뒤로 — 단 **나를 쫓는 몬스터에게서는 물러나지 않고**(끝없는 카이팅 방지) 힐러에게서 8타일 이상 멀어지지 않는다.
 - 비전투: 플레이어(힐러)에게 바짝 붙어 한 덩어리로 따라감(대형: 탱커 앞 30px, 근딜 옆 24px, 원딜 뒤 24px; 자리에서 0.75타일 넘게 벌어지면 ×1.6 로 따라잡음, 벽에 가리면 힐러 발자국을 따라감). 힐러(쓰러져 있으면 그 자리) 8타일 안에 몬스터가 보이면 교전, 적에게는 ×1.25 로 달려들고 막히면 타일 BFS 로 돌아간다. 힐러에게서 12타일 밖·복귀 중인 몬스터는 쫓지 않는다. 딜러 대상: 힐러를 노리는 놈 → (중간보스·보스면) 탱커 대상 → 내게 가장 가까운 놈(무리 사냥에서 타격 낭비 방지).
+- **앞장서기(자동 탐험)**: `AIParty.lead(battle, pts, goal)` 로 경로를 주면 `battle.lead = { on, pts, k, goal, state: 'walk'|'arrived'|'wait'|'ready'|'pull'|'stuck'|'hold', leader, pull }` 가 켜지고, 비전투 중엔 앞장이(`AIParty.leaderOf`: 탱커 → 최대 HP 근딜 → 아무 파티원, 없으면 null)가 경로를 힐러 속도의 90% 로 걷는다(힐러가 6타일 넘게 처지면 'wait'). 나머지는 앞장이 발자국(`battle._leadTrail`)을 따라 두 줄로(근딜 → 원딜, 1.1~1.8타일 뒤) 서고, 힐러 자리는 `AIParty.behindSpot(battle, 2.7타일)`(씬·시뮬이 힐러를 거기로 옮긴다). 풀링: 길 앞 9타일 안에 안 덤빈 몬스터가 보이면 멈춰 'ready'(`lead.pull = { uid, groupId, phase, t0, size, tier }`) → 1.2초 이상 + 파티가 모이면(힐러 4.5타일·동료 4타일 안) 또는 4초 뒤 'pull' 로 힐러가 따라올 빠르기로 돌진 → 몬스터가 덤비면 평소 전투 AI(도발). 같은 무리는 30초 안에 다시 멈추지 않는다. `AIParty.lead(battle, null)` = 제자리 대기(준비 중 풀링 취소), `AIParty.unlead(battle)` = 끄기(예전처럼 힐러를 따라감). 수동 조작·전투 중엔 씬이 대기/끄기로 바꾼다.
+- **생존**: 딜러(탱커 외)는 HP 30% 미만이고 마지막 전투원이 아니면 `ent.retreat = { since, until }` — 자기를 노리는 놈들 반대편 힐러 1.5타일 뒤로(이미 거기면 힐러 4타일 안에서 한 칸 더) ×1.15 로 빠진다. 원딜은 대상을 유지해 물러나며 쏘고 근딜은 손을 뗀다. HP 60% 이상이거나 8초가 지나면(또는 혼자 남으면) 복귀(`ent.lastReturn = { t, recovered }`), 다시 빠지기까지 5초. 탱커는 25% 미만이면 2.2초 동안 도발을 계속 쓰며 힐러 쪽으로 물러섰다가(45% 이상이면 바로) 복귀, 쿨 8초.
 - 모두 텔레그래프 안에 있으면 2/3 확률로 빠져나옴(1~5층 90%). 텔레그래프마다 한 번만 굴리고(`ent.dodge`), 탈출 지점은 `AIParty.exitPoint(tg, ent, battle)`(원/장판은 바깥쪽, 부채꼴은 옆, 돌진 선은 수직). 피해·위협·스킬 효과는 전부 battle 함수로만 일으킨다.
 
 ### 8.2 힐러 자동 로직 (ai_healer.js — `AIHealer`)
@@ -394,6 +396,16 @@ AIHealer.dodge(player, battle) -> { x, y } | null   // 텔레그래프/장판(�
 - 순찰(home 반경 3타일, 1.5~4초 쉬었다 이동), 어그로 범위(7타일) 안의 파티 발견 → 같은 groupId 무리(10타일 안) 전체 + 무리원 4타일 안 이웃 몬스터와 그 무리까지 교전(눈덩이, 보스 제외). 교전 중 이동 ×`Monsters.AGGRO_SPEED`(1.35), 첫 공격은 0.3~1.2 간격 흩어 시작, 같은 무리 일반 몬스터는 동시에 2마리까지만 능력 시전. 리쉬/포기 뒤 15초는 먼저 덤비지 않는다(`ent.aggro=true`, 첫 능력은 0.5~2초 뒤부터). 리쉬 25타일 넘거나 대상이 없으면 복귀(`ent.returning`)+HP 회복+저주 제거. 교전 중 같은 무리끼리 겹치면 살짝 밀어낸다.
 - 능력은 쿨마다 `battle.castAbility(ent, id)` 로 → Combat 이 `targetRule` 로 대상 선택·텔레그래프 생성·효과 적용. 대상이 8타일(돌진은 range) 밖이면 쓰지 않고, heal_self 는 HP<70% 일 때만. 보스는 `Monsters.abilitiesFor(def, hp비율)` 로 phases 에 따라 능력 세트 전환('boss_phase' 이벤트), summon 은 소환 수 제한(시전자당 동시 6, Combat 이 강제).
 - 저주: 공격 적중 시 `curses[].chance × Floors.curseMult`(Combat.basicAttack 이 굴림).
+
+### 8.5 파티 수다 (chatter.js — `Chatter`)
+```js
+Chatter.update(battle, dt)   // Combat.update 끝에서 호출(battle.aiEnabled && battle.chatter !== false). 0.1초마다 상태를 훑는다. DOM 없음
+Chatter.lineCount() ; Chatter.LINES ; Chatter.TONE_LINES ; GLOBAL_GAP(1.5) ; URGENT_GAP(0.6) ; ENT_GAP(2.5)
+// 'party_say' { uid, ent, text, kind, priority(0~3), t, role } — battle.chatLog 에 최근 30줄
+```
+- 상황(상태 변화로 감지, 이벤트 구독 없음): 앞장이 풀링 준비(pull/pull_big/pull_mini/boss) · 돌진(pull_go) · 전투 시작(engage/many) · 텔레그래프가 파티 근처에(tg_puddle/tg_aoe/tg_cone/tg_line) · 보스·중간보스 교전 · 소환(battle.monsters 증가 중 summonedBy) · 보스 페이즈 · 힐러를 노리는 몬스터(healer_danger, 탱커만) · 전투 끝(victory/victory_boss) · 연속 3킬(banter, `battle.kills/lastKill` 은 Combat 이 센다) · HP 45%(탱커 40%) 미만 힐 요청(heal_req/heal_req_tank, 30% 미만 heal_urgent — `ent.wantsHeal = 끝 시각` 을 씬이 "+" 로 표시, 70% 이상이면 해제) · 저주(curse/curse_dot/curse_root) · 후퇴/복귀(ent.retreat/lastReturn) · 35% 미만이었다가 75% 회복(thanks) · 쓰러짐(death) · 부활(revived).
+- 쿨: 전체 1.5초에 한 줄(우선순위 3 = 쓰러짐·급한 힐·후퇴·힐러 위험·보스는 0.6초), 한 사람 2.5초(급한 것은 무시), 종류별 쿨(KIND_GAP)·파티 전체 종류 쿨(승리 12초 등), 후보는 1.4초(종류별 더 길게) 안에 못 말하면 버린다. 한 틱 한 줄. 말하는 사람은 파티원만(힐러=사용자는 말하지 않음). AIHealer 대상 선택과 무관.
+- 대사: 상황 × 역할(tank/dps/any) 목록 + 성격(personality 문장 키워드 → quiet/cheer/caring/timid/brave) 말투 대사 30% 확률. 조용한 성격은 잡담을 덜 한다. 고르기는 자체 난수(battle.rng 를 건드리지 않아 시뮬 재현성 유지).
 
 ### 8.4 드랍 (loot.js — `Loot`)
 ```js
@@ -436,7 +448,7 @@ Floor.leave(fs, G, reason: 'cleared'|'escape'|'wipe') -> summary   // 마을 복
   // 스킬 버프 제거(음식 버프만 유지) → Party.heal. G.playTime += time. summary = { floor, reason, cleared, time, steps, kills, chests, playerDeaths, memberDeaths, groupsFought, bossDefeated, bossPhase: { reached, max }, fatigueGained, xpBonus, record } ('floor_left'). 두 번 불러도 같은 요약을 돌려주고 기록은 한 번만.
 ```
 숨겨진 상자는 덤불(4) 뒤에 있고 플레이어가 2타일 내 접근하면 드러난다. NPC 힌트는 `landmarkId` 이름으로 위치를 알려준다("3층 '달빛 폭포' 북쪽 덤불 뒤").
-시뮬레이션: `node healer/tools/sim.js <floor|all> [maxSeconds] [partyLevel] [--runs=N] [--seed=N] [--gear=basic|normal|good] [--skill=N] [--json] [--trace]` — 적정 레벨 파티(탱커 전사·근딜 도적·원딜 사냥꾼·마법사 + 힐러)가 탐험 봇(가장 가까운 미방문 무리/상자/중간보스 → 보스 → 출구, BFS 길찾기, 탱커가 앞설 때까지 대기, 비전투 휴식)으로 층을 끝까지 돈다. dt 0.1 고정.
+시뮬레이션: `node healer/tools/sim.js <floor|all> [maxSeconds] [partyLevel] [--runs=N] [--seed=N] [--gear=basic|normal|good] [--skill=N] [--json] [--trace] [--lead]` — 적정 레벨 파티(탱커 전사·근딜 도적·원딜 사냥꾼·마법사 + 힐러)가 탐험 봇(가장 가까운 미방문 무리/상자/중간보스 → 보스 → 출구, BFS 길찾기, 탱커가 앞설 때까지 대기, 비전투 휴식)으로 층을 끝까지 돈다. dt 0.1 고정. `--lead` 면 게임 AUTO 처럼 탱커가 앞장서고(AIParty.lead, 풀링 포함) 힐러가 2.7타일 뒤를 따른다.
 
 ## 10. 그래픽 모듈 계약 (DOM/canvas)
 ```js
@@ -472,6 +484,8 @@ UI.STAT_NAMES / SLOT_NAMES / ARMOR_NAMES / ROLE_NAMES
 - 씬: `Scenes.register(name, scene)`, `Scenes.go(name, params)`, `Scenes.current()`, `Scenes.update(dt)`, `Scenes.draw()`. scene = `{ enter(params), exit(), update(dt), draw(ctx), onTap(x,y)?, onJoy(dx,dy)? }`. 캔버스·DPR·zoom·조이스틱·탭 판정은 `js/scenes/scene.js` 가 공통으로 관리하고 현재 씬에 콜백.
 - 마을 씬(`town_scene.js`): 기존 main.js 의 마을 로직을 씬으로 옮긴 것. NPC 터치 → `UI.dialog`(Dialogue.greet + 수주 가능 퀘스트 선택지) ; 시설 문 → `UI.open(시설)` ; 성문 → `UI.open('tower')` ; 하단 고정 버튼: 가방·상태·퀘스트·파티.
 - 던전 씬(`dungeon_scene.js`): `Floor.start` 로 fs 생성, 청크 캐시(LRU 24개), 깊이 정렬(몬스터·파티·상자·출구), FX, 텔레그래프, HUD(파티 프레임 HP/MP/저주, 보스 HP 바, 시전 바, 스킬 바: 단일힐 선택/광역힐 선택/해제/버프/필살기/부활/일격/자동힐·자동회피 토글, 가방·퀘스트·귀환, 걸음·킬 카운터, 미니맵 토글), 조이스틱/탭 이동 + 자동 따라가기(파티가 앞장서고 힐러는 뒤따름: `settings.autoFollow` 면 플레이어가 파티 무게중심 뒤 2타일을 따라감, 조작 중엔 해제), 전멸/클리어 → `UI.open('result')` → 마을.
+  - AUTO(자동 탐험): 앞장이(`AIParty.leaderOf`)가 있으면 씬이 앞장이 위치에서 BFS 로 다음 목표(가까운 미방문 무리·드러난 상자 → 보스 → 출구)를 골라 `AIParty.lead` 로 넘기고, 힐러는 `behindSpot(2.7타일)` 을 따라간다(시전 중엔 4타일 넘게 처질 때만 움직임). 상자·출구는 앞장이가 닿으면 힐러가 직접 밟는다. 'stuck' 이면 그 목표는 포기. 휴식(HP 45%/MP 20% 미만, 최대 8초)·전투 중엔 대기, 조이스틱 조작이면 끄고 손을 떼고 1.5초 뒤 다시 앞장. 파티원이 없으면 예전처럼 힐러가 앞장선다.
+  - 파티 표시: 파티 전원 발밑(그림자 아래)에 기기 픽셀 정수 좌표 HP 바(18×3) + MP 바(18×2, 최대 MP 가 있을 때), 힐 요청 중이면 머리 옆 깜빡이는 "+", 후퇴 중이면 등 뒤 💨. 중간보스 바·이름표는 머리 위 그대로. 'party_say' 는 말한 사람 머리 위 말풍선 1.8초(최대 3개, 급한 것 → 최신 순, 겹치면 위로; 탱커는 굵게·푸른 테두리, 힐 요청은 붉은 바탕 + 깜빡이는 "+", 쓰러짐은 회색).
 - 부트(`main.js`): DOM 준비 → `UI.init()` → 저장 있으면 `title` 화면(이어하기/새 게임), 없으면 새 게임 → 프롤로그 `UI.story` → 마을 씬. 60초마다·씬 전환마다 `State.save()`.
 
 ## 12. 완성 기준 (수용 테스트)

@@ -54,8 +54,8 @@ module.exports = {
     const troll = dummy(ctx, battle, 12 * T, 12 * T);
     troll.aggro = true; troll.threat[members[0].uid] = 10;
     const mage = members[3];
-    mage.hp = Math.round(mage.maxHp * 0.25);
-    run(battle, 1.5, () => { if (mage.hp / mage.maxHp > 0.25) mage.hp = Math.round(mage.maxHp * 0.25); });
+    mage.hp = Math.round(mage.maxHp * 0.32);
+    run(battle, 1.5, () => { if (mage.hp / mage.maxHp > 0.32) mage.hp = Math.round(mage.maxHp * 0.32); });
     const req = says.find((s) => s.uid === mage.uid && s.kind.startsWith('heal_'));
     assert.ok(req, '힐 요청: ' + JSON.stringify(says.map((s) => s.kind + ':' + s.text)));
     assert.ok(/힐/.test(req.text), req.text);

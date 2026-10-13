@@ -400,4 +400,64 @@ module.exports = {
     const hitters = new Set(events.filter((e) => e.name === 'damage' && e.p.dstUid === tank.uid && e.p.type === 'basic').map((e) => e.p.srcUid));
     assert.strictEqual(hitters.size, 5, '근접 5자리 ' + hitters.size);
   },
+  '생존 AI: HP 20% 딜러는 공격자에게서 힐러 쪽으로 빠지고(💨), 힐을 받아 60% 넘으면 "다시 갑니다" 하고 복귀'(assert) {
+    const ctx = boot();
+    const S = setup(ctx, { level: 3, monsters: [], seed: 4, driveHealer: false, at: { x: 4 * T, y: 10 * T } });
+    const { battle, player, members } = S;
+    const rogue = members[1];
+    // 움직이지 않고 아프지 않게 때리는 트롤(공격자) — 도적을 노린다
+    const troll = ctx.Entities.fromMonster(ctx.Monsters.get('troll'), 1, 14 * T, 10 * T, battle.rng);
+    troll.base.maxHp = 1e9; troll.base.atk = 1; troll.base.moveSpeed = 0; troll.abilities = []; ctx.Entities.refresh(troll); troll.hp = troll.maxHp; troll.groupId = 'g';
+    battle.addMonster(troll);
+    troll.aggro = true; troll.threat[rogue.uid] = 1e6; troll.target = rogue.uid;
+    rogue.x = 13.2 * T; rogue.y = 10 * T;
+    for (const m of [members[0], members[2], members[3]]) { m.x = 12 * T; m.y = 11 * T; }
+    rogue.hp = Math.round(rogue.maxHp * 0.2);
+    const d0 = { healer: Math.hypot(rogue.x - player.x, rogue.y - player.y), troll: Math.hypot(rogue.x - troll.x, rogue.y - troll.y) };
+    sim(battle, 1.5, 0.1, () => { if (rogue.hp / rogue.maxHp > 0.2) rogue.hp = Math.round(rogue.maxHp * 0.2); });
+    assert.ok(rogue.retreat, '후퇴 중');
+    const d1 = { healer: Math.hypot(rogue.x - player.x, rogue.y - player.y), troll: Math.hypot(rogue.x - troll.x, rogue.y - troll.y) };
+    assert.ok(d1.healer < d0.healer - 2 * T, '힐러 쪽으로 ' + JSON.stringify([d0, d1]));
+    assert.ok(d1.troll > d0.troll + 2 * T, '공격자에게서 멀어짐 ' + JSON.stringify([d0, d1]));
+    assert.strictEqual(rogue.target, null, '근딜은 손을 뗀다');
+    // 힐을 받으면 복귀
+    battle.heal(player, rogue, rogue.maxHp);
+    sim(battle, 0.3);
+    assert.ok(!rogue.retreat && rogue.lastReturn && rogue.lastReturn.recovered, '복귀 ' + JSON.stringify(rogue.lastReturn));
+    const back0 = Math.hypot(rogue.x - troll.x, rogue.y - troll.y);
+    sim(battle, 2);
+    assert.ok(Math.hypot(rogue.x - troll.x, rogue.y - troll.y) < back0 - 2 * T, '다시 싸우러 간다');
+    assert.ok(S.events.some((e) => e.name === 'party_say' && e.p.uid === rogue.uid && e.p.kind === 'retreat'), '빠질게요 류 ' + JSON.stringify(S.events.filter((e) => e.name === 'party_say').map((e) => [e.p.t, e.p.uid, e.p.kind])));
+    assert.ok(S.events.some((e) => e.name === 'party_say' && e.p.uid === rogue.uid && e.p.kind === 'return'), '다시 갑니다 류 ' + JSON.stringify(S.events.filter((e) => e.name === 'party_say').map((e) => [e.p.t, e.p.uid, e.p.kind])) + JSON.stringify(rogue.lastReturn));
+  },
+
+  '생존 AI: 마지막 전투원은 빠지지 않고, 후퇴는 8초를 넘지 않으며 쿨타임 뒤에만 다시; 탱커는 25% 아래면 잠깐 힐러 쪽으로(도발 유지)'(assert) {
+    const ctx = boot();
+    const S = setup(ctx, { level: 3, monsters: [], seed: 5, driveHealer: false, at: { x: 4 * T, y: 10 * T } });
+    const { battle, player, members } = S;
+    const troll = ctx.Entities.fromMonster(ctx.Monsters.get('troll'), 1, 14 * T, 10 * T, battle.rng);
+    troll.base.maxHp = 1e9; troll.base.atk = 1; troll.base.moveSpeed = 0; troll.abilities = []; ctx.Entities.refresh(troll); troll.hp = troll.maxHp; troll.groupId = 'g';
+    battle.addMonster(troll); troll.aggro = true;
+    const [tank, rogue] = members;
+    for (const m of members) { m.x = 13 * T; m.y = 10 * T; }
+    // 혼자 남은 도적은 빠지지 않는다
+    for (const m of [tank, members[2], members[3]]) { m.alive = false; m.hp = 0; }
+    rogue.hp = Math.round(rogue.maxHp * 0.2);
+    sim(battle, 1, 0.1, () => { rogue.hp = Math.round(rogue.maxHp * 0.2); });
+    assert.ok(!rogue.retreat, '마지막 전투원');
+    // 동료가 있으면 빠지지만 8초 안에 끝난다(HP 가 안 올라도)
+    members[2].alive = true; members[2].hp = members[2].maxHp;
+    let started = null, ended = null;
+    sim(battle, 10, 0.1, (t) => { rogue.hp = Math.round(rogue.maxHp * 0.2); if (rogue.retreat && started == null) started = battle.time; if (started != null && !rogue.retreat && ended == null) ended = battle.time; });
+    assert.ok(started != null && ended != null && ended - started <= 8.2, '후퇴 시간 제한 ' + started + '→' + ended);
+    assert.ok(rogue.lastReturn && !rogue.lastReturn.recovered);
+    // 탱커
+    tank.alive = true; tank.x = 13 * T; tank.y = 10 * T; tank.hp = Math.round(tank.maxHp * 0.2);
+    const dh0 = Math.hypot(tank.x - player.x, tank.y - player.y);
+    sim(battle, 0.8, 0.1, () => { tank.hp = Math.round(tank.maxHp * 0.2); });
+    assert.ok(tank.retreat && tank.retreat.tank, '탱커 물러섬');
+    assert.ok(Math.hypot(tank.x - player.x, tank.y - player.y) < dh0 - T, '힐러 쪽으로');
+    sim(battle, 2.5, 0.1, () => { tank.hp = Math.round(tank.maxHp * 0.2); });
+    assert.ok(!tank.retreat, '잠깐만(2.2초)');
+  },
 };

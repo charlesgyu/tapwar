@@ -87,3 +87,4 @@ Playwright 는 `/opt/node-tools/node_modules/playwright/index.mjs` 에서 import
 - 마을은 24×34 타일로 압축(좌·우 4층 시설 + 가운데 성문→광장→시장→잡화상 대로). 시장 상인은 좌판 옆 통로(11.35, 22.6)에 서 있어 가려지지 않는다.
 - 저장 키 `localStorage['healer.save']`, 버전 1.
 - 모험가 사무소는 **구인구직 게시판**(core/recruit.js `Recruit`, ui_adventurer.js `RecruitUI`, DESIGN §6.1)이 주 파티 구성 수단이다. 직접 고용 UI는 없앴다(코어 `Facilities.adventurer.hire` 는 테스트 호환용으로 남김). 게시판 파티는 목표 층 한 판 뒤 `Floor.leave → Recruit.finishRun` 에서 해산된다. 테스트: `tests/recruit.test.js`.
+- 자동 탐험(AUTO)은 **탱커가 앞장**(`AIParty.lead`, 풀링 "준비하세요!" → 돌진)서고 힐러가 2.7타일 뒤를 따른다. 파티원 수다는 `core/combat/chatter.js`(`Chatter`, 'party_say' 이벤트 → 던전 씬 말풍선), 딜러 30%·탱커 25% 미만 후퇴/복귀는 `ai_party.js` 의 survive. 파티 HP/MP 바는 캐릭터 발밑. DESIGN §8.1·§8.5·§11. 시뮬은 `--lead` 로 같은 방식을 돌린다. 테스트: `tests/chatter.test.js`, `tests/combat.test.js`(생존 AI).

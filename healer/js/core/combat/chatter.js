@@ -4,13 +4,13 @@
 //  - 탱커(없으면 앞장서는 사람)가 가장 말이 많다: 풀링 "준비하세요!", 장판 경고, 보스·쫄 등장, 힐러 위험, 승리.
 //  - 딜러: HP 45% 아래면 힐 요청(ent.wantsHeal = 끝나는 시각 — 씬이 머리 위에 "+" 를 깜빡인다), 빠질 때/돌아올 때, 연속 처치, 저주.
 //  - 누구나: 위험했다가 회복되면 고맙다고, 쓰러질 때, 부활했을 때.
-// 말이 넘치지 않게: 전체 1.5초에 한 줄(급한 힐 요청·쓰러짐은 0.6초), 한 사람은 3.5초에 한 줄, 같은 종류는 종류별 쿨타임.
+// 말이 넘치지 않게: 전체 1.5초에 한 줄(급한 힐 요청·쓰러짐은 0.6초), 한 사람은 2.5초에 한 줄, 같은 종류는 종류별 쿨타임.
 // 대사 고르기는 전투 난수(battle.rng)를 건드리지 않도록 자체 난수를 쓴다(시뮬레이션 재현성 유지).
 // 힐러(플레이어 = 사용자)는 말하지 않는다. AIHealer 의 대상 고르기와는 무관하다(wantsHeal 은 표시용).
 const Chatter = (() => {
   const TILE = 32;
   const TICK = 0.1;
-  const GLOBAL_GAP = 1.5, URGENT_GAP = 0.6, ENT_GAP = 3.5, PENDING_LIFE = 1.4;
+  const GLOBAL_GAP = 1.5, URGENT_GAP = 0.6, ENT_GAP = 2.5, PENDING_LIFE = 1.4;
   const HEAL_REQ = { tank: 0.40, other: 0.45 }, URGENT_HP = 0.30, THANKS_FROM = 0.35, THANKS_AT = 0.75, WANTS_HEAL_FOR = 3.5;
   const MANY_FOES = 8, BIG_PULL = 14, BANTER_KILLS = 3, BANTER_WIN = 2.2;
   // 종류별 쿨타임(초, 같은 사람 기준. g: 파티 전체 기준)
@@ -19,9 +19,9 @@ const Chatter = (() => {
     victory: 10, healer_danger: 7, retreat: 4, return: 4, banter: 9, curse: 7, thanks: 12, death: 0, revived: 0, engage: 10,
   };
   const GLOBAL_KIND_GAP = { victory: 12, banter: 7, telegraph: 3, many: 25, engage: 10 };
-  // 우선순위: 3 급함(쓰러짐·급한 힐 요청·힐러 위험·보스) > 2 중요(풀링·장판·후퇴·힐 요청) > 1 수다(승리·복귀·감사·저주) > 0 잡담
+  // 우선순위: 3 급함(쓰러짐·급한 힐 요청·후퇴·힐러 위험·보스) > 2 중요(풀링·장판·후퇴·힐 요청) > 1 수다(승리·복귀·감사·저주) > 0 잡담
   const PRIO = {
-    death: 3, heal_urgent: 3, healer_danger: 3, boss: 3, pull: 2, pull_go: 1, telegraph: 2, heal_req: 2, retreat: 2, summon: 2, phase: 2, miniboss: 2,
+    death: 3, heal_urgent: 3, healer_danger: 3, boss: 3, retreat: 3, pull: 2, pull_go: 1, telegraph: 2, heal_req: 2, summon: 2, phase: 2, miniboss: 2,
     curse: 1, victory: 1, return: 1, thanks: 1, revived: 2, many: 1, engage: 1, banter: 0,
   };
 
@@ -95,7 +95,7 @@ const Chatter = (() => {
   }
   function rand(st) { st.seed = (Math.imul(st.seed ^ (st.seed >>> 15), 2246822507) + 0x6d2b79f5) >>> 0; return st.seed / 4294967296; }
   function entState(st, ent) {
-    return st.ents[ent.uid] || (st.ents[ent.uid] = { alive: ent.alive, curses: ent.curses.length, retreat: !!ent.retreat, low: false, last: -99, kinds: {}, ret: ent.lastReturn || null });
+    return st.ents[ent.uid] || (st.ents[ent.uid] = { alive: ent.alive, curses: ent.curses.length, retreat: false, low: false, last: -99, kinds: {}, ret: ent.lastReturn || null });
   }
   function pickLine(st, ent, kind) {
     const pool = [];
@@ -178,9 +178,6 @@ const Chatter = (() => {
         if (e.wantsHeal > now) e.wantsHeal = Math.max(e.wantsHeal, now + 1);   // 아직 아프면 "+" 를 유지
       }
       if (e.wantsHeal && (r >= 0.7 || e.wantsHeal < now)) e.wantsHeal = 0;
-      // 위험했다가 회복 → 고맙다
-      if (r < THANKS_FROM) es.low = true;
-      else if (es.low && r >= THANKS_AT) { es.low = false; if (chatty(st, e)) propose(st, battle, e, 'thanks', { delay: 0.3, life: 4 }); }
       // 저주
       if (e.curses.length > es.curses) {
         const ids = e.curses.map((c) => c.id);
@@ -189,8 +186,12 @@ const Chatter = (() => {
       es.curses = e.curses.length;
       // 후퇴·복귀(ai_party 의 ent.retreat / ent.lastReturn)
       if (!es.retreat && e.retreat) propose(st, battle, e, 'retreat');
-      if (e.lastReturn && e.lastReturn !== es.ret) { es.ret = e.lastReturn; if (e.lastReturn.recovered && inCombat) propose(st, battle, e, 'return', { delay: 0.2, life: 3 }); }
+      // 회복해서 돌아오면 "다시 갑니다!"(이때는 따로 고맙다고 하지 않는다)
+      if (e.lastReturn && e.lastReturn !== es.ret) { es.ret = e.lastReturn; if (e.lastReturn.recovered && inCombat) { propose(st, battle, e, 'return', { delay: 0.2, life: 3, priority: 2 }); es.low = false; } }
       es.retreat = !!e.retreat;
+      // 위험했다가 회복 → 고맙다
+      if (r < THANKS_FROM) es.low = true;
+      else if (es.low && r >= THANKS_AT) { es.low = false; if (chatty(st, e)) propose(st, battle, e, 'thanks', { delay: 0.3, life: 4 }); }
     }
   }
   function scanCombat(st, battle, inCombat) {
