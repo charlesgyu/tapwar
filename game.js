@@ -1217,7 +1217,7 @@ class FlyingOrb {
     let pierceDefense = false;
     if (atk) {
       // 공격 쪽 카드 (각 확률, 버프샷이면 효과 2배)
-      if (atk.has('power') && atk.roll()) { attack *= 1 + ITEM_BAL.powerBonus * atk.mul; addFx(t, 'power'); } // 파워샷
+      if (atk.has('power') && atk.roll(ITEM_BAL.powerChance)) { attack *= 1 + ITEM_BAL.powerBonus * atk.mul; addFx(t, 'power'); } // 파워샷
       pierceDefense = rivalHit && atk.has('piercing') && atk.roll();                            // 관통샷
       if (pierceDefense) { flashZone(t, '#7c3aed'); addFx(t, 'piercing'); }
     }
@@ -2708,10 +2708,11 @@ function updateOrbSpawners(currentTime) {
     const slow = zone.slowUntil && gameElapsedTime < zone.slowUntil ? 2 : 1;
     // [원거리] 맞닿지 않은 곳을 쏘는 지역은 발사 간격 2배
     const ranged = zone.targetZones.some(t => isRangedShot(zone, t));
-    // 속사는 구슬 속도만, 발사 간격은 그대로
     const rangedMult = ranged ? RANGED_INTERVAL_MULT : 1;
+    // [아이템 속사] 다음 5공격은 구슬 속도 2배 + 발사 간격 절반
+    const rapidMult = itemMode && zoneItemState(zone).rapid > 0 ? ITEM_BAL.rapidInterval : 1;
     const paralyzed = zone.paralyzedShots > 0 ? 1 / ITEM_BAL.paralyzeSpeed : 1; // [아이템 마비] 공격 속도 50% → 간격 2배
-    const interval = baseInterval * rangedMult * slow * paralyzed / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
+    const interval = baseInterval * rangedMult * slow * paralyzed * rapidMult / gameSpeed; // 2배속, 4배속 시 생성 간격 단축!
 
     // [일본 지진] 완전점령 지역은 10초 동안 공격 정지
     if (zone.stunUntil && gameElapsedTime < zone.stunUntil) return;
@@ -2913,7 +2914,9 @@ const ITEM_EVERY_SEC = 30;
 // 아이템 수치 (밸런스 조절은 여기서)
 const ITEM_BAL = {
   baseChance: 0.1,     // 카드 발동 확률
-  rareChance: 0.05,    // 저주샷·버프샷 발동 확률
+  rareChance: 0.1,     // 저주샷·버프샷 발동 확률 (밸런스: 5% → 10%)
+  powerChance: 0.2,    // 파워샷 발동 확률 (밸런스: 크리티컬과 기대값 맞춤 10% → 20%)
+  rapidInterval: 0.5,  // 속사: 다음 5공격 발사 간격 절반
   powerBonus: 0.5,     // 파워샷: 공격력 +50%
   critBonus: 1,        // 크리티컬: 공격력 +100% (2배)
   bounceCount: 2,      // 튕기기: 두 번 더 튕김 (공격력 그대로)
@@ -2928,7 +2931,7 @@ const ITEM_BAL = {
   chainShots: 5,       // 속사·보급·버프샷·저주샷: 다음 5 공격
   rapidSpeed: 2,       // 속사: 구슬 속도 2배
   supplyBonus: 0.1,    // 보급: 내 카드 확률 +10%
-  fortressTake: 0.3,   // 철벽: 상대 공격을 30%만 받음
+  fortressTake: 0,     // 철벽: 상대 공격을 완전히 막음 (밸런스: 30%만 받음 → 0)
   absorbHeal: 2        // 흡수: 상대 공격력의 2배 회복
 };
 const ITEM_ICON = {
@@ -2949,16 +2952,16 @@ const ITEM_ICON = {
   absorb: '<circle cx="12" cy="12" r="8"/><path d="M12 7v10M7 12h10"/>'
 };
 const ITEMS = [
-  { key: 'power', name: '파워샷', desc: '10% 확률로 공격력 50% 증가' },
+  { key: 'power', name: '파워샷', desc: '20% 확률로 공격력 50% 증가' },
   { key: 'crit', name: '크리티컬', desc: '10% 확률로 공격력 2배' },
   { key: 'pierce', name: '튕기기', desc: '10% 확률로 옆 상대 지역으로 두 번 더 튕김 (튕긴 곳은 기본 공격력만)' },
   { key: 'explode', name: '폭발', desc: '10% 확률로 맞힌 곳에 붙은 모든 상대 지역에 50% 피해' },
   { key: 'piercing', name: '관통샷', desc: '10% 확률로 상대의 모든 방어 효과 무시' },
   { key: 'paralyze', name: '마비', desc: '10% 확률로 맞은 상대 지역의 다음 5발 공격 속도 50% 감소' },
-  { key: 'rapid', name: '속사', desc: '10% 확률로 다음 5공격이 2배 빠르게 날아감' },
-  { key: 'curse', name: '저주샷', desc: '5% 확률로 맞은 상대 지역의 다음 5공격에 아이템 효과 없음' },
-  { key: 'buff', name: '버프샷', desc: '5% 확률로 내 다음 5공격의 모든 아이템 효과 2배' },
-  { key: 'fortress', name: '철벽', desc: '10% 확률로 상대 공격을 30%만 받음' },
+  { key: 'rapid', name: '속사', desc: '10% 확률로 다음 5공격을 2배 빨리 쏘고 2배 빠르게 날아감' },
+  { key: 'curse', name: '저주샷', desc: '10% 확률로 맞은 상대 지역의 다음 5공격에 아이템 효과 없음' },
+  { key: 'buff', name: '버프샷', desc: '10% 확률로 내 다음 5공격의 모든 아이템 효과 2배' },
+  { key: 'fortress', name: '철벽', desc: '10% 확률로 상대 공격을 완전히 막음' },
   { key: 'reflect', name: '반사 방패', desc: '10% 확률로 상대 구슬을 쏜 곳으로 되돌림' },
   { key: 'absorb', name: '흡수', desc: '10% 확률로 상대 공격을 막고 그 2배만큼 회복' },
   { key: 'rebuild', name: '재건', desc: '내 지역에 쏘면 10% 확률로 회복 2배, 그때 30% 확률로 붙은 내 지역도 회복' },
@@ -3193,7 +3196,7 @@ function itemChance(st, base) {
 }
 // 맞는 지역의 방어 확률 (그 지역에 보급이 켜져 있으면 +10%p)
 function defenseChance(t) { return itemChance(zoneItemState(t), ITEM_BAL.baseChance); }
-// [아이템 철벽] 확률로 상대 공격을 30%만 받음
+// [아이템 철벽] 확률로 상대 공격을 완전히 막음
 function defenseTake(power, t) {
   if (hasItem(t.owner, 'fortress') && Math.random() < defenseChance(t)) { addFx(t, 'fortress'); return power * ITEM_BAL.fortressTake; }
   return power;
