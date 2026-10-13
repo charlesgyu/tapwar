@@ -371,10 +371,13 @@ const FX = (() => {
       const fill = Math.max(0, Math.min(1, f.fill == null ? p : f.fill)), half = Math.max(2, R((f.r || 16) / 2));
       const blink = fill > 0.8 && (Math.floor(t * 16) & 1) === 0;
       const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
-      const band = (frac, c, a) => alpha(ctx, a, () => { ctx.fillStyle = c; const L = R(len * frac); for (let d = 0; d <= L; d++) for (let w = -half; w <= half; w++) ctx.fillRect(R(x1 + ux * d + nx * w), R(y1 + uy * d + ny * w), 1, 1); });
+      // 띠는 회전한 사각형 한 번으로(예전엔 픽셀마다 fillRect 를 불러 돌진 텔레그래프 하나에 수천 번 — 대규모 전투에서 프레임이 무너졌다)
+      const ang = Math.atan2(dy, dx);
+      const band = (frac, c, a) => alpha(ctx, a, () => { ctx.save(); ctx.translate(R(x1), R(y1)); ctx.rotate(ang); ctx.fillStyle = c; ctx.fillRect(0, -half, R(len * frac) + 1, half * 2 + 1); ctx.restore(); });
       band(1, '#ff4040', 0.25);
       band(fill, blink ? '#ff8070' : '#ff5a50', blink ? 0.65 : 0.55);
-      for (const s of [-1, 1]) for (let d = 0; d <= len; d++) px(ctx, R(x1 + ux * d + nx * s * half), R(y1 + uy * d + ny * s * half), blink ? '#ffe8e0' : '#e0343a');
+      ctx.save(); ctx.translate(R(x1), R(y1)); ctx.rotate(ang); ctx.fillStyle = blink ? '#ffe8e0' : '#e0343a';
+      ctx.fillRect(0, -half, R(len) + 1, 1); ctx.fillRect(0, half, R(len) + 1, 1); ctx.restore();
       // 끝 화살촉
       for (let k = 0; k < 4; k++) for (const s of [-1, 1]) px(ctx, R(x2 - ux * k + nx * s * k), R(y2 - uy * k + ny * s * k), '#ffe0d0');
     },
@@ -400,9 +403,9 @@ const FX = (() => {
   const NFONT = '"Arial Black", "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", Impact, sans-serif';
   // size: CSS px, fill: 글자색, top: 위쪽 밝은 색(그라데이션), life: 초, rise: CSS px
   const NSTYLE = {
-    dmg:   { size: 14, fill: '#ffffff', top: '#ffffff', life: 0.8, rise: 22 },
-    crit:  { size: 21, fill: '#ffc21a', top: '#fff27a', life: 1.0, rise: 30 },
-    big:   { size: 17, fill: '#ffe14a', top: '#fff6b0', life: 0.9, rise: 26 },
+    dmg:   { size: 15, fill: '#ffffff', top: '#ffffff', life: 0.8, rise: 22 },
+    crit:  { size: 24, fill: '#ffc21a', top: '#fff27a', life: 1.0, rise: 30 },
+    big:   { size: 18, fill: '#ffe14a', top: '#fff6b0', life: 0.9, rise: 26 },
     hurt:  { size: 13, fill: '#ff5a4a', top: '#ff9a8a', life: 0.8, rise: 20 },
     heal:  { size: 13, fill: '#5cf06a', top: '#c8ffb8', life: 0.9, rise: 22 },
     miss:  { size: 11, fill: '#cfe8ff', top: '#ffffff', life: 0.7, rise: 16 },

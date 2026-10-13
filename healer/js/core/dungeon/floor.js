@@ -16,6 +16,7 @@ const Floor = (() => {
   const STRAGGLER_R = 10 * TILE, STRAGGLER_WAIT = 4;   // 자동 따라가기: 비전투 상태로 이만큼 떨어진 채 4초면 힐러 옆으로 붙는다
   const PLAYER_REVIVE_WAIT = 8, PLAYER_REVIVE_PCT = 0.3;
   const EVADE_AFTER = 8, EVADE_MOVE = 8;               // 교전 중 8초 동안 대상 사거리 밖에서 거리를 8px 도 못 좁힌 몬스터는 길이 막힌 것
+  const RANGED_UNHURT = 12;                            // 물·벽 너머에서 쏘기만 하고 12초 동안 한 대도 안 맞은 원거리 일반 몬스터도 포기시킨다(파티원은 길찾기가 없어 못 간다)
 
   // 브라우저에서 최상위 const 모듈은 window 프로퍼티가 아니므로 typeof 로만 존재를 확인한다
   const Mods = {
@@ -194,8 +195,9 @@ const Floor = (() => {
       const tgt = m.target ? B.byUid(m.target) : null;
       if (m.returning || m.cast || !alive(tgt)) { delete S[m.uid]; continue; }
       const d = dist(m, tgt);
-      const rec = S[m.uid] && S[m.uid].target === tgt.uid ? S[m.uid] : (S[m.uid] = { target: tgt.uid, best: d, t: 0 });
+      const rec = S[m.uid] && S[m.uid].target === tgt.uid ? S[m.uid] : (S[m.uid] = { target: tgt.uid, best: d, t: 0, since: B.time });
       const reach = d <= (m.range || 28) + m.radius + tgt.radius;
+      if (reach && m.tier === 'normal' && (m.range || 28) > 60 && B.time - Math.max(rec.since, m.lastHurt || 0) >= RANGED_UNHURT) { delete S[m.uid]; giveUp(fs, m); continue; }
       if (reach || d < rec.best - EVADE_MOVE) { rec.best = Math.min(rec.best, d); rec.t = 0; continue; }
       rec.t += dt;
       if (rec.t < EVADE_AFTER) continue;
@@ -206,6 +208,7 @@ const Floor = (() => {
   function giveUp(fs, m) {
     m.aggro = false; m.threat = {}; m.target = null; m.returning = true;
     m.hp = m.maxHp; m.curses = []; m.state = 'move';
+    m.noAggroUntil = fs.battle.time + 15;               // 돌아가자마자 다시 덤벼 같은 자리에서 맴돌지 않게(AIMonster.lookForParty 가 본다)
     fs.battle.logMsg(`${m.name} 이(가) 길을 잃고 돌아간다`);
     emit('monster_evade', { uid: m.uid, id: m.def && m.def.id, floor: fs.floor, x: m.x, y: m.y });
   }

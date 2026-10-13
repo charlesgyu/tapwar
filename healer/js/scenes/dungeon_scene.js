@@ -4,7 +4,7 @@
 //    덕에 큰 사고는 없지만 계약(DESIGN §8 "Floor/scene 이 또 부르면 안 됨")을 지키려고 설정 토글만 한다.
 //  - HUD 는 DOM(#dhud, css/hud.css). 값이 바뀔 때만, 초당 10회까지만 건드린다(모바일 레이아웃 비용).
 const DungeonScene = (() => {
-  const TILE = 32, CHUNK_T = 16, CHUNK_PX = CHUNK_T * TILE, CHUNK_MAX = 30;
+  const TILE = 32, CHUNK_T = 16, CHUNK_PX = CHUNK_T * TILE, CHUNK_MAX = 36;
   const HUD_EVERY = 0.1;                     // HUD 갱신 주기(초)
   const MANUAL_HOLD = 1.5;                   // 수동 조작 뒤 이 시간 동안은 자동 이동(따라가기·탐험)을 하지 않는다
   const FOLLOW_START = 3 * TILE, FOLLOW_FORCE = 7 * TILE, FOLLOW_STOP = 24, FOLLOW_BEHIND = 2 * TILE;
@@ -228,15 +228,16 @@ const DungeonScene = (() => {
   }
   function exploreStep(dt) {
     const p = player;
-    const low = battle.allies().some((e) => e.hp / e.maxHp < 0.6) || (p.maxMp > 0 && p.mp / p.maxMp < 0.35);
-    if (low && explore.rest < 25) { explore.rest += dt; explore.status = '🍃 숨 고르는 중…'; return; }
+    // 빠른 템포: 많이 다쳤거나 마나가 바닥일 때만 잠깐(최대 8초) 숨을 고른다
+    const low = battle.allies().some((e) => e.hp / e.maxHp < 0.45) || (p.maxMp > 0 && p.mp / p.maxMp < 0.2);
+    if (low && explore.rest < 8) { explore.rest += dt; explore.status = '🍃 숨 고르는 중…'; return; }
     if (!low) explore.rest = 0;
     const far = battle.members.some((m) => alive(m) && dist(m, p) > 6 * TILE);
-    if (far && explore.wait < 4) { explore.wait += dt; explore.status = '👥 파티를 기다리는 중…'; return; }
+    if (far && explore.wait < 2.5) { explore.wait += dt; explore.status = '👥 파티를 기다리는 중…'; return; }
     if (!far) explore.wait = 0;
     if (waitForTank(dt)) { explore.status = '🛡️ 탱커가 앞장서기를 기다리는 중…'; return; }
     if (!route || route.kind !== 'explore' || !explore.target) {
-      if (!chooseExplore()) { explore.on = false; explore.status = ''; toast('더 둘러볼 곳이 없어요'); return; }
+      if (!chooseExplore()) { explore.on = false; settings().autoExplore = false; explore.status = ''; toast('더 둘러볼 곳이 없어요'); hudTick(true); return; }
     }
     const t = explore.target;
     explore.status = '🧭 ' + ({ group: '몬스터 무리', chest: '상자', boss: '보스', exit: '출구' }[t.kind] || '') + '(으)로 이동 중';
@@ -328,11 +329,16 @@ const DungeonScene = (() => {
     return c;
   }
   function drawTiles(ctx, cx, cy, vw, vh) {
-    const c0 = Math.max(0, Math.floor(cx / CHUNK_PX)), c1 = Math.min(Math.ceil(map.cols / CHUNK_T) - 1, Math.floor((cx + vw) / CHUNK_PX));
-    const r0 = Math.max(0, Math.floor(cy / CHUNK_PX)), r1 = Math.min(Math.ceil(map.rows / CHUNK_T) - 1, Math.floor((cy + vh) / CHUNK_PX));
+    const nci = Math.ceil(map.cols / CHUNK_T) - 1, ncj = Math.ceil(map.rows / CHUNK_T) - 1;
+    const c0 = Math.max(0, Math.floor(cx / CHUNK_PX)), c1 = Math.min(nci, Math.floor((cx + vw) / CHUNK_PX));
+    const r0 = Math.max(0, Math.floor(cy / CHUNK_PX)), r1 = Math.min(ncj, Math.floor((cy + vh) / CHUNK_PX));
     for (let cj = r0; cj <= r1; cj++) for (let ci = c0; ci <= c1; ci++) ctx.drawImage(chunkCanvas(ci, cj), ci * CHUNK_PX, cj * CHUNK_PX);
+    // 화면 바로 바깥 청크를 한 프레임에 하나씩 미리 만들어 둔다(빠르게 달릴 때 한꺼번에 여러 개 만드느라 끊기지 않게)
+    for (let cj = Math.max(0, r0 - 1); cj <= Math.min(ncj, r1 + 1); cj++) for (let ci = Math.max(0, c0 - 1); ci <= Math.min(nci, c1 + 1); ci++) {
+      if (!chunks.has(ci + ',' + cj)) { chunkCanvas(ci, cj); return; }
+    }
   }
-  // 안개: 아직 밝히지 않은(fs.visited=0) 타일을 어둡게. 화면에 보이는 타일만(약 13×27칸).
+  // 안개: 아직 밝히지 않은(fs.visited=0) 타일을 어둡게. 화면에 보이는 타일만.
   function drawFog(ctx, cx, cy, vw, vh) {
     const i0 = Math.max(0, Math.floor(cx / TILE)), i1 = Math.min(map.cols - 1, Math.floor((cx + vw) / TILE));
     const j0 = Math.max(0, Math.floor(cy / TILE)), j1 = Math.min(map.rows - 1, Math.floor((cy + vh) / TILE));
@@ -349,26 +355,170 @@ const DungeonScene = (() => {
   }
   function inView(x, y, cx, cy, vw, vh, m = 96) { return x > cx - m && x < cx + vw + m && y > cy - m && y < cy + vh + m * 1.5; }
 
+  // 스프라이트 색 덮어쓰기 캐시(피격 흰 번쩍·시체 어둡게). 원본 캔버스별로 한 번만 만든다.
+  const whiteOf = new WeakMap(), darkOf = new WeakMap();
+  function tintOf(cache, img, color, a) {
+    let c = cache.get(img);
+    if (!c) {
+      c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const x = c.getContext('2d'); x.drawImage(img, 0, 0); x.globalCompositeOperation = 'source-atop'; x.globalAlpha = a; x.fillStyle = color; x.fillRect(0, 0, c.width, c.height);
+      cache.set(img, c);
+    }
+    return c;
+  }
+  function frameOf(e, s, a) {
+    const dir = s[e.dir] ? e.dir : 'down';
+    if (a && a.atk > 0 && s.attack && s.attack.length) return s.attack[a.atk > 0.14 ? 0 : Math.min(1, s.attack.length - 1)];
+    return s[dir][a && a.moving ? a.frame : 0] || s.down[0];
+  }
   function drawEntity(ctx, e) {
     const s = sheetFor(e); if (!s) return;
     const a = anim.get(e.uid);
     const dir = s[e.dir] ? e.dir : 'down';
-    let img;
-    if (a && a.atk > 0 && s.attack && s.attack.length) img = s.attack[a.atk > 0.14 ? 0 : Math.min(1, s.attack.length - 1)];
-    else img = s[dir][a && a.moving ? a.frame : 0] || s.down[0];
+    const img = frameOf(e, s, a);
     let ox = 0, oy = 0;
     // 공격 프레임이 없는 파티원은 대상 쪽으로 살짝 내딛는 것으로 공격을 보여 준다
     if (a && a.atk > 0 && !(s.attack && s.attack.length)) { const k = Math.sin((a.atk / 0.3) * Math.PI) * 3; ox = (dir === 'left' ? -k : dir === 'right' ? k : 0); oy = (dir === 'up' ? -k : dir === 'down' ? k : 0); }
+    // 맞으면 살짝 밀려난다(넉백 흔들림)
+    if (a && a.flash > 0) { ox += (a.flash * 30) * (a.kx || 0); oy += (a.flash * 30) * (a.ky || 0); }
     const x = Math.round(e.x + ox), y = Math.round(e.y + oy);
     const rw = Math.max(6, Math.round(s.w * 0.28));
     Pixel.ellipse(ctx, x, y - 1, rw, Math.max(2, Math.round(rw * 0.38)), 'rgba(0,0,0,0.28)');
     if (!e.alive) { const o = ctx.globalAlpha; ctx.globalAlpha = 0.45; ctx.drawImage(img, x - s.anchor.x, y - s.anchor.y); ctx.globalAlpha = o; return; }
     ctx.drawImage(img, x - s.anchor.x, y - s.anchor.y);
+    // 피격 번쩍: 흰 실루엣을 겹친다(몬스터는 흰색, 파티는 붉은빛)
+    if (a && a.flash > 0) {
+      const o = ctx.globalAlpha; ctx.globalAlpha = Math.min(1, a.flash / 0.1) * (e.kind !== 'monster' ? 0.6 : e.tier === 'normal' ? 0.9 : 0.4);   // 큰 적은 계속 맞아서 늘 하얗게 보이지 않게 약하게
+      ctx.drawImage(e.kind === 'monster' ? tintOf(whiteOf, img, '#ffffff', 1) : tintOf(darkOf, img, '#ff3030', 0.8), x - s.anchor.x, y - s.anchor.y);
+      ctx.globalAlpha = o;
+    }
+  }
+
+  // ---------------- 손맛: 시체·동전·연속킬 ----------------
+  const CORPSE_STAY = 3.2, CORPSE_FADE = 0.9, CORPSE_MAX = 70;
+  const COIN_MAX = 160, MAGNET_R = 4 * TILE, COMBO_WIN = 2.5;
+  const corpses = [], corpsePool = [], coins = [], coinPool = [];
+  const deadOf = new WeakMap();
+  let pendingGold = 0, sparkleT = 0;
+  const combo = { n: 0, last: -99, best: 0 };
+  function addCorpse(e) {
+    const s = sheetFor(e); if (!s) return;
+    if (corpses.length >= CORPSE_MAX) corpsePool.push(corpses.shift());
+    const c = corpsePool.pop() || {};
+    c.img = frameOf(e, s, null); c.ax = s.anchor.x; c.ay = s.anchor.y; c.x = e.x; c.y = e.y; c.t = 0;
+    c.side = ((e.uid.charCodeAt(e.uid.length - 1) || 0) & 1) ? 1 : -1;
+    // 쓰러지는 방향: 마지막으로 맞은 쪽 반대로
+    const a = anim.get(e.uid); if (a && a.kx) c.side = a.kx > 0 ? 1 : -1;
+    corpses.push(c);
+  }
+  function updateCorpses(dt) {
+    let w = 0;
+    for (const c of corpses) { c.t += dt; if (c.t < CORPSE_STAY + CORPSE_FADE) corpses[w++] = c; else corpsePool.push(c); }
+    corpses.length = w;
+  }
+  function drawCorpses(ctx, cx, cy, vw, vh) {
+    const o = ctx.globalAlpha;
+    for (const c of corpses) {
+      if (!inView(c.x, c.y, cx, cy, vw, vh)) continue;
+      // 0.18초 동안 옆으로 넘어지고(흰 번쩍) → 납작하게 누운 채 어둡게 남았다가 → 서서히 사라진다
+      const fall = Math.min(1, c.t / 0.18), ang = c.side * fall * 1.45;
+      const sq = 1 - fall * 0.35;
+      ctx.globalAlpha = o * (c.t > CORPSE_STAY ? Math.max(0, 1 - (c.t - CORPSE_STAY) / CORPSE_FADE) : 1);
+      ctx.save();
+      ctx.translate(Math.round(c.x - c.side * fall * c.ay * 0.35), Math.round(c.y));
+      ctx.scale(1, sq);
+      ctx.rotate(ang);
+      ctx.drawImage(c.t < 0.12 ? tintOf(whiteOf, c.img, '#ffffff', 1) : tintOf(deadOf, c.img, '#1a1016', 0.5), -c.ax, -c.ay);
+      ctx.restore();
+    }
+    ctx.globalAlpha = o;
+  }
+  // 동전 그림(4프레임 회전), 한 번만 만든다
+  let coinFrames = null;
+  function coinImgs() {
+    if (coinFrames) return coinFrames;
+    coinFrames = [5, 4, 2, 4].map((rx) => {
+      const c = Pixel.make(12, 12), x = c.getContext('2d');
+      Pixel.ellipse(x, 6, 6, rx + 1, 6, '#5a3410');
+      Pixel.ellipse(x, 6, 6, rx, 5, '#e8a020');
+      if (rx > 1) Pixel.ellipse(x, 6, 5, Math.max(1, rx - 1), 4, '#ffd040');
+      if (rx > 2) { x.fillStyle = '#fff6c0'; x.fillRect(6 - Math.floor(rx / 2), 3, 1, 3); }
+      return c;
+    });
+    return coinFrames;
+  }
+  function spawnCoins(x, y, gold) {
+    if (!(gold > 0)) return;
+    const n = Math.min(6, Math.max(1, Math.round(Math.sqrt(gold) * 1.2)));
+    let left = gold;
+    for (let k = 0; k < n; k++) {
+      if (coins.length >= COIN_MAX) { const old = coins.shift(); absorbCoin(old, true); coinPool.push(old); }
+      const c = coinPool.pop() || {};
+      const v = k === n - 1 ? left : Math.floor(gold / n); left -= v;
+      const ang = Math.random() * Math.PI * 2, sp = 35 + Math.random() * 70;
+      c.x = x; c.y = y; c.z = 6; c.vx = Math.cos(ang) * sp; c.vy = Math.sin(ang) * sp * 0.6; c.vz = 150 + Math.random() * 90;
+      c.t = 0; c.val = v; c.state = 0; c.spd = 0; c.ph = Math.random() * 4;
+      coins.push(c);
+    }
+  }
+  function absorbCoin(c, silent) {
+    pendingGold = Math.max(0, pendingGold - c.val);
+    if (!silent && time - sparkleT > 0.05) { sparkleT = time; FX.spawn('coin_sparkle', player.x + (Math.random() - 0.5) * 8, player.y - 16); }
+  }
+  function updateCoins(dt) {
+    let w = 0;
+    const tx = player.x, ty = player.y - 12;
+    for (const c of coins) {
+      c.t += dt;
+      const dx = tx - c.x, dy = ty - c.y, d = Math.hypot(dx, dy);
+      if (c.state < 2 && c.t > 0.4 && (d < MAGNET_R || c.t > 3.5)) c.state = 2;
+      if (c.state === 0) {
+        c.x += c.vx * dt; c.y += c.vy * dt; c.vz -= 640 * dt; c.z += c.vz * dt;
+        if (c.z <= 0) { c.z = 0; if (c.vz < -70) { c.vz = -c.vz * 0.35; c.vx *= 0.5; c.vy *= 0.5; } else { c.vz = 0; c.state = 1; } }
+      } else if (c.state === 2) {
+        c.spd = Math.min(950, (c.spd || 140) + 1600 * dt);
+        const st = c.spd * dt;
+        c.z = Math.max(0, c.z - 80 * dt);
+        if (d <= st + 6) { absorbCoin(c); coinPool.push(c); continue; }
+        c.x += (dx / d) * st; c.y += (dy / d) * st;
+      }
+      coins[w++] = c;
+    }
+    coins.length = w;
+  }
+  function drawCoins(ctx, cx, cy, vw, vh) {
+    const imgs = coinImgs();
+    for (const c of coins) {
+      if (!inView(c.x, c.y, cx, cy, vw, vh, 16)) continue;
+      const x = Math.round(c.x), y = Math.round(c.y);
+      if (c.z > 1 || c.state === 0) Pixel.ellipse(ctx, x, y, 3, 1, 'rgba(0,0,0,0.3)');
+      ctx.drawImage(imgs[Math.floor(c.ph + time * 10) & 3], x - 6, Math.round(y - 10 - c.z));
+    }
+  }
+  function onKill() {
+    combo.n = time - combo.last <= COMBO_WIN ? combo.n + 1 : 1;
+    combo.last = time;
+    combo.best = Math.max(combo.best, combo.n);
+    if (combo.n % 10 === 0) comboBonus();
+    if (hud) { setCls(hud.kill, 'bump', false); void hud.kill.offsetWidth; setCls(hud.kill, 'bump', true); }
+  }
+  // 10연속킬마다: 화면 가운데 "연속킬 보너스!" + 작은 보너스 골드(동전이 파티 위로 쏟아졌다가 빨려 든다)
+  function comboBonus() {
+    const n = Math.max(1, Math.round((2 + floorNo * 1.5) * (1 + (combo.n / 10 - 1) * 0.2)));
+    const g = State.get();
+    g.player.gold = (g.player.gold || 0) + n;
+    runStats.gold += n; pendingGold += n;
+    spawnCoins(player.x, player.y - 24, n);
+    FX.num(player.x, headY(player) - 14, `+${n}G`, 'gold', { spread: 0 });
+    if (hud) {
+      setText(hud.comboSub, `${combo.n} 연속킬 · +${n}G`);
+      hud.combo.classList.remove('show'); void hud.combo.offsetWidth; hud.combo.classList.add('show');
+    }
   }
 
   function draw(ctx, view) {
     if (!fs) return;
-    Scenes.followCamera(player, map.cols * TILE, map.rows * TILE, false, -28, 0.24);
+    Scenes.followCamera(player, map.cols * TILE, map.rows * TILE, false, -20, 0.24);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = map.biome === 'cave' ? '#141018' : '#14200f';
     ctx.fillRect(0, 0, view.canvas.width, view.canvas.height);
@@ -376,6 +526,7 @@ const DungeonScene = (() => {
     const vw = view.viewW, vh = view.viewH;
     drawTiles(ctx, cx, cy, vw, vh);
     drawFog(ctx, cx, cy, vw, vh);
+    drawCorpses(ctx, cx, cy, vw, vh);
 
     // 바닥에 붙는 것: 성역 → 텔레그래프/장판 → 탭 표시 → 대상 고리 → 시전 빛
     for (const gh of battle.groundHeals) if (inView(gh.x, gh.y, cx, cy, vw, vh, gh.r)) FX.drawOne(ctx, { type: 'ground_heal', x: gh.x, y: gh.y, r: gh.r, fill: 1, t: time });
@@ -395,15 +546,12 @@ const DungeonScene = (() => {
     if (sel) { const k = (Math.floor(time * 4) & 1); Pixel.ellipse(ctx, Math.round(sel.x), Math.round(sel.y) - 1, 12 + k, 5, 'rgba(127,224,122,0.55)'); Pixel.ellipse(ctx, Math.round(sel.x), Math.round(sel.y) - 1, 9 + k, 3, 'rgba(20,40,20,0.35)'); }
     for (const e of battle.party()) if (e.alive && e.cast) FX.drawOne(ctx, { type: 'cast_glow', x: e.x, y: e.y, t: time, color: e.kind === 'player' ? '#ffe9a0' : '#8ad8ff' });
 
-    // 깊이 정렬: 발(y) 기준
-    const list = [];
+    // 깊이 정렬: 발(y) 기준. 화면 밖은 거른다(활성 반경 밖 몬스터도 보이면 그린다 — 멀리 서 있는 무리가 보여야 줌아웃한 맛이 난다)
+    const list = drawList; list.length = 0;
     for (const c of fs.chests) if (c.revealed && inView(c.x, c.y, cx, cy, vw, vh)) list.push({ y: c.y, chest: c });
     if (inView(map.exit.x, map.exit.y, cx, cy, vw, vh)) list.push({ y: map.exit.y, exit: true });
     for (const e of battle.party()) if (inView(e.x, e.y, cx, cy, vw, vh)) list.push({ y: e.y + (e.alive ? 0 : -40), ent: e });
-    for (const m of battle.monsters) {
-      if (!m.alive || !inView(m.x, m.y, cx, cy, vw, vh, 120) || dist(m, player) > ACTIVE_R) continue;
-      list.push({ y: m.y, ent: m });
-    }
+    for (const m of battle.monsters) if (m.alive && inView(m.x, m.y, cx, cy, vw, vh, 120)) list.push({ y: m.y, ent: m });
     list.sort((a, b) => a.y - b.y);
     for (const it of list) {
       if (it.ent) drawEntity(ctx, it.ent);
@@ -414,6 +562,7 @@ const DungeonScene = (() => {
         ctx.drawImage(img, Math.round(map.exit.x - img.width / 2), Math.round(map.exit.y - img.height + 8)); ctx.globalAlpha = o;
       }
     }
+    drawCoins(ctx, cx, cy, vw, vh);
     // 머리 위 저주 표시(매 프레임, 저주가 있는 동안)
     for (const it of list) {
       const e = it.ent; if (!e || !e.alive || !e.curses.length) continue;
@@ -422,20 +571,24 @@ const DungeonScene = (() => {
     FX.draw(ctx);
     Scenes.endWorld(ctx);
 
-    // 화면 공간: 미니 HP 바·이름표(또렷한 글자)
+    // 화면 공간: 머리 위 작은 HP 바(파티 전원 + 중간보스), 중간보스 이름표
     for (const it of list) {
       const e = it.ent; if (!e || !e.alive) continue;
-      const s = sheetFor(e), top = e.y - (s ? s.anchor.y : 30) - 4;
+      const s = sheetFor(e), top = e.y - (s ? s.anchor.y : 30) - 3;
       if (e.kind === 'monster') {
-        if (e.tier === 'boss') continue;            // 보스는 상단 큰 바
-        if (e.aggro || e.hp < e.maxHp) Scenes.drawMiniBar(ctx, e.x, top, e.hp, e.maxHp, { w: e.tier === 'miniboss' ? 40 : 24, h: 3, color: '#e04a4a' });
-        if (e.tier === 'miniboss') Scenes.drawLabel(ctx, e.name, e.x, top - 9, { size: 9, bg: 'rgba(60,20,20,0.85)', color: '#ffcf9a', border: '#c04a3a' });
-      } else if (e.kind === 'member') {
-        Scenes.drawMiniBar(ctx, e.x, top, e.hp, e.maxHp, { w: 22, h: 3, color: e.hp / e.maxHp < 0.35 ? '#ff6a4a' : '#5ad06a' });
+        if (e.tier !== 'miniboss') continue;            // 보스는 상단 큰 바, 일반 몬스터는 숫자·번쩍임으로 충분(무리 위 바는 잡음)
+        Scenes.drawMiniBar(ctx, e.x, top, e.hp, e.maxHp, { w: 34, h: 3, color: '#e04a4a' });
+        Scenes.drawLabel(ctx, e.name, e.x, top - 8, { size: 9, bg: 'rgba(60,20,20,0.85)', color: '#ffcf9a', border: '#c04a3a' });
+      } else {
+        const r = e.hp / e.maxHp;
+        Scenes.drawMiniBar(ctx, e.x, top, e.hp, e.maxHp, { w: 18, h: 3, color: r < 0.35 ? '#ff5a4a' : r < 0.6 ? '#ffc04a' : '#5ad06a' });
+        if (e.kind === 'player' && e.maxMp) Scenes.drawMiniBar(ctx, e.x, top + 4.5, e.mp, e.maxMp, { w: 18, h: 2, color: '#4aa0ff' });
       }
     }
+    FX.drawNums(ctx, Scenes.worldToScreen, view.DPR, view.canvas.width, view.canvas.height);
     Scenes.drawJoystick(ctx);
   }
+  const drawList = [];
 
   // ---------------- 갱신 ----------------
   function updateAnims(dt) {
@@ -447,6 +600,7 @@ const DungeonScene = (() => {
       a.moving = moved > 0.05 && moved < 3 * TILE;
       if (a.moving) { a.t += dt * Math.max(6, (e.speed || 100) / 12); a.frame = Math.floor(a.t) % 4; } else { a.t = 0; a.frame = 0; }
       if (a.atk > 0) a.atk = Math.max(0, a.atk - dt);
+      if (a.flash > 0) a.flash = Math.max(0, a.flash - dt);
     };
     for (const e of battle.party()) touch(e);
     for (const m of battle.monsters) if (m.alive && dist(m, player) <= ACTIVE_R) touch(m);
@@ -461,7 +615,11 @@ const DungeonScene = (() => {
     control(dt);
     Floor.update(fs, G, dt);
     FX.update(dt);
+    FX.updateNums(dt);
     updateAnims(dt);
+    updateCorpses(dt);
+    updateCoins(dt);
+    if (combo.n && time - combo.last > COMBO_WIN) combo.n = 0;
     hudAcc += dt;
     if (hudAcc >= HUD_EVERY) { hudAcc = 0; hudTick(); }
     checkFlow();
@@ -487,7 +645,7 @@ const DungeonScene = (() => {
   }
   function finish(reason) {
     if (ending) return;
-    ending = true; route = null; closePop();
+    ending = true; route = null; closePop(); closePause();
     const summary = Floor.leave(fs, G, reason);
     const xp = Math.max(0, totalXp(G.player) - runStats.xp0);
     State.save();
@@ -522,7 +680,7 @@ const DungeonScene = (() => {
   }
 
   // ---------------- 이벤트 → 이펙트·토스트 ----------------
-  function near(e) { return e && Math.abs(e.x - player.x) < 420 && Math.abs(e.y - player.y) < 620; }
+  function near(e) { return e && Math.abs(e.x - player.x) < 520 && Math.abs(e.y - player.y) < 820; }
   function headY(e) { const s = sheetFor(e); return e.y - (s ? Math.min(s.anchor.y, 60) : 28); }
   function subscribe() {
     const on = (name, fn) => unsubs.push(Events.on(name, (p) => { if (fs && !ending) fn(p || {}); }));
@@ -530,30 +688,43 @@ const DungeonScene = (() => {
       const dst = p.dst, src = p.src;
       if (src) { const a = anim.get(src.uid); if (a && (p.type === 'basic' || p.skillId)) a.atk = 0.3; }
       if (!near(dst)) return;
-      const y = headY(dst) + 4;
-      if (p.evaded) { FX.spawn('damage_number', dst.x, y, { text: '회피', color: '#cfe8ff' }); return; }
+      const y = headY(dst) + 2;
+      if (p.evaded) { FX.num(dst.x, y, '회피', 'miss', { spread: 4 }); return; }
       if (!(p.amount > 0)) return;
-      const toParty = dst.kind !== 'monster';
-      FX.spawn('damage_number', dst.x + ((p.amount * 7) % 9) - 4, y, { text: String(Math.round(p.amount)), color: toParty ? '#ff7a6a' : (p.crit ? '#ffd040' : '#ffffff'), crit: !!p.crit, dx: toParty ? -4 : 4 });
-      if (p.type === 'basic' || p.type === 'telegraph' || p.skillId) FX.spawn('hit', dst.x, dst.y - 12);
+      const a = anim.get(dst.uid);
+      if (a) {
+        a.flash = 0.1;
+        // 넉백 방향(때린 쪽 반대)
+        if (src) { const dx = dst.x - src.x, dy = dst.y - src.y, L = Math.hypot(dx, dy) || 1; a.kx = dx / L; a.ky = dy / L * 0.5; } else { a.kx = 0; a.ky = 0; }
+      }
+      const amt = Math.round(p.amount);
+      if (dst.kind === 'monster') FX.num(dst.x, y, amt, p.crit ? 'crit' : p.skillId ? 'big' : 'dmg');
+      else FX.num(dst.x, y, amt, 'hurt', { spread: 6 });
+      // 피격 섬광은 치명타·스킬·파티 피격은 항상, 평타는 절반만(큰 무리에서 이펙트 폭주 방지)
+      if ((p.type === 'basic' || p.type === 'telegraph' || p.skillId) && (p.crit || p.skillId || dst.kind !== 'monster' || Math.random() < 0.5)) FX.spawn('hit', dst.x, dst.y - 12, p.crit ? { color: '#ffe14a' } : undefined);
       if (src && p.type === 'basic' && (src.atkType === 'ranged' || src.atkType === 'magic') && near(src)) FX.spawn('projectile', src.x, src.y - 14, { from: { x: src.x, y: src.y - 14 }, to: { x: dst.x, y: dst.y - 12 }, color: src.atkType === 'magic' ? '#b48aff' : '#e8d8a0' });
     });
     on('heal', (p) => {
       if (!near(p.dst) || !(p.amount > 0)) return;
-      FX.spawn('damage_number', p.dst.x, headY(p.dst) + 2, { text: '+' + Math.round(p.amount), color: '#7dff8a' });
+      FX.num(p.dst.x, headY(p.dst), '+' + Math.round(p.amount), 'heal', { spread: 6 });
       if (p.skillId !== 'aoe_ground') FX.spawn('heal_sparkle', p.dst.x, p.dst.y - 10);
     });
     on('death', (p) => {
-      const e = p.ent; if (!near(e)) return;
-      FX.spawn(e.kind === 'monster' ? 'summon_puff' : 'hit', e.x, e.y - 8);
-      if (e.kind !== 'monster') toast(`${e.name} 이(가) 쓰러졌다!`, 1500);
+      const e = p.ent; if (!e) return;
+      if (e.kind === 'monster') {
+        onKill(e);
+        if (near(e)) { addCorpse(e); FX.spawn('hit', e.x, e.y - 10, { color: '#ff6a4a' }); }
+        return;
+      }
+      if (near(e)) FX.spawn('hit', e.x, e.y - 8);
+      toast(`${e.name} 이(가) 쓰러졌다!`, 1500);
     });
     on('cast_start', (p) => {
       const e = p.ent; if (!near(e)) return;
       // 몬스터 능력은 머리 위에 이름을 띄워 "곧 뭔가 온다" 를 알린다(텔레그래프와 함께)
       if (e.kind === 'monster' && p.abilityId && typeof Monsters !== 'undefined' && Monsters.ability) {
         const ab = Monsters.ability(p.abilityId);
-        if (ab) FX.spawn('damage_number', e.x, headY(e) - (e.tier === 'normal' ? 6 : 24), { text: ab.name + '!', color: '#ffb060', duration: 1.4 });
+        if (ab) FX.num(e.x, headY(e) - (e.tier === 'normal' ? 6 : 20), ab.name + '!', 'info', { spread: 0 });
       }
       if (e.kind === 'player' && p.skillId === 'holy_light') FX.spawn('levelup', e.x, e.y);
     });
@@ -568,7 +739,7 @@ const DungeonScene = (() => {
     });
     on('curse', (p) => {
       const e = p.ent || byUid(p.uid); if (!near(e) || e.kind === 'monster') return;
-      FX.spawn('damage_number', e.x, headY(e) - 8, { text: (typeof Stats !== 'undefined' && Stats.curseName ? Stats.curseName(p.id) : p.id), color: '#d89aff', duration: 1.2 });
+      FX.num(e.x, headY(e) - 8, (typeof Stats !== 'undefined' && Stats.curseName ? Stats.curseName(p.id) : p.id), 'curse', { spread: 0 });
     });
     on('boss_phase', (p) => { if (fs.boss && p.uid === fs.boss.uid) toast(`${fs.boss.name}의 기세가 달라졌다! (페이즈 ${phaseOf(fs.boss).n})`, 1800); });
     on('boss_killed', (p) => {
@@ -585,7 +756,12 @@ const DungeonScene = (() => {
       runStats.gold += p.gold || 0;
     });
     // 처치 골드는 Combat 이 'loot' 로, 상자 골드는 'chest_opened' 로 알린다(gold_changed 는 상점 거래에도 나서 쓰지 않는다)
-    on('loot', (p) => { if (p.gold > 0) runStats.gold += p.gold; });
+    // 처치 골드: 동전이 튀어나왔다가 가까워지면 빨려 든다. HUD 골드는 "아직 날아오는 동전"만큼 늦게 오른다(pendingGold)
+    on('loot', (p) => {
+      if (!(p.gold > 0)) return;
+      runStats.gold += p.gold;
+      if (p.x != null && Math.abs(p.x - player.x) < 520 && Math.abs(p.y - player.y) < 820) { pendingGold += p.gold; spawnCoins(p.x, p.y, p.gold); }
+    });
     on('item_gained', (p) => { if (p.inst) runStats.items.push(p.inst); });
     // 결과 화면을 닫으면 마을로 — ending 뒤에 오는 이벤트라 위 가드(on) 를 거치지 않는다
     unsubs.push(Events.on('ui_close', (p) => { if (p && p.name === 'result' && ending) goTown(); }));
@@ -599,65 +775,142 @@ const DungeonScene = (() => {
   function setH(node, pct) { const v = Math.max(0, Math.min(100, pct)).toFixed(1) + '%'; if (node._h !== v) { node._h = v; node.style.height = v; } }
   function setCls(node, cls, on) { on = !!on; if (!node._c) node._c = {}; if (node._c[cls] !== on) { node._c[cls] = on; node.classList.toggle(cls, on); } }
 
+  // 해골 배지(빨간 원 + 뿔 달린 해골). ring 의 stroke-dashoffset 으로 다음 10연속킬까지 채운다
+  const RING_LEN = 2 * Math.PI * 28;
+  const SKULL_SVG = `<svg viewBox="0 0 64 64" aria-hidden="true">
+    <circle cx="32" cy="32" r="28" fill="#1c1418" stroke="#3a2a30" stroke-width="5"/>
+    <circle class="ring" cx="32" cy="32" r="28" fill="none" stroke="#ff3a48" stroke-width="5" stroke-linecap="round" stroke-dasharray="${RING_LEN.toFixed(1)}" stroke-dashoffset="${RING_LEN.toFixed(1)}" transform="rotate(-90 32 32)"/>
+    <circle cx="32" cy="32" r="23" fill="#c8202e"/>
+    <path d="M17 27 Q9 16 15 9 Q17 18 24 22 Z M47 27 Q55 16 49 9 Q47 18 40 22 Z" fill="#6a5a62" stroke="#1c1418" stroke-width="1.6"/>
+    <path d="M20 31 a12 12 0 0 1 24 0 v7 h-4 v5 h-16 v-5 h-4 z" fill="#3a3036" stroke="#1c1418" stroke-width="1.6"/>
+    <circle cx="27" cy="32" r="3.6" fill="#ff5a5a"/><circle cx="37" cy="32" r="3.6" fill="#ff5a5a"/>
+    <path d="M32 36 l-2 3 h4 z" fill="#1c1418"/>
+    <path d="M28 40 v3 M32 40 v3 M36 40 v3" stroke="#1c1418" stroke-width="1.4"/>
+  </svg>`;
+
   function buildHud() {
     removeHud();
     const root = el('div', { id: 'dhud' });
-    // 상단: 파티 프레임
+    // 왼쪽 위: 층·골드
+    const floorTx = el('b'), goldTx = el('b');
+    const res = el('div', { class: 'dh-res' }, [
+      el('div', { class: 'r' }, [el('i', { class: 'ico stairs' }), floorTx]),
+      el('div', { class: 'r' }, [el('i', { class: 'ico coin' }), goldTx]),
+    ]);
+    // 그 아래: 파티 한 줄 요약(역할 아이콘 + 작은 HP/MP 바). 탭 = 수동 대상 지정
     const party = el('div', { class: 'dh-party' });
     const frames = [];
     for (let k = 0; k < 5; k++) {
-      const nm = el('span'), ri = el('b'), hp = el('i'), mp = el('i'), hpn = el('span', { class: 'hpn' }), cs = el('div', { class: 'cs' }), dead = el('div', { class: 'dead hidden' }, ['💀 쓰러짐']);
-      const hpBar = el('div', { class: 'dh-bar' }, [hp]), mpBar = el('div', { class: 'dh-bar mp' }, [mp]);
-      const btn = el('button', { class: 'dh-pf', onClick: () => { const f = frames[k]; if (f.uid) selectTarget(f.uid); } }, [el('div', { class: 'nm' }, [ri, nm]), hpBar, mpBar, hpn, cs, dead]);
+      const ri = el('b'), hp = el('i'), mp = el('i'), cs = el('span', { class: 'cs' }), dead = el('span', { class: 'dead hidden', text: '💀' });
+      const hpBar = el('span', { class: 'dh-bar' }, [hp]), mpBar = el('span', { class: 'dh-bar mp' }, [mp]);
+      const btn = el('button', { class: 'dh-pf', onClick: () => { const f = frames[k]; if (f.uid) selectTarget(f.uid); } }, [ri, el('span', { class: 'bars' }, [hpBar, mpBar]), cs, dead]);
       party.appendChild(btn);
-      frames.push({ btn, nm, ri, hp, mp, hpn, hpBar, mpBar, cs, dead, uid: null });
+      frames.push({ btn, ri, hp, mp, hpBar, mpBar, cs, dead, uid: null });
     }
-    const floorName = el('span', { class: 'fl' }), counters = el('span', { class: 'ct' });
-    const info = el('div', { class: 'dh-info panel' }, [floorName, counters]);
+    // 가운데 위: 해골 배지 + "83 KILL" + 연속킬 부제
+    const kill = el('div', { class: 'dh-kill' });
+    const badge = el('div', { class: 'badge' }); badge.innerHTML = SKULL_SVG;
+    const killN = el('b'), killSub = el('small', { text: '연속킬 보너스' });
+    kill.append(badge, el('div', { class: 'kn' }, [killN, el('span', { text: 'KILL' })]), killSub);
+    const ring = badge.querySelector('.ring');
+    // 보스 HP 바(교전 중에만)
     const bossName = el('span'), bossPhase = el('small'), bossHp = el('i');
-    const boss = el('div', { class: 'dh-boss panel hidden' }, [el('div', { class: 'bn' }, [bossName, bossPhase]), el('div', { class: 'dh-bar' }, [bossHp])]);
-    const top = el('div', { class: 'dh-top' }, [party, info, boss]);
-    // 오른쪽: 지도·가방·퀘스트·귀환
-    const mapBtn = el('button', { onClick: () => toggleMap() }, ['🗺️', el('small', { text: '지도' })]);
-    const side = el('div', { class: 'dh-side' }, [
-      mapBtn,
-      el('button', { onClick: () => UI.open('inventory') }, ['🎒', el('small', { text: '가방' })]),
-      el('button', { onClick: () => UI.open('quests') }, ['📜', el('small', { text: '퀘스트' })]),
-      el('button', { onClick: () => askEscape() }, ['🏠', el('small', { text: '귀환' })]),
-    ]);
+    const boss = el('div', { class: 'dh-boss hidden' }, [el('div', { class: 'bn' }, [bossName, bossPhase]), el('div', { class: 'dh-bar' }, [bossHp])]);
+    // 오른쪽 위: 일시정지 + 지도
+    const pauseBtn = el('button', { class: 'dh-pausebtn', 'aria-label': '일시정지', onClick: () => openPause() }, [el('i'), el('i')]);
+    const mapBtn = el('button', { class: 'dh-mapbtn', 'aria-label': '지도', onClick: () => toggleMap() }, ['🗺️']);
     const mini = el('canvas', { class: 'dh-map hidden', width: 300, height: 300, onClick: () => toggleMap(false) });
     const warn = el('div', { class: 'dh-warn' }, [el('div', { class: 'dh-warn-txt', text: '⚠ 위험 범위! 벗어나세요' })]);
-    // 하단: 시전 바 + 상태 + 스킬 바
+    // 가운데: 연속킬 보너스 큰 글자
+    const comboSub = el('small');
+    const combo = el('div', { class: 'dh-combo' }, [el('b', { text: '연속킬 보너스!' }), comboSub]);
+    // 아래: 시전 바 + 탐험 상태
     const castFill = el('i'), castText = el('span');
     const castBar = el('div', { class: 'dh-cast hidden' }, [castFill, castText]);
     const status = el('div', { class: 'dh-status hidden' });
-    const skills = el('div', { class: 'dh-skills panel' });
+    // 오른쪽 아래: 스킬 세로 줄 + AUTO
+    const col = el('div', { class: 'dh-col' });
     const sk = {};
     const mk = (key, opts) => {
-      const ic = el('span', { class: 'ic' }), nm = el('span', { class: 'nm' }), sub = el('span', { class: 'sub' }), cd = el('i', { class: 'cd' }), cdt = el('b', { class: 'cdt' }), badge = el('span', { class: 'badge hidden' });
-      const btn = el('button', { class: 'dh-sk' + (opts.toggle ? ' toggle' : '') }, [ic, nm, sub, cd, cdt, badge, opts.more ? el('span', { class: 'more', text: '▾' }) : null]);
+      const ic = el('span', { class: 'ic' }), sub = el('span', { class: 'sub' }), cdt = el('b', { class: 'cdt' }), badgeN = el('span', { class: 'badge hidden' });
+      const btn = el('button', { class: 'dh-sk ' + (opts.cls || ''), 'aria-label': opts.label || key }, [ic, sub, cdt, badgeN]);
       holdable(btn, opts.tap, opts.hold);
-      skills.appendChild(btn);
-      sk[key] = { btn, ic, nm, sub, cd, cdt, badge };
+      col.appendChild(btn);
+      sk[key] = { btn, ic, sub, cdt, badge: badgeN };
     };
-    mk('single', { more: true, tap: () => cast(G.player.active.single || 'heal_basic'), hold: () => openChooser('single') });
-    mk('aoe', { more: true, tap: () => cast(G.player.active.aoe || 'aoe_2'), hold: () => openChooser('aoe') });
-    mk('cleanse', { tap: () => cast('cleanse') });
-    mk('buff', { more: true, tap: () => openChooser('buff'), hold: () => openChooser('buff') });
-    mk('holy_light', { tap: () => cast('holy_light') });
-    mk('resurrect', { tap: () => cast('resurrect') });
-    mk('smite', { tap: () => cast('smite') });
-    mk('autoHeal', { toggle: true, tap: () => toggleSetting('autoHeal', '자동 힐') });
-    mk('autoDodge', { toggle: true, tap: () => toggleSetting('autoDodge', '자동 회피') });
-    mk('explore', { toggle: true, tap: () => toggleExplore() });
-    const bottom = el('div', { class: 'dh-bottom' }, [castBar, status, skills]);
+    mk('more', { cls: 'small', label: '더보기', tap: () => openMore() });
+    mk('resurrect', { label: '부활', tap: () => cast('resurrect') });
+    mk('holy_light', { cls: 'ult', label: '필살기', tap: () => cast('holy_light') });
+    mk('cleanse', { label: '해제', tap: () => cast('cleanse') });
+    mk('aoe', { label: '광역 힐', tap: () => cast(G.player.active.aoe || 'aoe_2'), hold: () => openChooser('aoe') });
+    mk('single', { label: '단일 힐', tap: () => cast(G.player.active.single || 'heal_basic'), hold: () => openChooser('single') });
+    const auto = el('button', { class: 'dh-auto', 'aria-label': '자동 탐험', onClick: () => toggleExplore() }, [el('span', { class: 'ic', text: '⚔️' }), el('b', { text: 'AUTO' })]);
     const back = el('div', { class: 'dh-back hidden', onClick: () => closePop() });
     const pop = el('div', { class: 'dh-pop panel hidden' });
-    root.append(warn, top, side, mini, bottom, back, pop);
+    const pause = el('div', { class: 'dh-pause hidden' });
+    root.append(warn, res, party, kill, boss, pauseBtn, mapBtn, mini, combo, castBar, status, col, auto, back, pop, pause);
     (document.getElementById('game') || document.body).appendChild(root);
-    hud = { root, frames, floorName, counters, boss, bossName, bossPhase, bossHp, side, mapBtn, mini, warn, castBar, castFill, castText, status, sk, back, pop, mapOpen: false, mapAcc: 9, mapImg: null };
+    hud = { root, frames, floorTx, goldTx, kill, killN, killSub, ring, boss, bossName, bossPhase, bossHp, mapBtn, mini, warn, combo, comboSub, castBar, castFill, castText, status, sk, auto, back, pop, pause, paused: false, mapOpen: false, mapAcc: 9, mapImg: null };
   }
   function removeHud() { const old = document.getElementById('dhud'); if (old) old.remove(); hud = null; }
+
+  // ---------------- 일시정지 메뉴: 계속 / 가방 / 퀘스트 / 설정 / 귀환 ----------------
+  function openPause(view) {
+    if (!hud || ending) return;
+    if (!hud.paused) { hud.paused = true; blockers++; }
+    closePop();
+    const P = hud.pause; P.innerHTML = '';
+    const btn = (label, fn, cls) => el('button', { class: cls || '', onClick: fn }, [label]);
+    let body;
+    if (view === 'settings') {
+      const st = settings();
+      const tg = (key, label, desc) => el('button', { class: 'tg' + ((key === 'autoHeal' ? st[key] !== false : key === 'autoFollow' ? st[key] !== false : !!st[key]) ? ' on' : ''), onClick: () => { toggleSetting(key, label); openPause('settings'); } }, [
+        el('span', { class: 'tx' }, [el('b', { text: label }), el('small', { text: desc })]), el('span', { class: 'sw' }),
+      ]);
+      body = [
+        el('div', { class: 'pt', text: '설정' }),
+        tg('autoHeal', '자동 힐', '가장 HP가 낮은 아군을 알아서 치유'),
+        tg('autoDodge', '자동 회피', '위험 범위에 서 있으면 알아서 피함'),
+        tg('autoFollow', '자동 따라가기', '전투 중 파티 뒤를 따라감'),
+        btn('상세 설정 · 스킬', () => { closePause(); UI.open('status'); }),
+        btn('← 뒤로', () => openPause(), 'sub'),
+      ];
+    } else {
+      body = [
+        el('div', { class: 'pt', text: '일시정지' }),
+        btn('▶ 계속', () => closePause(), 'primary'),
+        btn('🎒 가방', () => { closePause(); UI.open('inventory'); }),
+        btn('📜 퀘스트', () => { closePause(); UI.open('quests'); }),
+        btn('⚙️ 설정', () => openPause('settings')),
+        btn('🏠 귀환', () => { closePause(); askEscape(); }, 'danger'),
+      ];
+    }
+    P.appendChild(el('div', { class: 'panel' }, body));
+    P.classList.remove('hidden');
+  }
+  function closePause() {
+    if (!hud || !hud.paused) return;
+    hud.paused = false; blockers = Math.max(0, blockers - 1);
+    hud.pause.classList.add('hidden');
+  }
+  // "⋯" 메뉴: 축복(버프)·부활·일격 — 자주 안 쓰는 것들을 한곳에
+  function openMore() {
+    if (!hud) return;
+    const pop = hud.pop; pop.innerHTML = '';
+    const tgt = byUid(selUid);
+    pop.appendChild(el('div', { class: 'pt', text: `더보기 — ${tgt && tgt.alive ? tgt.name + '에게' : '자동 대상'}` }));
+    for (const id of BUFFS.concat(['resurrect', 'smite'])) {
+      const def = Skills.get(id); if (!def) continue;
+      const lock = !unlocked(id), left = lock ? 0 : cdLeft(id);
+      const mp = Math.round(Skills.mpCost(def, player));
+      pop.appendChild(el('button', { disabled: lock, onClick: () => { closePop(); cast(id); } }, [
+        el('span', { class: 'ic', text: lock ? '🔒' : SKILL_ICON[id] || '✨' }),
+        el('span', { class: 'tx' }, [el('b', { text: def.name }), el('small', { text: lock ? `Lv.${def.unlockLevel} 에 배움` : (def.desc || '').slice(0, 34) })]),
+        el('span', { class: 'mp', text: lock ? '' : left > 0 ? `${Math.ceil(left)}초` : `MP ${mp}` }),
+      ]));
+    }
+    pop.classList.remove('hidden'); hud.back.classList.remove('hidden');
+  }
 
   // 탭 = 바로 시전, 길게 누르기(0.42초) = 선택 메뉴. click 대신 pointer 이벤트로 직접 판정해 두 동작이 겹치지 않게 한다.
   function holdable(btn, onTap, onHold) {
@@ -671,12 +924,14 @@ const DungeonScene = (() => {
   }
 
   function toggleSetting(key, label) {
-    const s = settings(); s[key] = !s[key];
+    const s = settings();
+    s[key] = (key === 'autoHeal' || key === 'autoFollow') ? s[key] === false : !s[key];   // 기본값이 켜짐인 항목은 undefined 를 켜짐으로 본다
     toast(`${label} ${s[key] ? '켜짐' : '꺼짐'}`, 1000);
     State.save(); hudTick(true);
   }
   function toggleExplore() {
     explore.on = !explore.on; explore.target = null; explore.unreachable.clear();
+    settings().autoExplore = explore.on;
     if (route && route.kind === 'explore') route = null;
     manualT = 99;
     toast(explore.on ? '자동 탐험 시작 — 가까운 무리·상자·보스로 갑니다' : '자동 탐험 멈춤', 1400);
@@ -721,15 +976,16 @@ const DungeonScene = (() => {
     return { n: Math.max(1, i + 1), max: Math.max(1, phases.length) };
   }
   function cdLeft(id) { return Math.max(0, (player.cooldowns[id] || 0) - battle.time); }
+  function setVar(node, name, v) { if (node['_v' + name] !== v) { node['_v' + name] = v; node.style.setProperty(name, v); } }
   function paintSkill(s, id, extra = {}) {
     const def = Skills.get(id);
     const lock = !unlocked(id);
     setText(s.ic, lock ? '🔒' : (SKILL_ICON[id] || '✨'));
-    setText(s.nm, extra.name || (def ? def.name : id));
     const mp = def ? Math.round(Skills.mpCost(def, player)) : 0;
-    setText(s.sub, lock ? `Lv.${def ? def.unlockLevel : '?'}` : `MP ${mp}`);
+    setText(s.sub, lock ? `Lv.${def ? def.unlockLevel : '?'}` : String(mp));
     const left = lock ? 0 : cdLeft(id);
-    setH(s.cd, def && def.cooldown ? (left / def.cooldown) * 100 : 0);
+    // 쿨타임 고리: 남은 비율만큼 어두운 원뿔(conic-gradient)
+    setVar(s.btn, '--cd', (def && def.cooldown && left > 0 ? Math.min(1, left / def.cooldown) * 360 : 0).toFixed(0) + 'deg');
     setText(s.cdt, left > 0 ? (left >= 60 ? Math.ceil(left / 60) + '분' : Math.ceil(left) + '') : '');
     setCls(s.btn, 'locked', lock);
     setCls(s.btn, 'nomp', !lock && player.mp < mp);
@@ -737,39 +993,40 @@ const DungeonScene = (() => {
     setCls(s.btn, 'ready', !lock && !left && !!extra.ready && player.mp >= mp);
     if (extra.badge && !lock) { setText(s.badge, String(extra.badge)); setCls(s.badge, 'hidden', false); } else setCls(s.badge, 'hidden', true);
   }
-  function paintToggle(s, icon, name, on, sub) {
-    setText(s.ic, icon); setText(s.nm, name); setText(s.sub, sub || (on ? '켜짐' : '꺼짐'));
-    setCls(s.btn, 'on', on); setH(s.cd, 0); setText(s.cdt, ''); setCls(s.badge, 'hidden', true);
-  }
 
   function hudTick(force) {
     if (!hud || !fs) return;
     const party = battle.party();
-    // 파티 프레임: 플레이어 먼저, 그 뒤 파티원
+    // 파티 한 줄 요약: 플레이어 먼저, 그 뒤 파티원
     for (let k = 0; k < 5; k++) {
       const f = hud.frames[k], e = party[k];
       setCls(f.btn, 'hidden', !e);
       if (!e) { f.uid = null; continue; }
       f.uid = e.uid;
       setText(f.ri, ROLE_ICON[e.role] || '•');
-      setText(f.nm, e.name);
-      setText(f.hpn, `${Math.max(0, Math.ceil(e.hp))}/${Math.round(e.maxHp)}`);
+      if (f.btn._name !== e.name) { f.btn._name = e.name; f.btn.title = e.name; }
       const hpP = e.maxHp ? (e.hp / e.maxHp) * 100 : 0;
       setW(f.hp, e.alive ? hpP : 0); setW(f.mp, e.maxMp ? (e.mp / e.maxMp) * 100 : 0);
       setCls(f.hpBar, 'low', e.alive && hpP < 60 && hpP >= 35); setCls(f.hpBar, 'crit', e.alive && hpP < 35);
       setCls(f.btn, 'me', e.kind === 'player'); setCls(f.btn, 'sel', e.uid === selUid);
-      setCls(f.dead, 'hidden', e.alive);
-      const cs = e.alive ? e.curses.map((c) => CURSE_ICON[c.id] || '✖').join('') : '';
-      if (f.cs._t !== cs) { f.cs._t = cs; f.cs.innerHTML = ''; for (const c of e.alive ? e.curses : []) f.cs.appendChild(el('em', { text: CURSE_ICON[c.id] || '✖', title: Stats.curseName ? Stats.curseName(c.id) : c.id })); }
+      setCls(f.dead, 'hidden', e.alive); setCls(f.btn, 'down', !e.alive);
+      const cs = e.alive && e.curses.length ? '☠' : '';
+      setText(f.cs, cs);
     }
-    // 층 이름·카운터
-    setText(hud.floorName, `${floorNo}층 · ${map.name || ''}`);
-    const opened = fs.chests.filter((c) => c.opened).length;
-    setText(hud.counters, `👣 ${fs.steps}  ⚔️ ${fs.kills}  📦 ${opened}/${fs.chests.filter((c) => !c.hidden).length}`);
+    // 층·골드(이번 탐험에서 주운 골드 — 아직 날아오는 동전 몫은 빼고 보여 준다)
+    setText(hud.floorTx, `${floorNo}층`);
+    setText(hud.goldTx, String(Math.max(0, runStats.gold - pendingGold)));
+    // 처치 수 + 연속킬 고리
+    setText(hud.killN, String(fs.kills));
+    const cn = combo.n && time - combo.last <= COMBO_WIN ? combo.n : 0;
+    const prog = cn ? (cn % 10) / 10 : 0;
+    const off = (RING_LEN * (1 - prog)).toFixed(1);
+    if (hud.ring._off !== off) { hud.ring._off = off; hud.ring.setAttribute('stroke-dashoffset', off); }
+    setText(hud.killSub, cn >= 2 ? `${cn} 연속킬!` : '연속킬 보너스');
+    setCls(hud.kill, 'hot', cn >= 2);
     // 보스 바: 교전 중이거나 깎였을 때
     const b = fs.boss, showBoss = !!(b && b.alive && (b.aggro || b.hp < b.maxHp) && dist(b, player) < ACTIVE_R);
     setCls(hud.boss, 'hidden', !showBoss);
-    setCls(hud.side, 'boss', showBoss); setCls(hud.mini, 'boss', showBoss);
     if (showBoss) {
       const ph = phaseOf(b);
       setText(hud.bossName, `👑 ${b.name}`);
@@ -786,25 +1043,20 @@ const DungeonScene = (() => {
     // 위험 경고: 텔레그래프 안에 서 있으면 화면 가장자리 붉게
     const danger = alive(player) && typeof AIHealer !== 'undefined' && !!AIHealer.dodge(player, battle);
     setCls(hud.warn, 'on', danger);
-    // 스킬 바
+    // 스킬 줄
     const P = G.player, sk = hud.sk;
     const hurt = battle.allies().filter((e) => e.hp / e.maxHp < 0.7).length;
     const cursed = battle.allies().filter((e) => e.curses.length).length;
     const deadN = party.filter((e) => !e.alive).length;
-    const undead = battle.engagedMonsters().some((m) => (m.tags || []).includes('undead'));
     paintSkill(sk.single, P.active.single || 'heal_basic', { ready: hurt > 0 });
     paintSkill(sk.aoe, P.active.aoe || 'aoe_2', { ready: hurt >= 2 });
     paintSkill(sk.cleanse, 'cleanse', { badge: cursed, ready: cursed > 0 });
-    const buffUnlocked = BUFFS.some(unlocked);
-    paintSkill(sk.buff, BUFFS.find(unlocked) || 'buff_def', { name: '축복' });
-    if (buffUnlocked) { setText(sk.buff.ic, '🙏'); setText(sk.buff.sub, '메뉴'); }
-    paintSkill(sk.holy_light, 'holy_light', { name: '필살기', ready: hurt >= 3 });
-    paintSkill(sk.resurrect, 'resurrect', { badge: deadN, ready: deadN > 0 });
-    paintSkill(sk.smite, 'smite', { name: '일격', ready: undead });
-    const st = settings();
-    paintToggle(sk.autoHeal, '🤖', '자동 힐', st.autoHeal !== false);
-    paintToggle(sk.autoDodge, '🏃', '자동 회피', !!st.autoDodge);
-    paintToggle(sk.explore, '🧭', '자동 탐험', explore.on);
+    paintSkill(sk.holy_light, 'holy_light', { ready: hurt >= 3 });
+    // 부활은 쓰러진 사람이 있고 배웠을 때만 줄에 나타난다(평소엔 자리만 차지하는 버튼)
+    setCls(sk.resurrect.btn, 'hidden', !(deadN > 0 && unlocked('resurrect')));
+    if (deadN > 0) paintSkill(sk.resurrect, 'resurrect', { badge: deadN, ready: true });
+    setText(sk.more.ic, '⋯'); setText(sk.more.sub, '');
+    setCls(hud.auto, 'on', explore.on);
     // 지도
     setCls(hud.mini, 'hidden', !hud.mapOpen); setCls(hud.mapBtn, 'on', hud.mapOpen);
     if (hud.mapOpen) drawMinimap(force);
@@ -856,10 +1108,12 @@ const DungeonScene = (() => {
     fs = Floor.start(G, floorNo);
     map = fs.map; battle = fs.battle; player = battle.player;
     time = 0; hudAcc = 0; manualT = 99; ending = false; blockers = 0; route = null; followMoving = false; tapMark = null; selUid = null;
-    explore.on = false; explore.target = null; explore.done = new Set(); explore.unreachable = new Set(); explore.rest = 0; explore.wait = 0; explore.lead = 0; explore.status = '';
+    explore.on = !!settings().autoExplore; explore.target = null; explore.done = new Set(); explore.unreachable = new Set(); explore.rest = 0; explore.wait = 0; explore.lead = 0; explore.status = '';
     chunks.clear(); anim.clear();
+    corpses.length = 0; coins.length = 0; pendingGold = 0; combo.n = 0; combo.last = -99; combo.best = 0;
     runStats = { gold: 0, items: [], levelUps: [], xp0: totalXp(G.player) };
-    fogStyle = map.biome === 'cave' ? 'rgba(6, 4, 12, 0.66)' : 'rgba(6, 12, 8, 0.6)';
+    // 줌아웃 화면에서 안개가 너무 짙으면 "손전등 속 작은 방"처럼 보여서 조금 옅게
+    fogStyle = map.biome === 'cave' ? 'rgba(6, 4, 12, 0.5)' : 'rgba(6, 12, 8, 0.42)';
     if (typeof FX !== 'undefined') FX.clear();
     buildHud();
     subscribe();
@@ -868,7 +1122,7 @@ const DungeonScene = (() => {
     // 디버그·E2E 용 핸들(main.js 의 window.__healer 를 덮어쓰지 않고 붙인다)
     if (typeof window !== 'undefined') {
       window.__healer = window.__healer || {};
-      window.__healer.dungeon = { get fs() { return fs; }, get battle() { return battle; }, get player() { return player; }, teleport, cast, findPath, toggleExplore, finish, hudTick };
+      window.__healer.dungeon = { get fs() { return fs; }, get battle() { return battle; }, get player() { return player; }, get combo() { return combo; }, get coins() { return coins.length; }, get corpses() { return corpses.length; }, teleport, cast, findPath, toggleExplore, finish, hudTick, openPause, closePause };
     }
     const ch = chapterOf(floorNo);
     if (ch && ch.intro && ch.intro.length) storyOnce('dungeon_intro_' + floorNo, ch.intro, `${ch.n}장 · ${ch.title}`).then(() => toast(`${floorNo}층 · ${map.name}`, 1600));
@@ -890,11 +1144,19 @@ const DungeonScene = (() => {
     if (fs && !fs.summary) { Floor.leave(fs, G, 'escape'); State.save(); }
     removeHud();
     if (typeof FX !== 'undefined') FX.clear();
-    chunks.clear(); anim.clear();
+    chunks.clear(); anim.clear(); corpses.length = 0; coins.length = 0;
     fs = null; battle = null; player = null; map = null;
   }
 
-  const scene = { enter, exit, update, draw, onTap, onJoyStart() { closePop(); route = null; followMoving = false; manualT = 0; }, onJoyEnd() { manualT = 0; } };
+  const scene = {
+    enter, exit, update, draw, onTap,
+    // 배율: 가로 약 19타일(줌아웃 — 무리를 멀리서 보며 쓸어 담는 느낌). 실제 배율은 Scenes.applyZoom 이 0.25/0.5 단위로 맞춘다
+    zoomDivisor: 19 * TILE,
+    // 고정 조이스틱: 화면 아래 가운데(바닥에서 118px)
+    joyRest: { bottom: 118 },
+    onJoyStart() { closePop(); route = null; followMoving = false; manualT = 0; },
+    onJoyEnd() { manualT = 0; },
+  };
   if (typeof Scenes !== 'undefined') Scenes.register('dungeon', scene);
   return { scene, findPath: (...a) => findPath(...a), get fs() { return fs; } };
 })();

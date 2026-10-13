@@ -20,6 +20,7 @@ const AIParty = (() => {
   const skillsOf = (ent) => (typeof Skills !== 'undefined' && Skills.member ? Skills.member(ent.cls) : []);
 
   function update(ent, battle, dt) {
+    recordTrail(battle);
     if (!alive(ent) || ent.cast) return;
     if (dodge(ent, battle, dt)) return;
     const foes = findFoes(ent, battle);
@@ -70,13 +71,80 @@ const AIParty = (() => {
   }
 
   // ---- 비전투: 대형 따라가기 ----
+  // 파티원 AI 에는 길찾기가 없어서, 힐러가 모퉁이를 돌면 벽에 막혀 뒤처졌다. 힐러가 지나간 발자국(trail)을 기억해 두고
+  // 대형 자리가 벽 너머면 "보이는 발자국 중 힐러에게 가장 가까운 것"으로 걸어간다(사람이 앞사람 발자국을 따라가듯).
+  const TRAIL_STEP = 12, TRAIL_MAX = 160, LOS_STEP = 8;
+  function recordTrail(battle) {
+    const p = battle.player; if (!alive(p)) return;
+    const tr = battle._trail || (battle._trail = []);
+    const last = tr[tr.length - 1];
+    if (last && Math.hypot(p.x - last.x, p.y - last.y) < TRAIL_STEP) return;
+    tr.push({ x: p.x, y: p.y });
+    if (tr.length > TRAIL_MAX) tr.shift();
+  }
+  function clearPath(battle, a, b, r) {
+    const d = dist(a, b), n = Math.ceil(d / LOS_STEP);
+    for (let k = 1; k <= n; k++) {
+      const t = k / n;
+      if (!battle.canStand(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, r)) return false;
+    }
+    return true;
+  }
+  function trailPoint(ent, battle) {
+    const tr = battle._trail || [];
+    for (let k = tr.length - 1; k >= 0; k--) if (clearPath(battle, ent, tr[k], ent.radius)) return tr[k];
+    return null;
+  }
+  // 벽·물에 막힌 대상에게 가는 길: 타일 BFS(최대 NAV_MAX 칸, 목표 칸에서 조기 종료)로 경로를 만들어 1.5초 동안 재사용한다.
+  // 직선이 트여 있으면 그냥 직진. 경로를 못 찾으면 직진(예전 동작)으로 둔다.
+  const NAV_MAX = 2500, NAV_TTL = 1.5;
+  function navPath(battle, from, to) {
+    const map = battle.map; if (!map || !map.solid) return null;
+    const cols = map.cols, rows = map.rows;
+    const si = Math.floor(from.x / TILE), sj = Math.floor(from.y / TILE), ti = Math.floor(to.x / TILE), tj = Math.floor(to.y / TILE);
+    if (map.solid(ti, tj)) return null;
+    const start = sj * cols + si, goal = tj * cols + ti;
+    const prev = new Map([[start, -1]]), q = [start];
+    for (let h = 0; h < q.length && q.length < NAV_MAX; h++) {
+      const c = q[h];
+      if (c === goal) break;
+      const i = c % cols, j = (c / cols) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ni = i + dx, nj = j + dy;
+        if (ni < 0 || nj < 0 || ni >= cols || nj >= rows || map.solid(ni, nj)) continue;
+        const n = nj * cols + ni; if (prev.has(n)) continue;
+        prev.set(n, c); q.push(n);
+      }
+    }
+    if (!prev.has(goal)) return null;
+    const path = [];
+    for (let c = goal; c !== start && c >= 0; c = prev.get(c)) path.push({ x: (c % cols + 0.5) * TILE, y: (((c / cols) | 0) + 0.5) * TILE });
+    return path.reverse();
+  }
+  function navTo(ent, battle, x, y, dt, mult) {
+    const to = { x, y };
+    if (clearPath(battle, ent, to, ent.radius)) { ent._nav = null; return battle.moveTo(ent, x, y, dt, mult); }
+    const key = Math.floor(x / TILE) + ',' + Math.floor(y / TILE);
+    let nav = ent._nav;
+    if (!nav || nav.key !== key || battle.time - nav.t > NAV_TTL) nav = ent._nav = { key, t: battle.time, path: navPath(battle, ent, to) || [], k: 0 };
+    while (nav.k < nav.path.length && dist(ent, nav.path[nav.k]) <= 6) nav.k++;
+    if (nav.k >= nav.path.length) return battle.moveTo(ent, x, y, dt, mult);
+    // 앞의 웨이포인트 중 직선으로 보이는 가장 먼 것(최대 4칸 앞)으로 — 계단식 움직임을 줄인다
+    let wp = nav.path[nav.k];
+    for (let k = Math.min(nav.path.length - 1, nav.k + 4); k > nav.k; k--) if (clearPath(battle, ent, nav.path[k], ent.radius)) { wp = nav.path[k]; nav.k = k; break; }
+    return battle.moveTo(ent, wp.x, wp.y, dt, mult);
+  }
   function follow(ent, battle, dt) {
     const p = battle.player;
     if (!alive(p)) { ent.state = 'idle'; return; }
     const spot = formationSpot(ent, battle, p);
     const d = dist(ent, spot);
-    if (d > FOLLOW_SLACK) { ent.target = null; battle.moveTo(ent, spot.x, spot.y, dt, d > CATCHUP_DIST ? CATCHUP_SPEED : 1.1); }
-    else ent.state = 'idle';
+    if (d <= FOLLOW_SLACK) { ent.state = 'idle'; return; }
+    ent.target = null;
+    const mult = d > CATCHUP_DIST ? CATCHUP_SPEED : 1.1;
+    // 가까우면 바로, 멀고 벽에 가리면 발자국을 따라간다
+    const go = d <= CATCHUP_DIST * 2 || clearPath(battle, ent, spot, ent.radius) ? spot : (trailPoint(ent, battle) || spot);
+    battle.moveTo(ent, go.x, go.y, dt, mult);
   }
   function formationSpot(ent, battle, p) {
     const [dx, dy] = DIRS[p.dir] || DIRS.down;
@@ -108,16 +176,26 @@ const AIParty = (() => {
     if (!inRange(ent, tgt, ent.range || 40)) return approach(ent, battle, tgt, dt);
     useAttackSkills(ent, battle, tgt);
   }
+  // 딜러 대상: 힐러를 노리는 놈 → (보스·중간보스 전엔) 탱커의 대상 → 내게 가장 가까운 놈.
+  // 무리 사냥에서 넷이 한 마리를 노리면 한 방에 죽어 나머지 타격이 낭비되므로 일반 몬스터는 각자 가까운 놈을 친다.
+  function dpsTarget(ent, battle, foes) {
+    const healerUid = battle.player ? battle.player.uid : null;
+    const onHealer = foes.filter((m) => m.target === healerUid);
+    if (onHealer.length) return nearest(onHealer, ent);
+    const shared = sharedTarget(battle, foes);
+    if (shared && shared.tier !== 'normal') return shared;
+    return nearest(foes, ent) || shared;
+  }
   function melee(ent, battle, foes, dt) {
-    const tgt = sharedTarget(battle, foes) || nearest(foes, ent);
+    const tgt = dpsTarget(ent, battle, foes);
     ent.target = tgt.uid;
     if (inRange(ent, tgt, ent.range || 40)) { useAttackSkills(ent, battle, tgt); return; }
     if (useAttackSkills(ent, battle, tgt)) return;                 // 돌진기는 멀리서도 쓴다
     const spot = rearSpot(ent, battle, tgt);
-    if (!battle.moveTo(ent, spot.x, spot.y, dt, CHASE_SPEED)) approach(ent, battle, tgt, dt);
+    if (!clearPath(battle, ent, spot, ent.radius) || !battle.moveTo(ent, spot.x, spot.y, dt, CHASE_SPEED)) approach(ent, battle, tgt, dt);
   }
   function ranged(ent, battle, foes, dt) {
-    const tgt = sharedTarget(battle, foes) || nearest(foes, ent);
+    const tgt = dpsTarget(ent, battle, foes);
     ent.target = tgt.uid;
     const d = dist(ent, tgt), maxR = Math.min(ent.range || RANGED_MAX, RANGED_MAX);
     if (d > maxR) return approach(ent, battle, tgt, dt, maxR * 0.9);
@@ -139,7 +217,7 @@ const AIParty = (() => {
   function approach(ent, battle, tgt, dt, stopAt) {
     const d = dist(ent, tgt), stop = stopAt != null ? stopAt : 0;
     if (d <= stop) return;
-    battle.moveTo(ent, tgt.x, tgt.y, dt, CHASE_SPEED);
+    navTo(ent, battle, tgt.x, tgt.y, dt, CHASE_SPEED);
   }
   function retreat(ent, battle, tgt, dt) {
     const d = dist(ent, tgt) || 1;

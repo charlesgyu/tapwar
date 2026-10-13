@@ -1,7 +1,8 @@
 // 던전 씬 스크린샷: node healer/tools/dungeon_shot.mjs <floor> <outPrefix> [level]
 // ui_preview.mjs 처럼 모든 스크립트를 로드 → 새 게임 + 파티 4명(전사 탱커·도적·사냥꾼·마법사) → Scenes.go('dungeon', { floor })
 // → 탐험 시작 화면 → 가장 가까운 몬스터 무리 옆으로 순간이동 → 전투 3초 → 스크린샷 → 중간보스/보스 근처 → 스크린샷(텔레그래프·보스 바)
-// → 미니맵·길게 누르기 메뉴 → 자동 탐험 몇 초. PAGEERROR/콘솔 오류가 있으면 종료 코드 1. fps 는 Scenes.fps().
+// → 연속킬 보너스 순간 → 일시정지 메뉴 → 길게 누르기 메뉴 → 자동 탐험 몇 초. PAGEERROR/콘솔 오류가 있으면 종료 코드 1. fps 는 Scenes.fps().
+// 환경 변수 DPR(기본 3 — 아이폰 기준; 2 로 주면 안드로이드 보급형 배율 확인)
 import { chromium } from '/opt/node-tools/node_modules/playwright/index.mjs';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -21,7 +22,7 @@ const ORDER = [
   'js/ui/ui.js',
 ];
 const browser = await chromium.launch();
-const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: parseFloat(process.env.DPR || '3'), hasTouch: true, isMobile: true });
 const page = await ctx.newPage();
 let failed = false;
 page.on('pageerror', (e) => { failed = true; console.log('PAGEERROR', e.message); });
@@ -72,8 +73,37 @@ const fight = await page.evaluate(() => ({ fps: Scenes.fps(), inCombat: window._
 console.log('fight', JSON.stringify(fight));
 shots.push(await shot('fight'));
 
+// 연속킬 보너스: 무리를 차례로 찾아가며 10연속킬 배너가 뜨는 순간을 찍는다(최대 24초)
+const nextGroup = () => page.evaluate(() => {
+  const D = window.__healer.dungeon, fs = D.fs, p = D.player;
+  const live = fs.map.groups.filter((g) => !g.minibossId && fs.battle.monsters.some((m) => m.groupId === g.id && m.alive));
+  live.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y));
+  const g = live[0]; if (!g) return null; D.teleport(g.x + 2 * 32, g.y + 2 * 32); return g.id;
+});
+let comboShot = null, fpsMin = 999;
+for (let k = 0; k < 120 && !comboShot; k++) {
+  if (k % 16 === 0 && k) await nextGroup();
+  await wait(200);
+  const st = await page.evaluate(() => ({ show: !!document.querySelector('#dhud .dh-combo.show'), n: window.__healer.dungeon.combo.n, fps: Scenes.fps() }));
+  fpsMin = Math.min(fpsMin, st.fps);
+  if (st.show) { await wait(120); comboShot = await shot('combo'); }
+}
+if (!comboShot) {
+  // 자연 발생이 없으면(레벨이 낮아 처치가 느릴 때) 연속 9킬 상태에서 한 마리를 잡아 배너를 띄운다
+  await page.evaluate(() => { const D = window.__healer.dungeon; D.combo.n = 9; D.combo.last = 1e9; const m = D.battle.activeMonsters().find((x) => x.alive); if (m) m.hp = 1; });
+  for (let k = 0; k < 20 && !comboShot; k++) { await wait(150); if (await page.evaluate(() => !!document.querySelector('#dhud .dh-combo.show'))) comboShot = await shot('combo_forced'); }
+}
+if (comboShot) shots.push(comboShot);
+console.log('combo', JSON.stringify(await page.evaluate(() => ({ combo: window.__healer.dungeon.combo, coins: window.__healer.dungeon.coins, corpses: window.__healer.dungeon.corpses, nums: FX.nums().length, fps: Scenes.fps() }))), 'fpsMin', fpsMin.toFixed(1));
+
+// 일시정지 메뉴
+await page.evaluate(() => document.querySelector('#dhud .dh-pausebtn').click());
+await wait(300);
+shots.push(await shot('pause'));
+await page.evaluate(() => window.__healer.dungeon.closePause());
+
 // 길게 누르기 메뉴(단일 힐 선택)
-await page.evaluate(() => { const b = document.querySelectorAll('#dhud .dh-sk')[0]; b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); });
+await page.evaluate(() => { const b = document.querySelector('#dhud .dh-sk[aria-label="단일 힐"]'); b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); });
 await wait(600);
 shots.push(await shot('chooser'));
 await page.evaluate(() => { document.querySelector('#dhud .dh-back').click(); });
@@ -95,7 +125,7 @@ await page.evaluate(() => {
 });
 let bossTg = false;
 for (let k = 0; k < 16 && !bossTg; k++) { await wait(500); bossTg = await page.evaluate(() => window.__healer.dungeon.battle.telegraphs.length > 0 && window.__healer.dungeon.fs.boss.aggro); }
-await page.evaluate(() => { document.querySelector('#dhud .dh-side button').click(); });   // 미니맵 열기
+await page.evaluate(() => { document.querySelector('#dhud .dh-mapbtn').click(); });   // 미니맵 열기
 await wait(300);
 shots.push(await shot('boss'));
 const end = await page.evaluate(() => ({ fps: Scenes.fps(), counts: window.__counts, bossHp: Math.round(window.__healer.dungeon.fs.boss.hp), result: window.__healer.dungeon.fs.result }));

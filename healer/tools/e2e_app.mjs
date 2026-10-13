@@ -243,12 +243,12 @@ const installRecorder = () => ev(() => {
 await installRecorder();
 
 // ============ 14. 5초 플레이(자동 탐험 버튼) ============
-await page.locator('#dhud .dh-sk', { hasText: '자동 탐험' }).click();
+await page.locator('#dhud .dh-auto').click();   // AUTO = 자동 탐험
 await wait(5000);
 await shot('dungeon_explore');
 const steps5 = await ev(() => window.__healer.dungeon.fs.steps);
 step('5초 플레이(자동 탐험)', true, `걸음 ${steps5} · fps ${(await ev(() => Scenes.fps())).toFixed(0)}`);
-await page.locator('#dhud .dh-sk', { hasText: '자동 탐험' }).click();   // 끄기(순간이동 뒤 엉뚱한 곳으로 걷지 않게)
+await page.locator('#dhud .dh-auto').click();   // 끄기(순간이동 뒤 엉뚱한 곳으로 걷지 않게)
 
 // ============ 15. 가장 가까운 무리 → 전투 8초 ============
 const grp = await ev(() => {
@@ -262,7 +262,7 @@ let tgShot = null, dmgShot = null;
 for (let t = 0; t < 16; t++) {
   await wait(500);
   fpsSamples.push(await ev(() => Scenes.fps()));
-  const s = await ev(() => ({ tg: window.__healer.dungeon.battle.telegraphs.some((t) => !t.done), dn: FX && FX.list ? FX.list().some((f) => f.type === 'damage_number') : window.__e2e.damage > 0 }));
+  const s = await ev(() => ({ tg: window.__healer.dungeon.battle.telegraphs.some((t) => !t.done), dn: FX && FX.nums ? FX.nums().length > 0 : FX && FX.list ? FX.list().some((f) => f.type === 'damage_number') : window.__e2e.damage > 0 }));
   if (s.tg && !tgShot) tgShot = await shot('combat_telegraph');
   if (s.dn && !dmgShot && t >= 3) dmgShot = await shot('combat_damage_numbers');
 }

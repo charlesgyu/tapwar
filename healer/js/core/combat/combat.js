@@ -199,6 +199,7 @@ const Combat = (() => {
       let dmg = Math.max(1, amount * (o.mult || 1) - def) * rng.float(0.9, 1.1) * (crit ? CRIT_MULT : 1);
       dmg = Math.max(1, Math.round(dmg));
       dst.hp = Math.max(0, dst.hp - dmg);
+      if (dst.kind === 'monster') dst.lastHurt = B.time;   // Floor 의 "닿지 않는 원거리 몬스터" 판정용
       if (src && dst.kind === 'monster' && !o.noThreat) addThreat(dst, src, dmg);
       if (src && isParty(dst) && dst.kind === 'player' && has('Inventory') && Inventory.wear && G) Inventory.wear(G, 0.05);
       emit('damage', { src, dst, srcUid: src ? src.uid : null, dstUid: dst.uid, amount: dmg, evaded: false, crit, type: o.type || 'hit', skillId: o.skillId, abilityId: o.abilityId, hp: dst.hp });
@@ -587,7 +588,11 @@ const Combat = (() => {
       ent.state = 'attack'; faceTo(ent, tgt.x - ent.x, tgt.y - ent.y);
       if (ent.atkTimer > 0) return;
       ent.atkTimer = attackInterval(ent);
-      const dealt = damage(ent, tgt, attackPower(ent), { type: 'basic' });
+      const power = attackPower(ent);
+      // 휘두르기/폭발(Classes splash): 대상 주변 몬스터도 함께 맞는다. 대상이 이 공격으로 죽어도 주변 피해는 들어간다.
+      const splashed = ent.splash && isParty(ent) ? B.monsters.filter((m) => m !== tgt && alive(m) && dist(m, tgt) <= ent.splash.radius + m.radius) : null;
+      const dealt = damage(ent, tgt, power, { type: 'basic' });
+      if (splashed) for (const m of splashed) damage(ent, m, power * ent.splash.mult, { type: 'splash', noCrit: true });
       if (dealt > 0 && ent.kind === 'monster') rollCurses(ent, tgt);
     }
     function rollCurses(mon, dst) {

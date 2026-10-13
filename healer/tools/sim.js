@@ -148,11 +148,17 @@ function makeBot(ctx, fs, G) {
   }
   function follow(dt) {
     if (dist(p, S.target) <= ARRIVE[S.target.kind]) return arrive();
-    const wp = S.path[S.wp];
-    if (!wp) return arrive();
-    if (dist(p, wp) <= 6) { S.wp++; return; }
     const bx = p.x, by = p.y;
-    battle.moveTo(p, wp.x, wp.y, dt);
+    // 한 틱 동안 이동 예산(speed×dt)을 다 쓸 때까지 웨이포인트를 이어서 따라간다(예전엔 칸마다 한 틱씩 버려 실제 속도의 절반으로 걸었다)
+    let left = dt;
+    for (let hop = 0; hop < 6 && left > 1e-4; hop++) {
+      while (S.path[S.wp] && dist(p, S.path[S.wp]) <= 6) S.wp++;
+      const wp = S.path[S.wp];
+      if (!wp) return arrive();
+      const sp = p.speed > 0 ? p.speed : 1, part = Math.min(left, dist(p, wp) / sp + 1e-3);
+      if (!battle.moveTo(p, wp.x, wp.y, part)) break;
+      left -= part;
+    }
     if (dist(p, { x: bx, y: by }) >= 0.5 || (p.stats && p.stats.rooted)) { S.stuck = 0; return; }
     S.stuck += dt;
     if (S.stuck < STUCK_SECONDS) return;

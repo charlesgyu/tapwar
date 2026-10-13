@@ -10,6 +10,10 @@ const AIMonster = (() => {
   const HEAL_SELF_BELOW = 0.7, GROUP_CALL_RANGE = 10 * TILE;
   // 눈덩이 어그로: 무리가 덤비면 무리원 주변 4타일 안의 다른 몬스터(와 그 무리)까지 함께 달려든다(한 단계만 번진다).
   const NEIGHBOR_CALL_RANGE = 4 * TILE;
+  // 큰 무리의 일반 몬스터가 한꺼번에 능력을 쏟지 않게: 같은 무리에서 동시에 시전 중인 일반 몬스터는 최대 2마리
+  // (돌진 8개가 탱커에게 동시에 꽂히면 1~5층도 순식간에 전멸한다). 중간보스·보스는 제한 없음.
+  const GROUP_CAST_CAP = 2;
+  const REAGGRO_DELAY = 15;                                    // 리쉬·포기 뒤 15초 동안은 먼저 덤비지 않는다(맞으면 싸운다)
   const aggroSpeed = () => (mons() && mons().AGGRO_SPEED) || 1.35;
 
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -38,6 +42,7 @@ const AIMonster = (() => {
     if (dist(ent, p.to) <= HOME_SLACK || !battle.moveTo(ent, p.to.x, p.to.y, dt)) { p.to = null; p.wait = battle.rng.float(PATROL_WAIT[0], PATROL_WAIT[1]); ent.state = 'idle'; }
   }
   function lookForParty(ent, battle) {
+    if (ent.noAggroUntil > battle.time) return;            // 막 포기하고 돌아온 몬스터는 잠시 다시 덤비지 않는다(제자리 어그로 반복 방지)
     const found = battle.allies().find((e) => dist(e, ent) <= ent.aggroRange);
     if (found) aggroGroup(ent, battle, found);
   }
@@ -57,7 +62,7 @@ const AIMonster = (() => {
     return ent.groupId == null ? [ent] : battle.monsters.filter((m) => alive(m) && m.groupId === ent.groupId && dist(m, ent) <= GROUP_CALL_RANGE);
   }
   function engage(m, battle, found) {
-    if (m.aggro || m.returning) return;
+    if (m.aggro || m.returning || m.noAggroUntil > battle.time) return;
     m.aggro = true; m.target = found.uid; m.patrol = null;
     if (!m.threat[found.uid]) m.threat[found.uid] = 1;
     staggerCooldowns(m, battle);
@@ -88,6 +93,7 @@ const AIMonster = (() => {
   function leash(ent, battle) {
     ent.aggro = false; ent.threat = {}; ent.target = null; ent.returning = true;
     ent.hp = ent.maxHp; ent.curses = [];                         // 복귀하며 회복
+    ent.noAggroUntil = battle.time + REAGGRO_DELAY;
     ent.state = 'move';
   }
   function goHome(ent, battle, dt) {
@@ -105,8 +111,14 @@ const AIMonster = (() => {
   }
 
   // ---- 능력 ----
+  function groupCasting(ent, battle) {
+    let n = 0;
+    for (const m of battle.monsters) if (m !== ent && m.cast && m.groupId === ent.groupId && m.tier === 'normal' && alive(m)) n++;
+    return n;
+  }
   function tryAbility(ent, battle, tgt) {
     const M = mons(); if (!M || !ent.def) return false;
+    if (ent.tier === 'normal' && ent.groupId != null && ent.abilities.length && groupCasting(ent, battle) >= GROUP_CAST_CAP) return false;
     const ratio = ent.hp / ent.maxHp;
     trackPhase(ent, battle, ratio);
     for (const id of M.abilitiesFor(ent.def, ratio)) {

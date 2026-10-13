@@ -35,83 +35,112 @@
 @keyframes hud-pop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 /* ================= 던전 HUD (#dhud) — dungeon_scene.js 가 enter 때 만들고 exit 때 지운다 =================
-   어두운 숲/동굴 위에서도 읽히도록 반투명 짙은 패널 + 크림색 글자. 전부 #dhud 아래로 한정해 마을 HUD 와 충돌하지 않게 한다. */
-#dhud { position: absolute; inset: 0; pointer-events: none; z-index: 10; color: #f6ecd6; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
-  padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left)); }
+   레퍼런스(줌아웃 액션 RPG)처럼 최소한만: 왼쪽 위 층·골드·파티 요약, 가운데 위 해골 처치 배지, 오른쪽 위 일시정지,
+   아래 가운데 고정 조이스틱(캔버스), 오른쪽 아래 스킬 세로 줄 + AUTO. 글자는 패널 없이 굵은 흰 글씨 + 검은 외곽 그림자. */
+#dhud { --st: max(8px, env(safe-area-inset-top)); --sr: max(8px, env(safe-area-inset-right)); --sb: max(8px, env(safe-area-inset-bottom)); --sl: max(8px, env(safe-area-inset-left));
+  position: absolute; inset: 0; pointer-events: none; z-index: 10; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  --ol: 0 0 2px #000, 0 1px 0 #000, 1px 0 0 #000, -1px 0 0 #000, 0 -1px 0 #000, 0 2px 3px rgba(0,0,0,0.6); }
 #dhud .hidden { display: none !important; }
-#dhud button { font-family: inherit; -webkit-tap-highlight-color: transparent; }
-#dhud .panel { background: rgba(30, 22, 28, 0.82); border: 1.5px solid #8a6a48; border-radius: 10px; box-shadow: 0 2px 0 rgba(0,0,0,0.45); }
-#dhud .dh-top { display: flex; flex-direction: column; gap: 5px; }
-/* 파티 프레임 5개 */
-#dhud .dh-party { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; pointer-events: auto; }
-#dhud .dh-pf { position: relative; min-height: 44px; padding: 4px 5px 5px; border: 1.5px solid #8a6a48; border-radius: 9px; background: rgba(30, 22, 28, 0.82); text-align: left; color: inherit; overflow: hidden; }
-#dhud .dh-pf.me { border-color: #e2c26a; }
-#dhud .dh-pf.sel { border-color: #7fe07a; box-shadow: 0 0 0 2px rgba(127, 224, 122, 0.55); }
-#dhud .dh-pf .nm { display: flex; align-items: center; gap: 2px; font-size: 10.5px; font-weight: 800; white-space: nowrap; overflow: hidden; }
-#dhud .dh-pf .nm b { flex: none; font-size: 10px; }
-#dhud .dh-pf .nm span { overflow: hidden; text-overflow: ellipsis; }
-#dhud .dh-bar { position: relative; height: 7px; margin-top: 3px; border-radius: 3px; background: #3a2a2e; overflow: hidden; border: 1px solid rgba(0,0,0,0.5); }
-#dhud .dh-bar.mp { height: 4px; margin-top: 2px; }
+#dhud button { font-family: inherit; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+#dhud .panel { background: rgba(26, 18, 24, 0.9); border: 1.5px solid #8a6a48; border-radius: 12px; box-shadow: 0 3px 0 rgba(0,0,0,0.45); }
+/* 왼쪽 위: 층 · 골드 */
+#dhud .dh-res { position: absolute; left: var(--sl); top: var(--st); display: flex; flex-direction: column; gap: 4px; }
+#dhud .dh-res .r { display: flex; align-items: center; gap: 8px; height: 22px; }
+#dhud .dh-res b { font-size: 16px; font-weight: 900; text-shadow: var(--ol); letter-spacing: 0.3px; }
+#dhud .ico { display: inline-block; width: 20px; height: 20px; flex: none; }
+#dhud .ico.coin { border-radius: 50%; background: radial-gradient(circle at 38% 35%, #fff6c0 0 18%, #ffd040 20% 58%, #e09a18 60% 100%); box-shadow: 0 0 0 1.5px #5a3410, 0 1px 2px rgba(0,0,0,0.6); }
+#dhud .ico.stairs { background:
+    linear-gradient(#5ae0ff, #2a9ad0) 0 14px / 20px 6px no-repeat,
+    linear-gradient(#5ae0ff, #2a9ad0) 6px 8px / 14px 6px no-repeat,
+    linear-gradient(#8af0ff, #3ab0e0) 12px 2px / 8px 6px no-repeat;
+  filter: drop-shadow(0 0 1px #000) drop-shadow(0 1px 0 #000); }
+/* 파티 한 줄 요약(세로로 쌓은 작은 칸) */
+#dhud .dh-party { position: absolute; left: var(--sl); top: calc(var(--st) + 56px); display: flex; flex-direction: column; gap: 3px; pointer-events: auto; }
+#dhud .dh-pf { position: relative; display: flex; align-items: center; gap: 4px; width: 76px; height: 24px; padding: 0 5px 0 3px; border: 1px solid rgba(255,255,255,0.12); border-radius: 7px; background: rgba(16, 10, 14, 0.55); color: #fff; }
+#dhud .dh-pf.me { border-color: rgba(242, 211, 91, 0.75); }
+#dhud .dh-pf.sel { border-color: #7fe07a; box-shadow: 0 0 0 2px rgba(127, 224, 122, 0.5); }
+#dhud .dh-pf.down { opacity: 0.7; }
+#dhud .dh-pf > b { width: 15px; flex: none; font-size: 11px; line-height: 1; text-align: center; }
+#dhud .dh-pf .bars { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#dhud .dh-bar { position: relative; display: block; height: 6px; border-radius: 3px; background: #2a1e22; overflow: hidden; box-shadow: 0 0 0 1px rgba(0,0,0,0.7); }
+#dhud .dh-bar.mp { height: 3px; }
 #dhud .dh-bar i { display: block; height: 100%; width: 100%; transition: width 0.12s linear; background: linear-gradient(#8af07a, #3fae46); }
 #dhud .dh-bar.low i { background: linear-gradient(#ffd27a, #e0902a); }
 #dhud .dh-bar.crit i { background: linear-gradient(#ff8a7a, #d83a3a); }
 #dhud .dh-bar.mp i { background: linear-gradient(#8ac8ff, #3a86e0); }
-#dhud .dh-pf .cs { position: absolute; right: 3px; top: 3px; display: flex; gap: 1px; font-size: 10px; line-height: 13px; }
-#dhud .dh-pf .cs:empty { display: none; }
-#dhud .dh-pf .hpn { display: block; margin-top: 2px; font-size: 9px; font-weight: 800; color: #c9b89a; line-height: 10px; }
-#dhud .dh-pf .cs em { font-style: normal; background: rgba(150, 70, 200, 0.75); border-radius: 3px; padding: 0 1px; }
-#dhud .dh-pf .dead { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 2px; background: rgba(20, 10, 14, 0.72); font-size: 11px; font-weight: 900; color: #ff9a8a; }
-/* 층 이름 + 카운터 */
-#dhud .dh-info { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 3px 8px; font-size: 11px; font-weight: 800; }
-#dhud .dh-info .fl { color: #f2d35b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#dhud .dh-info .ct { display: flex; gap: 8px; white-space: nowrap; color: #e9dcc5; }
+#dhud .dh-pf .cs { position: absolute; right: -4px; top: -5px; font-size: 11px; color: #d89aff; text-shadow: var(--ol); }
+#dhud .dh-pf .dead { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; background: rgba(20, 8, 12, 0.6); border-radius: 7px; }
+/* 가운데 위: 해골 처치 배지 */
+#dhud .dh-kill { position: absolute; left: 50%; top: var(--st); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
+#dhud .dh-kill .badge { width: 58px; height: 58px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6)); }
+#dhud .dh-kill .badge svg { width: 100%; height: 100%; display: block; }
+#dhud .dh-kill .badge .ring { transition: stroke-dashoffset 0.15s ease-out; }
+#dhud .dh-kill .kn { margin-top: -4px; display: flex; align-items: baseline; gap: 3px; text-shadow: var(--ol); line-height: 1; }
+#dhud .dh-kill .kn b { font-size: 30px; font-weight: 900; letter-spacing: -0.5px; }
+#dhud .dh-kill .kn span { font-size: 14px; font-weight: 900; }
+#dhud .dh-kill small { margin-top: 1px; font-size: 10px; font-weight: 900; color: #3fd8c8; text-shadow: var(--ol); white-space: nowrap; }
+#dhud .dh-kill.hot small { color: #ffe14a; }
+#dhud .dh-kill.bump .kn b { animation: dh-bump 0.18s ease-out; }
+@keyframes dh-bump { from { transform: scale(1.25); } to { transform: scale(1); } }
 /* 보스 HP 바 */
-#dhud .dh-boss { padding: 4px 8px 6px; border-color: #c04a3a; }
-#dhud .dh-boss .bn { display: flex; justify-content: space-between; font-size: 12px; font-weight: 900; color: #ffcf9a; }
+#dhud .dh-boss { position: absolute; left: 50%; top: calc(var(--st) + 104px); transform: translateX(-50%); width: min(calc(100% - 196px), 300px); padding: 3px 8px 5px; border-radius: 10px; background: rgba(26, 12, 16, 0.78); border: 1.5px solid #c04a3a; }
+#dhud .dh-boss .bn { display: flex; justify-content: space-between; gap: 6px; font-size: 11px; font-weight: 900; color: #ffcf9a; white-space: nowrap; overflow: hidden; }
+#dhud .dh-boss .bn span { overflow: hidden; text-overflow: ellipsis; }
 #dhud .dh-boss .bn small { color: #ff9a8a; font-weight: 800; }
-#dhud .dh-boss .dh-bar { height: 10px; }
+#dhud .dh-boss .dh-bar { height: 8px; margin-top: 2px; }
 #dhud .dh-boss .dh-bar i { background: linear-gradient(#ff7a5a, #b8282a); }
-/* 오른쪽 세로 버튼 */
-#dhud .dh-side { position: absolute; right: max(6px, env(safe-area-inset-right)); top: 128px; display: flex; flex-direction: column; gap: 6px; pointer-events: auto; }
-#dhud .dh-side.boss { top: 172px; }
-#dhud .dh-side button { width: 46px; height: 46px; border: 1.5px solid #8a6a48; border-radius: 12px; background: rgba(30, 22, 28, 0.82); color: #f6ecd6; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 18px; line-height: 1; padding: 0; }
-#dhud .dh-side button small { font-size: 9px; font-weight: 800; margin-top: 2px; }
-#dhud .dh-side button.on { border-color: #7fe07a; background: rgba(40, 70, 40, 0.88); }
-#dhud .dh-side button:active, #dhud .dh-sk:active, #dhud .dh-pf:active { transform: translateY(1px); }
+/* 오른쪽 위: 일시정지 · 지도 */
+#dhud .dh-pausebtn, #dhud .dh-mapbtn { position: absolute; right: var(--sr); width: 44px; height: 44px; border: 0; border-radius: 12px; background: rgba(16, 10, 14, 0.55); pointer-events: auto; color: #fff; padding: 0; }
+#dhud .dh-pausebtn { top: var(--st); display: flex; align-items: center; justify-content: center; gap: 6px; }
+#dhud .dh-pausebtn i { display: block; width: 6px; height: 20px; border-radius: 2px; background: #e8e2e6; box-shadow: 0 0 0 1px rgba(0,0,0,0.5); }
+#dhud .dh-mapbtn { top: calc(var(--st) + 52px); font-size: 20px; }
+#dhud .dh-mapbtn.on { background: rgba(40, 70, 40, 0.85); box-shadow: inset 0 0 0 1.5px #7fe07a; }
+#dhud .dh-pausebtn:active, #dhud .dh-mapbtn:active, #dhud .dh-sk:active, #dhud .dh-auto:active, #dhud .dh-pf:active { transform: scale(0.94); }
 /* 미니맵 */
-#dhud .dh-map { position: absolute; right: 58px; top: 128px; width: 150px; height: 150px; border: 2px solid #8a6a48; border-radius: 10px; background: #120e14; image-rendering: pixelated; pointer-events: auto; box-shadow: 0 3px 10px rgba(0,0,0,0.5); }
-#dhud .dh-map.boss { top: 172px; }
+#dhud .dh-map { position: absolute; right: var(--sr); top: calc(var(--st) + 150px); width: 150px; height: 150px; border: 2px solid #8a6a48; border-radius: 10px; background: #120e14; image-rendering: pixelated; pointer-events: auto; box-shadow: 0 3px 10px rgba(0,0,0,0.5); }
 /* 위험 경고(텔레그래프 안) */
 #dhud .dh-warn { position: absolute; inset: 0; pointer-events: none; opacity: 0; box-shadow: inset 0 0 40px 12px rgba(255, 40, 30, 0.75); transition: opacity 0.15s; }
 #dhud .dh-warn.on { opacity: 1; animation: dh-pulse 0.5s ease-in-out infinite alternate; }
-#dhud .dh-warn-txt { position: absolute; left: 50%; bottom: 200px; transform: translateX(-50%); padding: 4px 10px; border-radius: 8px; background: rgba(160, 20, 20, 0.85); font-size: 13px; font-weight: 900; color: #fff; white-space: nowrap; }
+#dhud .dh-warn-txt { position: absolute; left: 50%; bottom: calc(var(--sb) + 250px); transform: translateX(-50%); padding: 4px 10px; border-radius: 8px; background: rgba(160, 20, 20, 0.85); font-size: 13px; font-weight: 900; color: #fff; white-space: nowrap; }
 @keyframes dh-pulse { from { opacity: 0.55; } to { opacity: 1; } }
-/* 하단: 시전 바 + 탐험 상태 + 스킬 바 */
-#dhud .dh-bottom { position: absolute; left: max(6px, env(safe-area-inset-left)); right: max(6px, env(safe-area-inset-right)); bottom: max(6px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; gap: 5px; }
-#dhud .dh-cast { position: relative; width: 62%; height: 18px; border-radius: 9px; background: rgba(30, 22, 28, 0.85); border: 1.5px solid #e2c26a; overflow: hidden; }
+/* 연속킬 보너스! — 화면 가운데 큰 노란 글자 */
+#dhud .dh-combo { position: absolute; left: 0; right: 0; top: 30%; display: flex; flex-direction: column; align-items: center; opacity: 0; pointer-events: none; }
+#dhud .dh-combo b { font-size: 34px; font-weight: 900; color: #ffe14a; letter-spacing: -0.5px; white-space: nowrap;
+  text-shadow: 0 0 3px #4a1a00, 0 2px 0 #4a1a00, 2px 0 0 #4a1a00, -2px 0 0 #4a1a00, 0 -2px 0 #4a1a00, 2px 2px 0 #4a1a00, -2px 2px 0 #4a1a00, 0 4px 8px rgba(0,0,0,0.6); }
+#dhud .dh-combo small { margin-top: 2px; font-size: 14px; font-weight: 900; color: #fff6c0; text-shadow: var(--ol); }
+#dhud .dh-combo.show { animation: dh-combo 1.5s ease-out forwards; }
+@keyframes dh-combo { 0% { opacity: 0; transform: scale(2.2); } 10% { opacity: 1; transform: scale(0.92); } 18% { transform: scale(1.06); } 26% { transform: scale(1); } 75% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-26px); } }
+/* 아래 가운데: 시전 바 · 탐험 상태(조이스틱 위) */
+#dhud .dh-cast { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--sb) + 178px); width: 150px; height: 16px; border-radius: 8px; background: rgba(16, 10, 14, 0.75); box-shadow: 0 0 0 1.5px #e2c26a; overflow: hidden; }
 #dhud .dh-cast i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: linear-gradient(#fff2b0, #e2b84a); transition: width 0.1s linear; }
-#dhud .dh-cast span { position: absolute; inset: 0; text-align: center; font-size: 11px; font-weight: 900; line-height: 15px; color: #fff; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
-#dhud .dh-status { font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 8px; background: rgba(30, 22, 28, 0.75); color: #bfe8a0; }
-#dhud .dh-skills { width: 100%; max-width: 440px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 5px; pointer-events: auto; }
-#dhud .dh-sk { position: relative; min-height: 54px; border: 1.5px solid #6a5040; border-radius: 10px; background: linear-gradient(#4a3a3e, #2e2428); color: #f6ecd6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 2px 1px; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
-#dhud .dh-sk .ic { font-size: 19px; line-height: 1.05; }
-#dhud .dh-sk .nm { font-size: 10px; font-weight: 800; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-#dhud .dh-sk .sub { font-size: 9px; color: #9ac8ff; font-weight: 700; white-space: nowrap; }
-#dhud .dh-sk .more { position: absolute; right: 3px; top: 1px; font-size: 9px; color: #e2c26a; }
-#dhud .dh-sk .badge { position: absolute; left: 3px; top: 2px; min-width: 14px; height: 14px; border-radius: 7px; background: #d9534f; font-size: 9px; font-weight: 900; line-height: 14px; text-align: center; padding: 0 3px; }
-#dhud .dh-sk .cd { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0, 0, 0, 0.6); pointer-events: none; }
-#dhud .dh-sk .cdt { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 900; color: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; }
+#dhud .dh-cast span { position: absolute; inset: 0; text-align: center; font-size: 10px; font-weight: 900; line-height: 16px; color: #fff; text-shadow: var(--ol); }
+#dhud .dh-status { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--sb) + 200px); font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 8px; background: rgba(16, 10, 14, 0.6); color: #bfe8a0; white-space: nowrap; }
+/* 오른쪽 아래: 스킬 세로 줄(둥근 버튼, 쿨타임 원뿔) + AUTO */
+#dhud .dh-col { position: absolute; right: var(--sr); bottom: calc(var(--sb) + 76px); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: auto; }
+#dhud .dh-sk { --cd: 0deg; position: relative; width: 52px; height: 52px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.28); background: radial-gradient(circle at 50% 40%, #4a3a44, #221820 72%); color: #fff; display: flex; align-items: center; justify-content: center; padding: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+#dhud .dh-sk::after { content: ''; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(rgba(0,0,0,0.68) var(--cd), transparent 0); pointer-events: none; }
+#dhud .dh-sk .ic { font-size: 22px; line-height: 1; margin-top: -4px; }
+#dhud .dh-sk .sub { position: absolute; bottom: 3px; left: 0; right: 0; text-align: center; font-size: 9px; font-weight: 900; color: #9ac8ff; text-shadow: var(--ol); }
+#dhud .dh-sk .cdt { position: absolute; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; font-size: 17px; font-weight: 900; color: #fff; text-shadow: var(--ol); pointer-events: none; }
+#dhud .dh-sk .badge { position: absolute; z-index: 1; right: 2px; top: 2px; min-width: 15px; height: 15px; border-radius: 8px; background: #d9534f; font-size: 9px; font-weight: 900; line-height: 15px; text-align: center; padding: 0 3px; }
+#dhud .dh-sk.small { width: 40px; height: 32px; border-radius: 16px; }
+#dhud .dh-sk.small .ic { margin: 0; font-size: 18px; font-weight: 900; }
+#dhud .dh-sk.ult { border-color: rgba(255, 214, 90, 0.6); background: radial-gradient(circle at 50% 40%, #6a5030, #2a1c14 72%); }
 #dhud .dh-sk.nomp .sub { color: #ff7a6a; }
-#dhud .dh-sk.nomp { border-color: #8a3a3a; }
-#dhud .dh-sk.locked { opacity: 0.5; background: #2a2226; }
+#dhud .dh-sk.locked { opacity: 0.45; }
 #dhud .dh-sk.locked .sub { color: #c9b89a; }
-#dhud .dh-sk.toggle.on { border-color: #7fe07a; background: linear-gradient(#3f6a3a, #24402a); }
-#dhud .dh-sk.toggle.on .sub { color: #bff0a0; }
-#dhud .dh-sk.ready { border-color: #e2c26a; box-shadow: inset 0 0 8px rgba(226, 194, 106, 0.6); }
-#dhud .dh-sk.casting { border-color: #fff2b0; box-shadow: 0 0 0 2px rgba(255, 242, 176, 0.6); }
-/* 길게 누르기 선택 / 버프 메뉴 */
-#dhud .dh-back { position: absolute; inset: 0; pointer-events: auto; background: rgba(0,0,0,0.25); }
-#dhud .dh-pop { position: absolute; left: 10px; right: 10px; bottom: 150px; max-width: 420px; margin: 0 auto; padding: 8px; pointer-events: auto; display: flex; flex-direction: column; gap: 6px; animation: hud-pop 0.15s ease-out; }
+#dhud .dh-sk.ready { border-color: #ffd65a; box-shadow: 0 0 0 2px rgba(255, 214, 90, 0.35), 0 0 12px rgba(255, 214, 90, 0.55); }
+#dhud .dh-sk.casting { border-color: #fff2b0; box-shadow: 0 0 0 3px rgba(255, 242, 176, 0.7); }
+#dhud .dh-auto { position: absolute; right: var(--sr); bottom: var(--sb); width: 60px; height: 60px; border: 0; border-radius: 16px; background: rgba(16, 10, 14, 0.5); color: #fff; pointer-events: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 0; }
+#dhud .dh-auto .ic { font-size: 24px; line-height: 1; filter: grayscale(1) brightness(1.6); }
+#dhud .dh-auto b { font-size: 11px; font-weight: 900; letter-spacing: 0.5px; text-shadow: var(--ol); color: #d8d0d4; }
+#dhud .dh-auto.on { background: rgba(60, 46, 10, 0.7); box-shadow: inset 0 0 0 2px #ffd65a, 0 0 14px rgba(255, 214, 90, 0.5); }
+#dhud .dh-auto.on .ic { filter: none; animation: dh-spin 1.6s linear infinite; }
+#dhud .dh-auto.on b { color: #ffe14a; }
+@keyframes dh-spin { 0% { transform: rotate(-12deg); } 50% { transform: rotate(12deg); } 100% { transform: rotate(-12deg); } }
+/* 길게 누르기 선택 / 더보기 메뉴 */
+#dhud .dh-back { position: absolute; inset: 0; pointer-events: auto; background: rgba(0,0,0,0.3); }
+#dhud .dh-pop { position: absolute; left: 10px; right: 72px; bottom: calc(var(--sb) + 90px); max-width: 400px; margin: 0 auto; padding: 8px; pointer-events: auto; display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto; animation: hud-pop 0.15s ease-out; color: #f6ecd6; }
 #dhud .dh-pop .pt { font-size: 12px; font-weight: 900; color: #f2d35b; padding: 0 2px; }
 #dhud .dh-pop button { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 6px 10px; border: 1.5px solid #6a5040; border-radius: 9px; background: #3a2e32; color: #f6ecd6; text-align: left; }
 #dhud .dh-pop button.cur { border-color: #7fe07a; }
@@ -121,5 +150,20 @@
 #dhud .dh-pop button .tx b { display: block; font-size: 13px; }
 #dhud .dh-pop button .tx small { display: block; font-size: 10px; color: #c9b89a; }
 #dhud .dh-pop button .mp { font-size: 11px; color: #9ac8ff; font-weight: 800; white-space: nowrap; }
-/* 던전에선 공통 토스트가 스킬 바를 가리지 않게 시전 바 위로 올린다(ui.css 는 공통이라 여기서만 덮어쓴다) */
-body:has(#dhud) #ui-toast { bottom: calc(max(6px, env(safe-area-inset-bottom)) + 168px); }
+/* 일시정지 메뉴 */
+#dhud .dh-pause { position: absolute; inset: 0; z-index: 5; pointer-events: auto; background: rgba(6, 4, 8, 0.6); display: flex; align-items: center; justify-content: center; padding: 20px; }
+#dhud .dh-pause .panel { width: min(100%, 300px); padding: 14px; display: flex; flex-direction: column; gap: 8px; color: #f6ecd6; animation: hud-pop 0.15s ease-out; }
+#dhud .dh-pause .pt { text-align: center; font-size: 18px; font-weight: 900; color: #f2d35b; margin-bottom: 4px; }
+#dhud .dh-pause button { min-height: 48px; border: 1.5px solid #6a5040; border-radius: 10px; background: #3a2e32; color: #f6ecd6; font-size: 15px; font-weight: 800; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px 12px; }
+#dhud .dh-pause button.primary { background: linear-gradient(#5aa84a, #3a7a32); border-color: #2f6b2f; color: #fff; }
+#dhud .dh-pause button.danger { background: #5a2a2e; border-color: #8a3a3a; }
+#dhud .dh-pause button.sub { background: transparent; border-color: transparent; color: #c9b89a; font-size: 13px; min-height: 40px; }
+#dhud .dh-pause button.tg { justify-content: space-between; text-align: left; }
+#dhud .dh-pause button.tg .tx b { display: block; font-size: 14px; }
+#dhud .dh-pause button.tg .tx small { display: block; font-size: 10px; color: #c9b89a; font-weight: 600; }
+#dhud .dh-pause button.tg .sw { flex: none; width: 40px; height: 22px; border-radius: 11px; background: #5a4a4e; position: relative; transition: background 0.15s; }
+#dhud .dh-pause button.tg .sw::after { content: ''; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left 0.15s; }
+#dhud .dh-pause button.tg.on .sw { background: #5ac04a; }
+#dhud .dh-pause button.tg.on .sw::after { left: 21px; }
+/* 던전에선 공통 토스트가 조이스틱·스킬 줄을 가리지 않게 위로 올린다(ui.css 는 공통이라 여기서만 덮어쓴다) */
+body:has(#dhud) #ui-toast { bottom: calc(max(8px, env(safe-area-inset-bottom)) + 224px); }

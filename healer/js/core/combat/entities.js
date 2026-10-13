@@ -51,6 +51,7 @@ const Entities = (() => {
     ent.name = src.name; ent.cls = src.cls; ent.level = src.level || 1; ent.src = src;
     ent.sprite = src.cls; ent.atkType = ci ? ci.atkType : 'melee'; ent.range = ci ? ci.range : 40;
     ent.atkInterval = ci ? ci.atkInterval : 1.0; ent.dmgStat = ci ? ci.dmgStat : 'atk';
+    ent.splash = ci && ci.splash ? Object.assign({}, ci.splash) : null;
     // 음식 버프(G.player.buffs)는 전투 엔티티로 복사되어 Stats.derive 가 읽는다
     ent.buffs = Array.isArray(src.buffs) ? src.buffs.map((b) => Object.assign({}, b)) : [];
     ent.hp = Infinity; ent.mp = Infinity;
