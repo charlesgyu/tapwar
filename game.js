@@ -4505,6 +4505,8 @@ function drawMinimap(timestamp) {
   // 현재 보고 있는 화면 영역
   const vr = visibleWorldRect();
   const vx = vr.minX, vy = vr.minY, vw = vr.maxX - vr.minX, vh = vr.maxY - vr.minY;
+  // 화면이 지도 전체를 보여 주면 사각형이 미니맵 테두리처럼 보이므로 그리지 않음
+  if (vx <= L.area.x && vy <= L.area.y && vx + vw >= L.area.x + L.area.w && vy + vh >= L.area.y + L.area.h) return;
   // 흰 테두리 + 잉크 선: 파랑·빨강 땅 위에서도 읽힘 (노랑은 '본진' 뜻이라 쓰지 않음)
   m.lineWidth = 3 / L.scale;
   m.strokeStyle = 'rgba(255,255,255,0.75)';
