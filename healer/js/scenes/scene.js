@@ -42,7 +42,18 @@ const Scenes = (() => {
     const end = (e) => {
       if (e.pointerId !== joy.id) return;
       const wasActive = joy.active;
-      if (!joy.moved && current && current.onTap) { const w = screenToWorld(e.clientX, e.clientY); current.onTap(w.x, w.y, e.clientX, e.clientY); }
+      if (!joy.moved && current) {
+        // 더블탭(0.32초 안, 40px 이내 두 번째 탭) → 캐릭터 중심 원형 메뉴. 첫 탭의 이동은 취소한다.
+        const now = performance.now();
+        if (lastTap && now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) {
+          lastTap = null;
+          if (current.onDoubleTap) current.onDoubleTap();
+          openRadial();
+        } else {
+          lastTap = { t: now, x: e.clientX, y: e.clientY };
+          if (current.onTap) { const w = screenToWorld(e.clientX, e.clientY); current.onTap(w.x, w.y, e.clientX, e.clientY); }
+        }
+      }
       joy.id = null; joy.active = false; joy.dx = 0; joy.dy = 0;
       if (wasActive && current && current.onJoyEnd) current.onJoyEnd();
     };
@@ -192,18 +203,58 @@ const Scenes = (() => {
   }
 
   // ---------- 루프 ----------
+  // ---------- 더블탭 원형 메뉴 ----------
+  // 가방·상태·퀘스트·파티를 평소엔 숨겨 두고, 더블탭하면 캐릭터 둘레에 펼친다. 열려 있는 동안 게임은 멈춘다.
+  let lastTap = null, radialEl = null;
+  const RADIAL_ITEMS = [
+    { id: 'inventory', icon: '🎒', label: '가방' },
+    { id: 'status', icon: '📜', label: '상태' },
+    { id: 'quests', icon: '❗', label: '퀘스트' },
+    { id: 'party', icon: '🛡️', label: '파티' },
+  ];
+  function radialOpen() { return !!radialEl; }
+  function closeRadial() { if (radialEl) { radialEl.remove(); radialEl = null; } }
+  function openRadial() {
+    if (radialEl || (typeof UI !== 'undefined' && UI.isOpen())) return;
+    // 중심 = 현재 씬의 플레이어(없으면 화면 중앙). 화면 밖으로 나가지 않게 가장자리에서 띄운다.
+    const a = current && current.menuAnchor ? current.menuAnchor() : null;
+    let cx = view.cssW / 2, cy = view.cssH / 2;
+    if (a) { const p = worldToScreen(a.x, a.y); cx = p.x / view.DPR; cy = p.y / view.DPR; }
+    const R = 78, M = R + 40;
+    cx = Math.max(M, Math.min(view.cssW - M, cx)); cy = Math.max(M + 40, Math.min(view.cssH - M - 40, cy));
+    radialEl = document.createElement('div');
+    radialEl.className = 'radial-menu';
+    radialEl.addEventListener('pointerdown', (e) => { if (e.target === radialEl) { e.preventDefault(); closeRadial(); } });
+    const n = RADIAL_ITEMS.length;
+    RADIAL_ITEMS.forEach((it, i) => {
+      const ang = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+      const b = document.createElement('button');
+      b.className = 'radial-item';
+      b.style.left = (cx + Math.cos(ang) * R) + 'px'; b.style.top = (cy + Math.sin(ang) * R) + 'px';
+      b.style.animationDelay = (i * 0.03) + 's';
+      b.innerHTML = `<span class="ic">${it.icon}</span><span class="lb">${it.label}</span>`;
+      b.addEventListener('click', (e) => { e.stopPropagation(); closeRadial(); if (typeof UI !== 'undefined') UI.open(it.id); });
+      radialEl.appendChild(b);
+    });
+    const hub = document.createElement('div');
+    hub.className = 'radial-hub'; hub.style.left = cx + 'px'; hub.style.top = cy + 'px';
+    radialEl.appendChild(hub);
+    document.body.appendChild(radialEl);
+  }
+
   function loop(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
     fpsAcc += dt; fpsN++; if (fpsAcc >= 1) { fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; }
     if (current && !paused) {
       const uiOpen = typeof UI !== 'undefined' && UI.isOpen();
-      try { if (!uiOpen || current.updateWhileUI) current.update(dt); } catch (e) { console.error('[Scenes] update', e); }
+      // 메뉴(모달·원형 메뉴)가 열려 있으면 게임 시간을 멈춘다(그리기는 계속)
+      try { if ((!uiOpen || current.updateWhileUI) && !radialEl) current.update(dt); } catch (e) { console.error('[Scenes] update', e); }
       try { current.draw(view.ctx, view); } catch (e) { console.error('[Scenes] draw', e); }
     }
     requestAnimationFrame(loop);
   }
   function setPaused(p) { paused = !!p; }
 
-  return { init, register, go, current: () => current, name: () => currentName, view, joy, keys, screenToWorld, worldToScreen, followCamera, moveAxis, beginWorld, endWorld, visible, camX, camY, roundRect, drawLabel, drawBubble, drawMiniBar, drawJoystick, setPaused, fps: () => fps, FONT };
+  return { init, register, go, current: () => current, name: () => currentName, view, joy, keys, screenToWorld, worldToScreen, followCamera, moveAxis, beginWorld, endWorld, visible, camX, camY, roundRect, drawLabel, drawBubble, drawMiniBar, drawJoystick, setPaused, fps: () => fps, FONT, openRadial, closeRadial, radialOpen };
 })();
 if (typeof module !== 'undefined') module.exports = Scenes;

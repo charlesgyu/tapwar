@@ -395,7 +395,7 @@ const TownScene = (() => {
         unsubs.push(Events.on('chapter_advanced', checkTownEvent));
       }
       updateHud(true);
-      if (!entered) UI.toast('화면을 터치하면 그곳으로 걸어가요. 드래그하면 조이스틱!', 3500);
+      if (!entered) UI.toast('탭하면 이동, 드래그하면 조이스틱, 두 번 탭하면 메뉴!', 3500);
       entered = true;
       checkTownEvent();
     },
@@ -419,6 +419,9 @@ const TownScene = (() => {
     draw,
     onTap,
     onJoyStart() { if (player) { player.path = null; player.onArrive = null; } },
+    // 더블탭 원형 메뉴: 첫 탭으로 시작한 이동은 취소하고 캐릭터를 중심으로 연다
+    onDoubleTap() { if (player) { player.path = null; player.onArrive = null; } tapMark = null; },
+    menuAnchor() { return player ? { x: player.x, y: player.y - 18 } : null; },
   };
   Scenes.register('town', scene);
 

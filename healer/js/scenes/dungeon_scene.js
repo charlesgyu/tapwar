@@ -1150,6 +1150,9 @@ const DungeonScene = (() => {
 
   const scene = {
     enter, exit, update, draw, onTap,
+    // 더블탭 원형 메뉴: 첫 탭 이동 취소, 플레이어 중심
+    onDoubleTap() { if (route && route.kind === 'tap') route = null; tapMark = null; },
+    menuAnchor() { return player ? { x: player.x, y: player.y - 18 } : null; },
     // 배율: 가로 약 19타일(줌아웃 — 무리를 멀리서 보며 쓸어 담는 느낌). 실제 배율은 Scenes.applyZoom 이 0.25/0.5 단위로 맞춘다
     zoomDivisor: 19 * TILE,
     // 고정 조이스틱: 화면 아래 가운데(바닥에서 118px)

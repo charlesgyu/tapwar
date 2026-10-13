@@ -155,7 +155,7 @@ step('상인 포션 구매', ok && potions >= 10, `작은 체력 포션 ${potion
 await closeScreen();
 
 // ============ 6. 가방: 벨트 등록 + 장착 ============
-await page.locator('#btn-inventory').click();
+await page.evaluate(() => Scenes.openRadial()); await page.locator('.radial-item', { hasText: '가방' }).click(); // 하단 바 대신 더블탭 원형 메뉴
 await until(() => UI.current() && UI.current().name === 'inventory');
 await page.locator(`#ui-root .inv-cell[aria-label="${potionName}"]`).first().click(); await wait(150);
 await clickBtn('벨트 등록');
