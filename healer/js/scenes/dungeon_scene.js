@@ -8,6 +8,8 @@ const DungeonScene = (() => {
   const HUD_EVERY = 0.1;                     // HUD 갱신 주기(초)
   const MANUAL_HOLD = 1.5;                   // 수동 조작 뒤 이 시간 동안은 자동 이동(따라가기·탐험)을 하지 않는다
   const FOLLOW_START = 3 * TILE, FOLLOW_FORCE = 7 * TILE, FOLLOW_STOP = 24, FOLLOW_BEHIND = 2 * TILE;
+  const HEALER_BACK = 2.7 * TILE;            // 자동 탐험(탱커 앞장)에서 힐러가 서는 자리: 앞장이 발자국 2.7타일 뒤(딜러들 뒤)
+  const SAY_LIFE = 1.8, SAY_MAX = 3;         // 파티 말풍선: 1.8초, 화면에 최대 3개
   const TAP_PICK_R = 18;                     // 파티원 탭 판정 반경(px, 몸통 중심 기준)
   const ASTAR_BUDGET = 14000;                // 탭 길찾기 노드 상한(160×160 맵 전체를 뒤지지 않게)
   const ACTIVE_R = (typeof Combat !== 'undefined' && Combat.ACTIVE_RANGE) || 20 * TILE;
@@ -35,7 +37,7 @@ const DungeonScene = (() => {
   // ---------------- 상태 ----------------
   let G = null, fs = null, map = null, battle = null, player = null, floorNo = 1;
   let time = 0, hudAcc = 0, manualT = 99, ending = false, blockers = 0;
-  let route = null;                          // { kind: 'tap'|'explore'|'follow', pts: [{x,y}], stuck, at }
+  let route = null;                          // { kind: 'tap'|'explore'|'follow'|'lead', pts: [{x,y}], stuck, at }
   let followMoving = false, tapMark = null, selUid = null;
   const explore = { on: false, target: null, done: new Set(), unreachable: new Set(), rest: 0, wait: 0, lead: 0, status: '' };
   const chunks = new Map();                  // 'ci,cj' → canvas (LRU: Map 삽입 순서 = 오래된 순)
@@ -198,8 +200,10 @@ const DungeonScene = (() => {
     if (fs.bossDefeated) list.push({ kind: 'exit', id: 'exit', i: map.exit.i, j: map.exit.j, x: map.exit.x, y: map.exit.y, r: 8 });
     return list;
   }
-  function chooseExplore() {
-    const i0 = Math.floor(player.x / TILE), j0 = Math.floor(player.y / TILE);
+  // from: 길을 찾을 출발점(기본 힐러, 탱커가 앞장서면 탱커). 경로는 route(힐러 직접) 또는 반환값(앞장이에게 줄 것)으로.
+  function chooseExplore(from) {
+    const src = from || player;
+    const i0 = Math.floor(src.x / TILE), j0 = Math.floor(src.y / TILE);
     const B = bfsFrom(i0, j0), cols = map.cols;
     let best = null;
     for (const c of exploreCandidates()) {
@@ -213,6 +217,7 @@ const DungeonScene = (() => {
     const pts = [];
     for (let k = best.c.j * cols + best.c.i; k >= 0 && k !== j0 * cols + i0; k = B.prev[k]) pts.push({ x: (k % cols + 0.5) * TILE, y: (((k / cols) | 0) + 0.5) * TILE });
     explore.target = best.c;
+    if (from) return pts.reverse();
     route = { kind: 'explore', pts: pts.reverse(), at: time };
     return true;
   }
@@ -250,29 +255,100 @@ const DungeonScene = (() => {
     } else if (r === 'stuck') { explore.unreachable.add(t.id); explore.target = null; route = null; }
   }
 
+  // ---------------- 자동 탐험: 탱커가 앞장서고 힐러는 뒤따른다 ----------------
+  // 탱커(없으면 HP 높은 근딜 → 아무 파티원)가 다음 목적지(가까운 무리·상자·중간보스 → 보스 → 출구)로 먼저 걷고(AIParty.lead),
+  // 딜러는 탱커 발자국을 따라가며, 힐러는 그 뒤 2.7타일에 선다. 무리 앞에서는 탱커가 멈춰 "준비하세요!" → 파티가 모이면 돌진(ai_party).
+  // 상자·출구는 힐러가 밟아야 열리므로, 앞장이가 닿으면 힐러가 직접 걸어간다.
+  function leaderEnt() { return typeof AIParty !== 'undefined' && AIParty.leaderOf ? AIParty.leaderOf(battle) : null; }
+  function dropLead() {
+    if (battle && battle.lead && typeof AIParty !== 'undefined') AIParty.unlead(battle);
+    if (route && route.kind === 'lead') route = null;
+    explore.leadUid = null;
+  }
+  function holdLead() { if (battle.lead && battle.lead.pts.length) AIParty.lead(battle, null); else if (!battle.lead) AIParty.lead(battle, null); }
+  // 힐러를 goal(없으면 앞장이 뒤 자리)로. 가까우면 앞장이 걸음에 맞춰 천천히, 막히면 A* 로 돌아간다.
+  function healerFollow(dt, goal) {
+    const spot = goal || AIParty.behindSpot(battle, HEALER_BACK, 0, player.radius);
+    if (!spot) return;
+    const d = dist(player, spot);
+    if (d < 6 || (player.cast && d < 3 * TILE)) { if (route && route.kind === 'lead') route = null; return; }
+    if (canStandLine(player, spot, player.radius)) {
+      if (route && route.kind === 'lead') route = null;
+      battle.moveTo(player, spot.x, spot.y, dt, d < 24 ? 0.9 : 1);
+      return;
+    }
+    if (!route || route.kind !== 'lead' || time - route.at > 0.8) {
+      const pts = findPath(player.x, player.y, spot.x, spot.y, 4000);
+      route = pts && pts.length ? { kind: 'lead', pts, at: time } : null;
+    }
+    if (route) followRoute(dt);
+  }
+  const GOAL_NAME = { group: '몬스터 무리', chest: '상자', boss: '보스', exit: '출구' };
+  function leadStep(dt, ld) {
+    const p = player;
+    if (route && route.kind !== 'lead') route = null;
+    // 많이 다쳤거나 마나가 바닥이면 잠깐(최대 8초) 다 같이 멈춰 숨을 고른다
+    const low = battle.allies().some((e) => e.hp / e.maxHp < 0.45) || (p.maxMp > 0 && p.mp / p.maxMp < 0.2);
+    if (low && explore.rest < 8) { explore.rest += dt; explore.status = '🍃 숨 고르는 중…'; holdLead(); explore.target = null; healerFollow(dt); return; }
+    if (!low) explore.rest = 0;
+    let L = battle.lead;
+    if (!L || !explore.target || explore.leadUid !== ld.uid || !L.pts.length && L.state === 'hold') {
+      const pts = chooseExplore(ld);
+      if (!pts) { explore.on = false; settings().autoExplore = false; explore.status = ''; dropLead(); toast('더 둘러볼 곳이 없어요'); hudTick(true); return; }
+      L = AIParty.lead(battle, pts, explore.target);
+      explore.leadUid = ld.uid;
+    }
+    const t = explore.target;
+    if (L.state === 'stuck') { explore.unreachable.add(t.id); explore.target = null; holdLead(); return; }
+    let goal = null;
+    if (t.kind === 'chest' || t.kind === 'exit') {
+      // 앞장이가 닿았으면 힐러가 직접 밟는다
+      if (L.state === 'arrived' || dist(ld, t) <= 1.5 * TILE) {
+        goal = { x: t.x, y: t.y };
+        if (dist(p, t) <= 12) {
+          const c = t.kind === 'chest' ? fs.chests.find((x) => x.id === t.id) : null;
+          if (c && !c.opened) explore.unreachable.add(t.id);
+          explore.target = null; holdLead(); return;
+        }
+      }
+    } else if (L.state === 'arrived' || dist(ld, t) <= t.r) {
+      if (t.kind === 'group') explore.done.add(t.id);
+      explore.target = null; holdLead(); return;
+    }
+    healerFollow(dt, goal);
+    const who = ld.role === 'tank' ? '🛡️' : '⚔️';
+    explore.status = L.state === 'ready' ? `${who} ${ld.name}: 준비하세요!` : L.state === 'pull' ? `${who} ${ld.name} 돌진!` : L.state === 'wait' ? `${who} ${ld.name}이(가) 힐러를 기다려요`
+      : goal ? `✚ 힐러가 ${GOAL_NAME[t.kind]}(으)로` : `${who} ${ld.name} 앞장 → ${GOAL_NAME[t.kind] || ''}`;
+  }
+
   // ---------------- 조작 ----------------
   function control(dt) {
     manualT += dt;
     if (!alive(player)) { route = null; followMoving = false; return; }
     const ax = Scenes.moveAxis();
     if (ax.len > 0) {
-      manualT = 0; route = null; followMoving = false; explore.target = null;
+      // 수동 조작이 이긴다: 앞장서기를 풀고 파티는 다시 힐러를 따라온다(손을 떼고 1.5초 뒤 AUTO 면 탱커가 다시 앞장)
+      manualT = 0; route = null; followMoving = false; explore.target = null; dropLead();
       battle.moveTo(player, player.x + ax.x * 64, player.y + ax.y * 64, dt * ax.len);
       return;
     }
     // 자동 회피가 이번 틱에 피할 곳으로 데려갈 것이면 다른 이동은 끼어들지 않는다
     if (settings().autoDodge && typeof AIHealer !== 'undefined' && AIHealer.dodge(player, battle)) return;
-    if (route && route.kind === 'tap') { followRoute(dt); return; }
+    if (route && route.kind === 'tap') { dropLead(); followRoute(dt); return; }
     if (battle.inCombat()) {
-      if (route && route.kind === 'explore') { route = null; explore.target = null; }
+      if (route && (route.kind === 'explore' || route.kind === 'lead')) { route = null; explore.target = null; }
+      if (battle.lead) { holdLead(); explore.target = null; }
       explore.rest = 0; explore.status = explore.on ? '⚔️ 전투 중 — 탐험 일시정지' : '';
       if (settings().autoFollow !== false && manualT > MANUAL_HOLD) followParty(dt);
       return;
     }
     followMoving = false;
     if (route && route.kind === 'follow') route = null;
-    if (explore.on && manualT > MANUAL_HOLD) exploreStep(dt);
-    else explore.status = '';
+    if (explore.on && manualT > MANUAL_HOLD) {
+      const ld = leaderEnt();
+      if (ld) leadStep(dt, ld);
+      else { dropLead(); exploreStep(dt); }        // 파티원이 없으면 예전처럼 힐러가 앞장선다
+    } else { if (battle.lead) dropLead(); explore.status = ''; }
   }
 
   function onTap(wx, wy) {
@@ -287,7 +363,7 @@ const DungeonScene = (() => {
     if (!pts || !pts.length) { toast('그곳으로는 갈 수 없어요', 1200); return; }
     route = { kind: 'tap', pts, at: time };
     tapMark = { x: wx, y: wy, t: 0 };
-    manualT = 0; followMoving = false; explore.target = null;
+    manualT = 0; followMoving = false; explore.target = null; dropLead();
   }
   function selectTarget(uid) {
     selUid = selUid === uid ? null : uid;
@@ -933,8 +1009,9 @@ const DungeonScene = (() => {
     explore.on = !explore.on; explore.target = null; explore.unreachable.clear();
     settings().autoExplore = explore.on;
     if (route && route.kind === 'explore') route = null;
+    if (!explore.on) dropLead();
     manualT = 99;
-    toast(explore.on ? '자동 탐험 시작 — 가까운 무리·상자·보스로 갑니다' : '자동 탐험 멈춤', 1400);
+    toast(explore.on ? (leaderEnt() ? '자동 탐험 시작 — 탱커가 앞장서고 힐러는 뒤따라요' : '자동 탐험 시작 — 가까운 무리·상자·보스로 갑니다') : '자동 탐험 멈춤', 1400);
     hudTick(true);
   }
   function toggleMap(force) {
