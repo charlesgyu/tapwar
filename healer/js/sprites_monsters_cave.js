@@ -447,7 +447,7 @@
   MonsterSprites.register('wraith', build(32, 32, { x: 16, y: 30 }, (F, dir, f, atk) => {
     const hov = atk >= 0 ? -1 : [0, -1, -2, -1][f];
     const cx = 16, hy = 8 + hov, ry = 17 + hov;
-    const robe = T.wraith, hood = ['#1f1a38', '#3b3264', '#6a5e9c'], hand = T.wraithHand;
+    const robe = T.wraith, hood = ['#3a3272', '#5e519e', '#9488d2'], hand = T.wraithHand;   // 두건은 로브보다 한 톤 밝게(실루엣 구분)
     F.shadow(cx, 29, 7 + hov, 2, 'rgba(0,0,0,0.18)');
     // 로브: 둥근 몸통 + 아래로 좁아지는 자락, 옆에선 뒤로 흘러가는 자락
     const skirt = dir === 'right' ? tri(cx - 9, ry, cx + 7, ry, cx - 2 + [0, 1, 0, -1][f], ry + 12) : tri(cx - 9, ry, cx + 9, ry, cx, ry + 12);
@@ -468,7 +468,7 @@
     const tail = dir === 'right' ? tri(cx - 5, hy - 4, cx - 11, hy + 2, cx - 4, hy + 5) : tri(cx - 7, hy - 2, cx + 7, hy - 2, cx, hy + 9);
     F.blob(union(ell(cx, hy, 7, 7), tail), hood, { rw: 2 });
     if (dir === 'down') {
-      F.flat(ell(cx, hy + 1, 5, 4), '#15101f', '#15101f');
+      F.flat(ell(cx, hy + 1, 5, 4), '#15101f', '#15101f'); F.dot(cx - 5, hy - 5, 10, 1, hood[2]); F.px(cx - 6, hy - 4, hood[2]); F.px(cx + 5, hy - 4, hood[2]);
       glowEye(F, cx - 4, hy, 3, 3, '#7ff0ff', W); glowEye(F, cx + 2, hy, 3, 3, '#7ff0ff', W);
       F.px(cx - 4, hy + 3, '#3fb8d8'); F.px(cx + 4, hy + 3, '#3fb8d8');
     } else if (dir === 'right') {
