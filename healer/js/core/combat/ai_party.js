@@ -211,7 +211,9 @@ const AIParty = (() => {
     const L = battle.lead; if (!L || !L.on || !alive(L.leader)) return;
     const tr = battle._leadTrail || (battle._leadTrail = []);
     const last = tr[tr.length - 1], ld = L.leader;
-    if (last && Math.hypot(ld.x - last.x, ld.y - last.y) < TRAIL_STEP) return;
+    const jump = last ? Math.hypot(ld.x - last.x, ld.y - last.y) : 0;
+    if (last && jump < TRAIL_STEP) return;
+    if (jump > 3 * TILE) tr.length = 0;                       // 순간이동(길 잃음 구조·디버그)했으면 옛 발자국은 버린다
     tr.push({ x: ld.x, y: ld.y });
     if (tr.length > TRAIL_MAX) tr.shift();
   }
