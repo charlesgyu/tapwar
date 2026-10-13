@@ -7,9 +7,9 @@ const AIParty = (() => {
   const TILE = 32;
   const DODGE_FOREST = 0.9, DODGE_CAVE = 2 / 3, DODGE_MARGIN = 16;
   const RANGED_MIN = 150, RANGED_MAX = 220;
-  const FOLLOW_SLACK = 16, ENGAGE_RANGE = 8 * TILE, MAX_CHASE = 15 * TILE, RETREAT_LEASH = 8 * TILE;
+  const FOLLOW_SLACK = 16, ENGAGE_RANGE = 8 * TILE, MAX_CHASE = 12 * TILE, RETREAT_LEASH = 8 * TILE;
   // 빠른 템포: 파티는 힐러 주위 1.5타일 안에 덩어리로 붙어 다니고(뒤처지면 ×1.5 로 따라잡음), 적에게는 ×1.25 로 달려든다.
-  const CATCHUP_DIST = 1.5 * TILE, CATCHUP_SPEED = 1.5, CHASE_SPEED = 1.25;
+  const CATCHUP_DIST = 0.75 * TILE, CATCHUP_SPEED = 1.6, CHASE_SPEED = 1.25;
   const DIRS = { down: [0, 1], up: [0, -1], left: [-1, 0], right: [1, 0] };
 
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -32,10 +32,12 @@ const AIParty = (() => {
 
   // 교전 몬스터 + 바로 근처에서 발견한 몬스터. 힐러에게서 너무 먼 놈은 쫓지 않는다(파티가 흩어지지 않게).
   function findFoes(ent, battle) {
-    const anchor = alive(battle.player) ? battle.player : ent;
-    const near = battle.activeMonsters().filter((m) => dist(m, ent) <= ENGAGE_RANGE || dist(m, anchor) <= ENGAGE_RANGE);
+    // 힐러가 쓰러져 있어도 그 자리가 기준(파티원이 지키다 일으켜 세운다) — 기준을 자기 자신으로 바꾸면 사슬처럼 끌려가 보스까지 간다
+    const anchor = battle.player || ent;
+    // 아직 안 덤빈 몬스터는 "힐러" 기준 8타일 안만 덮친다(파티원 자기 기준으로 잡으면 사슬처럼 끌려가 덩어리가 흩어진다). 복귀 중인 놈은 쫓지 않는다.
+    const near = battle.activeMonsters().filter((m) => !m.returning && dist(m, anchor) <= ENGAGE_RANGE);
     const set = new Set(battle.engagedMonsters().concat(near));
-    return Array.from(set).filter((m) => alive(m) && dist(m, anchor) <= MAX_CHASE);
+    return Array.from(set).filter((m) => alive(m) && !m.returning && dist(m, anchor) <= MAX_CHASE);
   }
 
   // ---- 회피 ----
@@ -136,14 +138,14 @@ const AIParty = (() => {
   }
   function follow(ent, battle, dt) {
     const p = battle.player;
-    if (!alive(p)) { ent.state = 'idle'; return; }
-    const spot = formationSpot(ent, battle, p);
+    if (!p) { ent.state = 'idle'; return; }
+    const spot = formationSpot(ent, battle, p);   // 쓰러진 힐러 곁으로도 모인다(Floor 가 교전이 끝나면 일으켜 세운다)
     const d = dist(ent, spot);
     if (d <= FOLLOW_SLACK) { ent.state = 'idle'; return; }
     ent.target = null;
     const mult = d > CATCHUP_DIST ? CATCHUP_SPEED : 1.1;
     // 가까우면 바로, 멀고 벽에 가리면 발자국을 따라간다
-    const go = d <= CATCHUP_DIST * 2 || clearPath(battle, ent, spot, ent.radius) ? spot : (trailPoint(ent, battle) || spot);
+    const go = d <= TILE * 1.5 || clearPath(battle, ent, spot, ent.radius) ? spot : (trailPoint(ent, battle) || spot);
     battle.moveTo(ent, go.x, go.y, dt, mult);
   }
   function formationSpot(ent, battle, p) {
@@ -151,10 +153,10 @@ const AIParty = (() => {
     const px = -dy, py = dx;                                    // 진행 방향의 수직
     const same = battle.members.filter((m) => m.role === ent.role);
     const side = same.indexOf(ent) % 2 === 0 ? 1 : -1, lane = Math.floor(same.indexOf(ent) / 2) + 1;
-    // 전부 힐러에게서 1.5타일(48px) 안: 탱커 앞 36, 근딜 옆 30, 원딜 뒤 30 + 옆 20
-    if (ent.role === 'tank') return { x: p.x + dx * 36 + px * 20 * side * (lane - 1), y: p.y + dy * 36 + py * 20 * side * (lane - 1) };
-    if (ent.role === 'ranged') return { x: p.x - dx * 30 + px * 20 * side * lane, y: p.y - dy * 30 + py * 20 * side * lane };
-    return { x: p.x + dx * 12 + px * 30 * side * lane, y: p.y + dy * 12 + py * 30 * side * lane };
+    // 전부 힐러에게서 1타일(32px) 남짓: 탱커 앞 30, 근딜 옆 24, 원딜 뒤 24 + 옆 16 — 레퍼런스처럼 한 덩어리로 붙어 다닌다
+    if (ent.role === 'tank') return { x: p.x + dx * 30 + px * 18 * side * (lane - 1), y: p.y + dy * 30 + py * 18 * side * (lane - 1) };
+    if (ent.role === 'ranged') return { x: p.x - dx * 24 + px * 16 * side * lane, y: p.y - dy * 24 + py * 16 * side * lane };
+    return { x: p.x + dx * 10 + px * 24 * side * lane, y: p.y + dy * 10 + py * 24 * side * lane };
   }
 
   // ---- 역할별 전투 ----

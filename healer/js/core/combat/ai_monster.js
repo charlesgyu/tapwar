@@ -52,7 +52,7 @@ const AIMonster = (() => {
     const near = battle.activeMonsters ? battle.activeMonsters() : battle.monsters.filter(alive);
     const pulled = new Set(mates);
     for (const n of near) {
-      if (pulled.has(n) || n.aggro || n.returning) continue;
+      if (pulled.has(n) || n.aggro || n.returning || n.tier === 'boss') continue;   // 층 보스는 끌려오지 않는다(아레나에서 기다린다)
       if (!mates.some((m) => dist(m, n) <= NEIGHBOR_CALL_RANGE)) continue;
       for (const x of groupMates(n, battle).concat(n)) pulled.add(x);
     }
@@ -66,6 +66,9 @@ const AIMonster = (() => {
     m.aggro = true; m.target = found.uid; m.patrol = null;
     if (!m.threat[found.uid]) m.threat[found.uid] = 1;
     staggerCooldowns(m, battle);
+    // 첫 공격도 흩어 놓는다 — 무리 15마리의 첫 타가 같은 틱에 꽂히면 힐로 받을 수 없는 일격사가 난다
+    const iv = 1 / Math.max(0.05, (m.stats && m.stats.atkSpeed) || 1);
+    m.atkTimer = Math.max(m.atkTimer || 0, battle.rng.float(0.3, 1.2) * iv);
   }
   // 첫 능력은 조금 뒤에(무리 전체가 같은 순간에 쏟아 붓지 않게)
   function staggerCooldowns(m, battle) {

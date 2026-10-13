@@ -126,7 +126,7 @@ module.exports = {
     }
     // 동굴 몬스터의 perFloor 는 6층부터 누적된다(1층 기준으로 7번 누적되지 않음)
     const bat6 = Monsters.statsAt(Monsters.get('bat'), 6);
-    assert.strictEqual(bat6.hp, Math.round(Monsters.get('bat').base.hp * Floors.get(6).mult.hp));
+    assert.strictEqual(bat6.hp, Math.round(Monsters.get('bat').base.hp * Floors.get(6).mult.hp * Monsters.TEMPO.cave.hpNormal));
     // 저주 확률은 층 배수를 탄다(최대 0.95)
     const sp = Monsters.get('spider');
     assert.ok(Monsters.curseChance(sp, 'dot', 2) > Monsters.curseChance(sp, 'dot', 1));

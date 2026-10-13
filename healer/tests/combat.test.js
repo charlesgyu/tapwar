@@ -43,7 +43,8 @@ module.exports = {
     assert.ok(p.stats.int > 14, '음식 버프 반영 ' + p.stats.int);
     const m = Entities.fromMember(G, memberInst(ctx, ['warrior', 'tank', '바위'], 5, 0));
     assert.strictEqual(m.kind, 'member'); assert.strictEqual(m.role, 'tank'); assert.strictEqual(m.level, 5);
-    assert.strictEqual(m.maxHp, Stats.derive(m.src, G).maxHp); assert.strictEqual(m.range, 40); assert.strictEqual(m.atkInterval, 1.2);
+    assert.strictEqual(m.maxHp, Stats.derive(m.src, G).maxHp); assert.strictEqual(m.range, 40); assert.strictEqual(m.atkInterval, 0.6);
+    assert.ok(m.splash && m.splash.radius > 0 && m.splash.mult > 0, '전사 휘두르기(splash)');
     const def = Monsters.get('skeleton'), st = Monsters.statsAt(def, 3);
     const mon = Entities.fromMonster(def, 3, 100, 200, ctx.RNG.make(1));
     assert.strictEqual(mon.kind, 'monster'); assert.strictEqual(mon.maxHp, st.hp); assert.strictEqual(mon.stats.atk, st.atk); assert.strictEqual(mon.stats.def, st.def);
@@ -57,9 +58,10 @@ module.exports = {
 
   '60초 시뮬: 탱커가 위협 1위, 피해/힐 이벤트 발생, 처치→루팅·경험치·카운터, 활성 반경 밖 몬스터는 갱신 생략'(assert) {
     const ctx = boot();
-    // 2레벨 파티 vs 10마리 무리(좀비·해골이 질겨 전투가 길다). 5인 파티는 1층 고블린 6마리쯤은 5초 만에 쓸어버린다.
-    const ids = ['zombie', 'zombie', 'zombie', 'skeleton', 'skeleton', 'goblin', 'goblin', 'wolf', 'wolf', 'orc'];
-    const group = ids.map((id, i) => ({ id, x: 15 * T + (i % 4) * 40, y: 9 * T + Math.floor(i / 4) * 40 }));
+    // 2레벨 파티 vs 30마리 큰 무리(빠른 템포에선 예전 10마리 무리는 몇 초 만에 녹는다)
+    const base = ['zombie', 'zombie', 'zombie', 'skeleton', 'skeleton', 'goblin', 'goblin', 'wolf', 'wolf', 'orc'];
+    const ids = base.concat(base, base);
+    const group = ids.map((id, i) => ({ id, x: 15 * T + (i % 6) * 36, y: 8 * T + Math.floor(i / 6) * 36 }));
     group.push({ id: 'wolf', x: 45 * T, y: 45 * T, groupId: 'far' });   // 30 타일 밖
     const S = setup(ctx, { level: 2, floor: 1, monsters: group, seed: 11 });
     const { battle, members, events, G } = S;
@@ -67,11 +69,14 @@ module.exports = {
     const gold0 = G.player.gold;
     sim(battle, 60, 0.1, healLoop(battle));
     assert.ok(count(events, 'damage') > 50, '피해 이벤트 ' + count(events, 'damage'));
-    assert.ok(count(events, 'heal') >= 3, '힐 이벤트 ' + count(events, 'heal'));
-    assert.ok(count(events, 'heal_done') >= 3 && count(events, 'cast_start') >= 3 && count(events, 'cast_done') >= 3);
+    // 빠른 템포: 30마리가 몇 초 만에 쓰러져 파티가 크게 다치지 않는다 — 힐 흐름(시전→힐→heal_done)이 한 번 이상 돌면 된다
+    assert.ok(count(events, 'heal') >= 1, '힐 이벤트 ' + count(events, 'heal'));
+    assert.ok(count(events, 'heal_done') >= 1 && count(events, 'cast_start') >= 1 && count(events, 'cast_done') >= 1);
+    assert.ok(count(events, 'monster_killed') >= 25, '무리를 베어 넘긴다 ' + count(events, 'monster_killed'));
     const killed = events.filter((e) => e.name === 'monster_killed');
     assert.ok(killed.length >= 3, '처치 ' + killed.length);
     assert.ok(killed.every((e) => e.p.id && e.p.family && Array.isArray(e.p.tags) && e.p.floor === 1), 'monster_killed 페이로드');
+    assert.ok(killed.every((e) => typeof e.p.gold === 'number' && typeof e.p.x === 'number' && typeof e.p.y === 'number' && e.p.goldDeferred === false), 'monster_killed 골드·위치');
     // 위협: 피해를 준 몬스터마다 1위가 탱커
     const fought = S.monsters.filter((m) => m !== far && Object.keys(m.threat).length);
     const topIsTank = fought.filter((m) => Object.entries(m.threat).sort((a, b) => b[1] - a[1])[0][0] === tank.uid);
@@ -160,7 +165,7 @@ module.exports = {
     assert.strictEqual(count(events, 'consumable_used'), 2);
   },
 
-  '부활: 죽은 파티원에게 resurrect 시전(5초) → HP 30% 로 alive, revive 이벤트, 쿨타임; 전멸하면 result=wipe'(assert) {
+  '부활: 죽은 파티원에게 resurrect 시전(3초) → HP 30% 로 alive, revive 이벤트, 쿨타임; 전멸하면 result=wipe'(assert) {
     const ctx = boot();
     const S = setup(ctx, { level: 8, monsters: [], seed: 2, driveHealer: false });
     const { battle, player, members, events, G } = S;
@@ -171,9 +176,9 @@ module.exports = {
     const mp0 = player.mp;
     same(assert, battle.useSkill(player, 'resurrect', tank), { ok: true });
     assert.strictEqual(player.mp, mp0, '시전 시작 땐 MP 그대로');
-    assert.strictEqual(player.cast.skillId, 'resurrect'); assert.strictEqual(player.cast.total, 5);
+    assert.strictEqual(player.cast.skillId, 'resurrect'); assert.strictEqual(player.cast.total, 3);
     assert.strictEqual(battle.useSkill(player, 'heal_basic').reason, 'casting');
-    sim(battle, 5.1);
+    sim(battle, 3.1);
     assert.ok(tank.alive, '부활'); assert.strictEqual(tank.hp, Math.round(tank.maxHp * 0.3));
     assert.strictEqual(count(events, 'revive'), 1); assert.ok(player.cooldowns.resurrect > battle.time);
     assert.ok(player.mp >= mp0 - 120 && player.mp < mp0 - 100, 'MP 는 시전 완료 때 소모(시전 중 회복분 포함) ' + player.mp);
@@ -207,7 +212,8 @@ module.exports = {
 
   '전멸: 1레벨 파티가 5층 트롤 무리에 전원 사망 → result=wipe'(assert) {
     const ctx = boot();
-    const trolls = Array.from({ length: 8 }, (_, i) => ({ id: 'troll', x: 14 * T + (i % 4) * 36, y: 9 * T + Math.floor(i / 4) * 36 }));
+    // 큰 무리(12마리) — 빠른 템포의 파티 화력이면 8마리 정도는 1레벨도 버틴다
+    const trolls = Array.from({ length: 12 }, (_, i) => ({ id: 'troll', x: 14 * T + (i % 4) * 36, y: 9 * T + Math.floor(i / 4) * 36 }));
     const S = setup(ctx, { level: 1, floor: 5, monsters: trolls, seed: 4 });
     const { battle, events } = S;
     sim(battle, 150, 0.1, healLoop(battle));
@@ -309,8 +315,8 @@ module.exports = {
     for (const m of members) { m.x = 11 * T; m.y = 10 * T; }
     const tgt = S.monsters[0];
     tgt.base.maxHp = 1e6; ctx.Entities.refresh(tgt); tgt.hp = tgt.maxHp;   // 화염구 한 방에 죽지 않게
-    assert.ok(battle.useSkill(mage, 'fireball', tgt).ok); assert.strictEqual(mage.state, 'cast'); assert.strictEqual(mage.cast.total, 1.5);
-    sim(battle, 1.6);
+    assert.ok(battle.useSkill(mage, 'fireball', tgt).ok); assert.strictEqual(mage.state, 'cast'); assert.strictEqual(mage.cast.total, 0.6);
+    sim(battle, 0.7);
     const fb = events.filter((e) => e.name === 'damage' && e.p.skillId === 'fireball');
     assert.strictEqual(fb.length, 1); assert.strictEqual(fb[0].p.type, 'magic');
     assert.ok(battle.useSkill(hunter, 'multishot', tgt).ok);
@@ -336,5 +342,62 @@ module.exports = {
     assert.ok(battle.useSkill(player, 'aoe_ground', { x: tank.x, y: tank.y }).ok); sim(battle, 1.6);
     assert.strictEqual(battle.groundHeals.length, 1); const h1 = tank.hp; sim(battle, 2.1);
     assert.ok(tank.hp > h1 && tank.hp > 10, '성역 회복'); sim(battle, 5); assert.strictEqual(battle.groundHeals.length, 0);
+  },
+  'deferGold: 처치 골드를 즉시 더하지 않고 monster_killed 에 gold·x·y 를 실어 보낸다, collectGold 로 주워 담는다(기본은 즉시 적용)'(assert) {
+    const ctx = boot();
+    const S = setup(ctx, { level: 3, monsters: [{ id: 'goblin', x: 20 * T, y: 10 * T }, { id: 'goblin', x: 22 * T, y: 10 * T }], ai: false, seed: 5 });
+    const { battle, G, events, monsters } = S;
+    // 기본(deferGold false): 예전처럼 즉시 더한다
+    const g0 = G.player.gold;
+    battle.damage(battle.members[0], monsters[0], 99999, { noEvade: true, noDef: true });
+    const k0 = events.filter((e) => e.name === 'monster_killed')[0].p;
+    assert.ok(k0.gold > 0 && k0.goldDeferred === false && G.player.gold === g0 + k0.gold, '즉시 적용');
+    // deferGold: 골드는 그대로, 이벤트에 골드·위치
+    battle.deferGold = true;
+    const g1 = G.player.gold;
+    battle.damage(battle.members[0], monsters[1], 99999, { noEvade: true, noDef: true });
+    const k1 = events.filter((e) => e.name === 'monster_killed')[1].p;
+    assert.strictEqual(G.player.gold, g1, '골드 보류');
+    assert.ok(k1.gold > 0 && k1.goldDeferred === true && k1.x === monsters[1].x && k1.y === monsters[1].y, 'monster_killed { gold, x, y }');
+    const loot = events.filter((e) => e.name === 'loot')[1].p;
+    assert.ok(loot.goldDeferred === true && loot.gold === k1.gold, 'loot 이벤트도 보류 표시');
+    assert.strictEqual(battle.collectGold(k1.gold, k1.x, k1.y), k1.gold);
+    assert.strictEqual(G.player.gold, g1 + k1.gold, '주워 담음');
+    const gc = events.filter((e) => e.name === 'gold_changed').pop().p;
+    assert.ok(gc.source === 'pickup' && gc.delta === k1.gold);
+    assert.strictEqual(battle.collectGold(0), 0);
+  },
+
+  '눈덩이 어그로: 무리가 덤비면 무리원 4타일 안 이웃 무리도 함께, 그 밖은 그대로; 교전 몬스터는 ×1.35 로 달린다'(assert) {
+    const ctx = boot();
+    const mons = [
+      { id: 'goblin', x: 16 * T, y: 10 * T, groupId: 'g1' }, { id: 'goblin', x: 17 * T, y: 10 * T, groupId: 'g1' },
+      { id: 'wolf', x: 20 * T, y: 10 * T, groupId: 'g2' }, { id: 'wolf', x: 24 * T, y: 10 * T, groupId: 'g2' },   // g1 에서 3타일(이웃), 같은 무리 동료는 7타일
+      { id: 'sheepie', x: 30 * T, y: 10 * T, groupId: 'g3' },                                                    // 그 밖
+    ];
+    const S = setup(ctx, { level: 3, monsters: mons, seed: 3, at: { x: 10 * T, y: 10 * T } });
+    const { battle, monsters } = S;
+    for (const e of battle.party()) { e.x = 10 * T; e.y = 10 * T; }
+    battle.aiEnabled = false; monsters.forEach((m) => { m.x = m.home.x; m.y = m.home.y; });
+    ctx.AIMonster.update(monsters[0], battle, 0.1);
+    assert.ok(monsters[0].aggro && monsters[1].aggro, '같은 무리');
+    assert.ok(monsters[2].aggro && monsters[3].aggro, '이웃 무리 전체(4타일 안 이웃 + 그 무리)');
+    assert.ok(!monsters[4].aggro, '멀리 있는 무리는 그대로');
+    assert.ok(monsters[0].atkTimer > 0, '첫 공격은 흩어진다');
+    const m = monsters[2], x0 = m.x; m.cooldowns = { charge: 999 };
+    ctx.AIMonster.update(m, battle, 0.1);
+    assert.ok(Math.abs((x0 - m.x) - m.speed * ctx.Monsters.AGGRO_SPEED * 0.1) < 0.5, '교전 이동속도 ×1.35 ' + (x0 - m.x));
+  },
+
+  '자리 다툼: 한 대상을 동시에 근접 공격하는 몬스터는 최대 5마리(원거리는 제한 없음)'(assert) {
+    const ctx = boot();
+    const mons = Array.from({ length: 10 }, (_, i) => ({ id: 'goblin', x: 12 * T + (i % 5) * 4, y: 10 * T + Math.floor(i / 5) * 4 }));
+    const S = setup(ctx, { level: 20, monsters: mons, ai: false, seed: 8 });
+    const { battle, members, events, monsters } = S;
+    const tank = members[0]; tank.x = 12 * T + 8; tank.y = 10 * T + 2; tank.hp = tank.maxHp = 1e6;
+    for (const m of monsters) { m.target = tank.uid; m.aggro = true; m.atkTimer = 0; }
+    sim(battle, 0.95);
+    const hitters = new Set(events.filter((e) => e.name === 'damage' && e.p.dstUid === tank.uid && e.p.type === 'basic').map((e) => e.p.srcUid));
+    assert.strictEqual(hitters.size, 5, '근접 5자리 ' + hitters.size);
   },
 };

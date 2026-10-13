@@ -2,14 +2,14 @@ const load = require('../tools/load');
 const same = (assert, a, b, msg) => assert.deepStrictEqual(JSON.parse(JSON.stringify(a)), JSON.parse(JSON.stringify(b)), msg);
 const FILES = ['core/rng.js', 'core/events.js', 'core/data_classes.js', 'core/data_skills.js'];
 
-// DESIGN.md §3.2 표 그대로: [id, type, 시전, MP, 쿨, 해금]
+// DESIGN.md §3.2 표 그대로: [id, type, 시전, MP, 쿨, 해금] — 시전 시간은 빠른 전투 템포에 맞춰 줄인 값(기본 힐 1.2초, 빠른 힐 0.6초)
 const TABLE = [
-  ['heal_basic', 'single_heal', 2.0, 20, 0, 1], ['cleanse', 'cleanse', 0.5, 25, 2, 1], ['buff_def', 'buff', 1.0, 30, 8, 2],
-  ['aoe_2', 'aoe_heal', 2.5, 45, 0, 3], ['heal_fast', 'single_heal', 1.0, 30, 0, 4], ['buff_atk', 'buff', 1.0, 30, 8, 5],
-  ['aoe_ground', 'ground_heal', 1.5, 60, 12, 6], ['smite', 'smite', 1.5, 25, 0, 7], ['resurrect', 'resurrect', 5.0, 120, 60, 8],
-  ['heal_instant', 'single_heal', 0, 40, 3, 9], ['holy_light', 'ultimate', 0, 50, 300, 10], ['buff_aspd', 'buff', 1.0, 30, 8, 12],
-  ['aoe_3', 'aoe_heal', 3.0, 65, 0, 14], ['buff_spd', 'buff', 1.0, 30, 8, 16], ['buff_eva', 'buff', 1.0, 30, 8, 18],
-  ['buff_mana', 'buff', 1.0, 30, 8, 20],
+  ['heal_basic', 'single_heal', 1.2, 20, 0, 1], ['cleanse', 'cleanse', 0.4, 25, 2, 1], ['buff_def', 'buff', 0.6, 30, 8, 2],
+  ['aoe_2', 'aoe_heal', 1.5, 45, 0, 3], ['heal_fast', 'single_heal', 0.6, 30, 0, 4], ['buff_atk', 'buff', 0.6, 30, 8, 5],
+  ['aoe_ground', 'ground_heal', 1.0, 60, 12, 6], ['smite', 'smite', 1.0, 25, 0, 7], ['resurrect', 'resurrect', 3.0, 120, 60, 8],
+  ['heal_instant', 'single_heal', 0, 40, 3, 9], ['holy_light', 'ultimate', 0, 50, 300, 10], ['buff_aspd', 'buff', 0.6, 30, 8, 12],
+  ['aoe_3', 'aoe_heal', 1.8, 65, 0, 14], ['buff_spd', 'buff', 0.6, 30, 8, 16], ['buff_eva', 'buff', 0.6, 30, 8, 18],
+  ['buff_mana', 'buff', 0.6, 30, 8, 20],
 ];
 
 module.exports = {
@@ -102,7 +102,7 @@ module.exports = {
     assert.strictEqual(Skills.upgradeCost('taunt', 1), null, '파티원 스킬은 강화 없음');
   },
 
-  '파티원 스킬: 직업별 구성, 도발 위협×5 쿨12, mult 1.5~2.5, 쿨 6~15'(assert) {
+  '파티원 스킬: 직업별 구성, 도발 위협×5 쿨6, mult 1.5~2.5, 쿨 3~8(빠른 템포)'(assert) {
     const { Skills } = load(FILES);
     same(assert, Skills.member('warrior').map((s) => s.id), ['taunt', 'cleave']);
     same(assert, Skills.member('monk').map((s) => s.id), ['taunt', 'flurry']);
@@ -113,13 +113,13 @@ module.exports = {
     assert.strictEqual(Skills.member('priest').length, 16, '사제 파티원은 사제 스킬');
     same(assert, Skills.member('nope'), []);
     const taunt = Skills.get('taunt');
-    assert.strictEqual(taunt.type, 'taunt'); assert.strictEqual(taunt.threatMult, 5); assert.strictEqual(taunt.cooldown, 12);
+    assert.strictEqual(taunt.type, 'taunt'); assert.strictEqual(taunt.threatMult, 5); assert.strictEqual(taunt.cooldown, 6);
     for (const cls of ['warrior', 'monk', 'mage', 'hunter', 'rogue', 'spellblade']) {
       for (const s of Skills.member(cls)) {
         if (s.type === 'taunt') continue;
         assert.strictEqual(s.type, 'attack', s.id);
         assert.ok(s.power.mult >= 1.5 && s.power.mult <= 2.5, `${s.id} mult ${s.power.mult}`);
-        assert.ok(s.cooldown >= 6 && s.cooldown <= 15, `${s.id} 쿨 ${s.cooldown}`);
+        assert.ok(s.cooldown >= 3 && s.cooldown <= 8, `${s.id} 쿨 ${s.cooldown}`);
         assert.ok(s.name && s.desc);
       }
     }
@@ -131,8 +131,8 @@ module.exports = {
   'castTime/mpCost 헬퍼는 시전자의 castSpeed·mpCostMult 를 반영한다'(assert) {
     const { Skills } = load(FILES);
     const basic = Skills.get('heal_basic');
-    assert.strictEqual(Skills.castTime(basic, null), 2);
-    assert.strictEqual(Skills.castTime(basic, { stats: { castSpeed: 0.8 } }), 1.6);
+    assert.strictEqual(Skills.castTime(basic, null), 1.2);
+    assert.strictEqual(Skills.castTime(basic, { stats: { castSpeed: 0.8 } }), 0.96);
     assert.strictEqual(Skills.mpCost(basic, { stats: { mpCostMult: 0.75 } }), 15);
     assert.strictEqual(Skills.mpCost(basic, {}), 20);
     assert.strictEqual(Skills.list().length, 16 + 8);

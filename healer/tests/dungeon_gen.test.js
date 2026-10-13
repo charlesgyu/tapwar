@@ -29,15 +29,21 @@ const cheb = (a, b) => Math.max(Math.abs(a.i - b.i), Math.abs(a.j - b.j));
 const same = (assert, a, b, msg) => assert.strictEqual(JSON.stringify(a), JSON.stringify(b), msg);
 
 module.exports = {
-  '1~10층 전부 요구 수치 충족(160×160, walkable≥10000, 몬스터≥300, 무리 60~80, 중간보스 3, 상자≥16/숨김≥5, 랜드마크≥6)'(assert) {
+  '1~10층 전부 요구 수치 충족(160×160, walkable≥10000, 몬스터≥300, 무리 18~40(대부분 8~15, 20+ 떼 포함), 중간보스 3, 상자≥16/숨김≥5, 랜드마크≥6)'(assert) {
     for (const map of maps().maps) {
       const f = map.floor;
       assert.strictEqual(map.cols, 160); assert.strictEqual(map.rows, 160); assert.strictEqual(map.tiles.length, 160 * 160);
       assert.ok(map.walkableCount >= 10000, `${f}층 walkable ${map.walkableCount}`);
       let walk = 0; for (const t of map.tiles) if (t === T.FLOOR || t === T.DECO) walk++;
       assert.strictEqual(walk, map.walkableCount, `${f}층 walkableCount 집계`);
-      assert.ok(map.groups.length >= 60 && map.groups.length <= 80, `${f}층 무리 ${map.groups.length}`);
+      assert.ok(map.groups.length >= 18 && map.groups.length <= 40, `${f}층 무리 ${map.groups.length}`);
       const total = map.groups.reduce((s, g) => s + g.members.length, 0);
+      // 무리 사냥: 일반 무리는 평균 10마리 이상, 20마리 넘는 떼가 하나 이상, 무리원 수만큼 설 자리(spots)
+      const normal = map.groups.filter((g) => !g.minibossId);
+      assert.ok(total / map.groups.length >= 10, `${f}층 평균 무리 크기 ${(total / map.groups.length).toFixed(1)}`);
+      assert.ok(normal.every((g) => g.members.length >= 7 && g.members.length <= 30), `${f}층 무리 크기 범위`);
+      assert.ok(normal.some((g) => g.members.length >= 20), `${f}층 20마리 이상 떼`);
+      assert.ok(map.groups.every((g) => g.spots.length >= g.members.length), `${f}층 무리 자리 부족`);
       assert.ok(total >= 300, `${f}층 몬스터 ${total}`);
       assert.strictEqual(map.monsterCount, total);
       const mb = map.groups.filter((g) => g.minibossId);

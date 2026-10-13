@@ -319,13 +319,14 @@ ent = { uid, kind: 'player'|'member'|'monster', name, cls?, role, level, def: mD
         home: {x,y} (몬스터 순찰 기준), groupId, aggroRange, leashRange }
   // 구현이 더 쓰는 필드: 공통 range/atkInterval/dmgStat(직업·mDef 에서), 몬스터 base(Stats.applyStatus 의 기준 수치)/abilities/aggro/returning/summonedBy/phase/xp/gold/floor/threatMult, 플레이어 skillLevels
 Entities.refresh(ent, G?, now?) -> ent   // 버프/저주가 바뀐 뒤 파생 스탯 재계산(최대 HP/MP·speed 갱신, hp/mp 클램프). Combat 이 상태 변화마다 부른다
-Combat.create({ map, player, members, monsters, rng, G?, floor?, autoLoot?, driveHealer?, ai? }) -> battle
+Combat.create({ map, player, members, monsters, rng, G?, floor?, autoLoot?, driveHealer?, ai?, deferGold? }) -> battle
   // G 생략 시 State.get(), floor 생략 시 monsters[0].floor. autoLoot(기본 true): 처치 시 골드·Inventory.add·Level.addXp 를 Combat 이 직접 적용(Floor 는 다시 적용하지 말 것).
+  // deferGold(기본 false, battle.deferGold 로 나중에 켜도 됨): 처치 골드를 즉시 더하지 않는다 — 씬이 'monster_killed' {gold,x,y} 자리에 동전을 뿌리고, 주울 때 battle.collectGold(amount, x?, y?) → G.player.gold += amount + 'gold_changed' {source:'pickup'}. Floor.start(G, f, { deferGold: true }) 로도 전달.
   // driveHealer(기본 true): battle.update 가 AIHealer.update(player, battle, G, dt) 를 호출한다(Floor/scene 이 또 부르면 안 됨). ai:false 는 AI 전부 끔(테스트용), battle.aiEnabled 로 토글.
 battle.update(dt)            // 모든 로직: 이동·어그로·공격·시전·버프/저주 만료·텔레그래프·장판·사망·루팅 이벤트
 battle.time ; battle.entities ; battle.player ; battle.members ; battle.monsters ; battle.telegraphs ; battle.groundHeals ; battle.log (최근 메시지)
 battle.useSkill(caster, skillId, target?) -> { ok, reason? }   // 시전 시작(캐스팅). 대상 생략 시 AIHealer.pickTarget 로 자동
-battle.moveTo(ent, x, y, dt) ; battle.canStand(x, y) ; battle.inCombat() -> bool ; battle.activeMonsters() (활성 반경 20타일 내)
+battle.moveTo(ent, x, y, dt, speedMult?) ; battle.collectGold(amount, x?, y?) ; battle.canStand(x, y) ; battle.inCombat() -> bool ; battle.activeMonsters() (활성 반경 20타일 내)
 battle.damage(src, dst, amount, opts) ; battle.heal(src, dst, amount) ; battle.applyCurse(dst, curseId, dur) ; battle.cleanse(dst)
   // damage opts: { mult, crit(강제), noEvade, noDef, noCrit, noThreat, type: 'basic'|'magic'|'physical'|'telegraph'|'puddle'|'dot', skillId, abilityId } ; cleanse(dst, n=1) -> [제거한 저주 id]
 battle.result -> null | 'wipe'
@@ -334,19 +335,19 @@ battle.addMonster(ent) ; battle.engagedMonsters() (aggro 상태) ; battle.allies
 battle.addBuff(ent, buff) ; battle.revive(ent, pct, src?) ; battle.taunt(src, mon, mult) ; battle.addThreat(mon, src, amount) ; battle.topThreat(mon) ; battle.inTelegraph(tg, ent) ; battle.cancelCast(ent, reason) ; battle.logMsg(text)
 ```
 - 위협(어그로): 피해 ×1(탱커는 `Floors.tankThreatMult(floor)` = 1~5층 ×4, 6층부터 ×2.5, 여기에 mDef.threatMult 를 곱함; Floors 없으면 ×3), 도발은 `max(최고 위협, 50) × 5` 로 즉시 1위 + 대상 전환, 힐 ×0.5 가 교전(aggro) 중인 몬스터 전원에 분산. 몬스터는 최고 위협 대상을 공격(현재 대상이 1위의 90% 이상이면 유지). 1~5층은 힐러가 거의 안 맞음, 6층부터 'healer' 타겟 능력 등장.
-- 피해 = `max(1, atk × mult − def × 0.5) × (0.9~1.1)`, 회피(dst.evasion%)/크리(src.crit%, ×1.5) 적용. 공격 속도·이동속도는 버프/저주 반영. 파티원 기본 공격은 직업 dmgStat(atk/matk/hybrid), 간격 = atkInterval/atkSpeed ; 몬스터 간격 = 1/aspd, 적중 시 `Monsters.curseChance` 로 저주.
+- 피해 = `max(1, atk × mult − def × 0.5) × (0.9~1.1)`, 회피(dst.evasion%)/크리(src.crit%, ×1.5) 적용. 공격 속도·이동속도는 버프/저주 반영. 파티원 기본 공격은 직업 dmgStat(atk/matk/hybrid) × `Classes.DMG_MULT`(1.5), 간격 = atkInterval/atkSpeed(빠른 템포: 예전의 절반), 전사·무투가·마검사·마법사는 `splash` { radius, mult } 로 대상 주변 몬스터도 함께 친다 ; 몬스터 간격 = 1/aspd, 적중 시 `Monsters.curseChance` 로 저주. 한 대상을 동시에 근접 공격하는 몬스터는 최대 5마리(1초 창, 원거리 제외). 일반 몬스터 능력(텔레그래프) 피해 ×0.6.
 - 텔레그래프: `battle.telegraphs: [ { id, type: 'circle'|'puddle'|'cone'|'line', x, y, r, t, windup, owner, abilityId, dmg?, dps?, duration?, fill: 0~1, resolved } ]` — windup 동안 fill 증가(색 채워짐), 완료 시 circle 은 범위 내 파티에 1회 피해, puddle 은 `active` 가 되어 duration(5s) 동안 0.5초마다 dps×0.5 피해(+`curse` 가 있으면 들어온 사람마다 1회), cone 은 `{ angle(도), facing(rad) }` 부채꼴 1회 피해, line(돌진) 은 `{ x2, y2 }` 선분 폭 r 1회 피해 후 시전자가 끝점으로 이동. 범위기 피해는 회피 불가. `battle.groundHeals` 도 같은 구조(치유의 성역: `{ type:'puddle', fill:1, hps, tick }`, 1초마다 반경 안 아군 회복).
 - 저주 id: `dot`(초당 피해 = 최대 HP 2%, `curses[].dps`), `def_down`, `atk_down`, `aspd_down`, `spd_down`, `heal_down`(받는 힐 50%), `root`(이동불가). 10~20초(dur 생략 시). 같은 저주는 시간만 갱신. 죽으면 저주·스킬 버프는 사라지고 음식 버프만 남는다.
 - 시전: `ent.cast` 진행 중 이동하면 취소(플레이어, reason 'moved'). 멤버/몬스터는 시전 중 정지. MP 소모·쿨타임은 **시전 완료 때**(취소되면 손해 없음, 완료 시 MP 부족/대상 소실이면 reason 'mp'/'no_target' 으로 취소). useSkill 거부 reason: 'ended'|'no_skill'|'dead'|'casting'|'cooldown'|'locked'|'not_owner'|'mp'|'no_target'. 세트 proc(instant_basic/instant_aoe → 시전 0, free_mana → MP 0)은 시전 시작 때 굴린다.
 - 광역힐 대상은 useSkill 에 넘어온 대상 목록(`[ents]`, AIHealer.pickTarget 이 고른 **HP 낮은 순 N 명** — 사용자 지정)을 그대로 쓰고(`cast.targets`, 시전 완료 때 죽은 사람은 뺌), 목록이 없거나 모자라면 다친 아군 우선 무작위 N 명으로 채운다. 파티원 공격 스킬의 추가 대상(targets 3)은 사거리 안의 가까운 몬스터만. curse_volley 는 curses 중 count 개를 뽑아 각각 targetRule 로 고른 대상에게 duration 초.
 - 사망: hp≤0 → alive=false. 부활 스킬로 HP 30%. 전원 사망 → `battle.result='wipe'` + 'wipe' 이벤트. 몬스터 처치 시 살아 있는 파티 전원에게 `Level.addXp(src, mDef xp)`, `Loot.roll` 결과를 골드·Inventory.add 로 적용(autoLoot) 하고 `G.counters.kills/bossKills` 증가, 힐은 `G.counters.heals`. 매 update 끝에 `G.player.hp/mp/buffs` 를 동기화.
 - 벨트 자동 사용: 플레이어 HP<40% → hp 포션, MP<25% → mp 포션, 저주 걸림 → 해독제 (벨트에 등록된 것만, 아이템별 쿨 10s, 0.5초마다 검사).
-- 이벤트: 'damage' {src,dst,srcUid,dstUid,amount,evaded,crit,type,skillId?,abilityId?,hp}, 'heal' {src,dst,amount,skillId,hp}, 'heal_done' {amount}(플레이어 힐만, 퀘스트용), 'death' {uid,ent,kind,name,killer}, 'revive', 'curse' {uid,id,until,src}, 'curse_expired', 'cleanse' {uid,removed}, 'cast_start'/'cast_done'/'cast_cancel' {uid,skillId|abilityId,total?,target?,reason?}, 'telegraph' {id,type,x,y,r,windup,owner,abilityId}, 'telegraph_hit', 'ground_heal', 'summon' {owner,monsterId,count,uids}, 'monster_killed' {id,family,tags,tier,floor,uid,x,y,killer}, 'boss_killed' {id,floor,uid}, 'loot' {gold,items,added,lost,uid,monsterId,x,y,applied}, 'wipe', 'boss_phase' {uid,id,hpBelow,abilities}, 'level_up'(Level 이 발행).
+- 이벤트: 'damage' {src,dst,srcUid,dstUid,amount,evaded,crit,type,skillId?,abilityId?,hp}, 'heal' {src,dst,amount,skillId,hp}, 'heal_done' {amount}(플레이어 힐만, 퀘스트용), 'death' {uid,ent,kind,name,killer}, 'revive', 'curse' {uid,id,until,src}, 'curse_expired', 'cleanse' {uid,removed}, 'cast_start'/'cast_done'/'cast_cancel' {uid,skillId|abilityId,total?,target?,reason?}, 'telegraph' {id,type,x,y,r,windup,owner,abilityId}, 'telegraph_hit', 'ground_heal', 'summon' {owner,monsterId,count,uids}, 'monster_killed' {id,family,tags,tier,floor,uid,x,y,killer,gold,goldDeferred}, 'boss_killed' {id,floor,uid}, 'loot' {gold,items,added,lost,uid,monsterId,x,y,applied,goldDeferred}, 'wipe', 'boss_phase' {uid,id,hpBelow,abilities}, 'level_up'(Level 이 발행).
 
 ### 8.1 파티원 AI (ai_party.js — `AIParty.update(ent, battle, dt)`)
 - 탱커: 가장 가까운 교전 몬스터(또는 힐러를 노리는 몬스터 우선)에게 접근·공격, 도발 쿨마다 사용, 몬스터가 여러 마리면 가장 위협 낮은 아군을 노리는 놈에게 도발.
 - 근딜: 탱커의 대상 공격(뒤쪽 위치), 스킬 쿨마다 사용. 원딜: 사거리 유지(대상과 150~220px), 너무 가까우면 뒤로 — 단 **나를 쫓는 몬스터에게서는 물러나지 않고**(끝없는 카이팅 방지) 힐러에게서 8타일 이상 멀어지지 않는다.
-- 비전투: 플레이어(힐러)를 따라감(대형: 탱커 앞 48px, 근딜 옆 40px, 원딜 뒤 44px). 탐색 중 몬스터 무리 어그로 범위에 들어오거나 힐러/자신 6타일 안에 몬스터가 보이면 교전. 힐러에게서 15타일 밖의 몬스터는 쫓지 않는다.
+- 비전투: 플레이어(힐러)에게 바짝 붙어 한 덩어리로 따라감(대형: 탱커 앞 30px, 근딜 옆 24px, 원딜 뒤 24px; 자리에서 0.75타일 넘게 벌어지면 ×1.6 로 따라잡음, 벽에 가리면 힐러 발자국을 따라감). 힐러(쓰러져 있으면 그 자리) 8타일 안에 몬스터가 보이면 교전, 적에게는 ×1.25 로 달려들고 막히면 타일 BFS 로 돌아간다. 힐러에게서 12타일 밖·복귀 중인 몬스터는 쫓지 않는다. 딜러 대상: 힐러를 노리는 놈 → (중간보스·보스면) 탱커 대상 → 내게 가장 가까운 놈(무리 사냥에서 타격 낭비 방지).
 - 모두 텔레그래프 안에 있으면 2/3 확률로 빠져나옴(1~5층 90%). 텔레그래프마다 한 번만 굴리고(`ent.dodge`), 탈출 지점은 `AIParty.exitPoint(tg, ent, battle)`(원/장판은 바깥쪽, 부채꼴은 옆, 돌진 선은 수직). 피해·위협·스킬 효과는 전부 battle 함수로만 일으킨다.
 
 ### 8.2 힐러 자동 로직 (ai_healer.js — `AIHealer`)
@@ -369,7 +370,7 @@ AIHealer.dodge(player, battle) -> { x, y } | null   // 텔레그래프/장판(�
 위험 회피: `dodge()` 가 텔레그래프 안에 플레이어가 있으면 밖의 안전 지점을 돌려준다. autoDodge 면 자동 이동(시전 취소), 아니면 UI 가 깜빡여 알려줌. 상태는 전투 엔티티의 `player.healerAI = { failed, seen, last, tick }` 에 둔다.
 
 ### 8.3 몬스터 AI (ai_monster.js — `AIMonster.update(ent, battle, dt)`)
-- 순찰(home 반경 3타일, 1.5~4초 쉬었다 이동), 어그로 범위(7타일) 안의 파티 발견 → 같은 groupId 무리(10타일 안) 전체 교전(`ent.aggro=true`, 첫 능력은 0.5~2초 뒤부터). 리쉬 25타일 넘거나 대상이 없으면 복귀(`ent.returning`)+HP 회복+저주 제거. 교전 중 같은 무리끼리 겹치면 살짝 밀어낸다.
+- 순찰(home 반경 3타일, 1.5~4초 쉬었다 이동), 어그로 범위(7타일) 안의 파티 발견 → 같은 groupId 무리(10타일 안) 전체 + 무리원 4타일 안 이웃 몬스터와 그 무리까지 교전(눈덩이, 보스 제외). 교전 중 이동 ×`Monsters.AGGRO_SPEED`(1.35), 첫 공격은 0.3~1.2 간격 흩어 시작, 같은 무리 일반 몬스터는 동시에 2마리까지만 능력 시전. 리쉬/포기 뒤 15초는 먼저 덤비지 않는다(`ent.aggro=true`, 첫 능력은 0.5~2초 뒤부터). 리쉬 25타일 넘거나 대상이 없으면 복귀(`ent.returning`)+HP 회복+저주 제거. 교전 중 같은 무리끼리 겹치면 살짝 밀어낸다.
 - 능력은 쿨마다 `battle.castAbility(ent, id)` 로 → Combat 이 `targetRule` 로 대상 선택·텔레그래프 생성·효과 적용. 대상이 8타일(돌진은 range) 밖이면 쓰지 않고, heal_self 는 HP<70% 일 때만. 보스는 `Monsters.abilitiesFor(def, hp비율)` 로 phases 에 따라 능력 세트 전환('boss_phase' 이벤트), summon 은 소환 수 제한(시전자당 동시 6, Combat 이 강제).
 - 저주: 공격 적중 시 `curses[].chance × Floors.curseMult`(Combat.basicAttack 이 굴림).
 
@@ -391,7 +392,7 @@ map = { floor, biome, name, cols: 160, rows: 160, tile: 32, tiles: Uint8Array(co
         solid(i, j) -> bool (범위 밖은 true), walkableCount, pathLength (spawn→boss 최단 타일 수), monsterCount,
         spawn: {x,y,i,j}, exit: {x,y,i,j},                  // 모든 위치는 월드 px(타일 중심 (i+0.5)*32) + 타일 좌표 i,j 를 함께 담는다
         landmarks: [ { id: 'f{floor}_lm{n}', name, x, y, i, j, kind: 'open'|'water'|'narrow'|'nook' } ], // Floors.get(f).landmarks 이름 순서대로, 상자/힌트 기준점
-        groups: [ { id, x, y, i, j, members: [monsterId...], minibossId?, spots: [ {x,y,i,j} ... ] } ],   // 합계 ≥ 300, 무리 60~80, 중간보스 3 무리('f{floor}_mb{n}', members[0] = minibossId). spots = 무리 중심 반경 2타일 안 통행 가능 칸(가까운 순) → Floor 가 멤버를 여기에 세운다
+        groups: [ { id, x, y, i, j, members: [monsterId...], minibossId?, spots: [ {x,y,i,j} ... ] } ],   // 합계 ≥ 300, 무리 18~40(일반 무리 대부분 8~15, 15% 는 20~26 떼, 중간보스 호위 6~10), 중간보스 3 무리('f{floor}_mb{n}', members[0] = minibossId). spots = 무리원 수만큼 나오도록 반경 2→5타일로 넓힌 통행 가능 칸(가까운 순) → Floor 가 멤버를 여기에 세운다
         boss: { id, x, y, i, j, arenaR: 192 (px = 6타일) },
         chests: [ { id, x, y, i, j, type: 'normal'|'hidden', landmarkId, hidden: bool } ] }  // ≥ 16개/층(기본 12 일반 + 6 숨김), hidden 은 'f{floor}_hidden{1..6}', 일반은 'f{floor}_chest{n}'
 DungeonGen.T = { WALL:0, FLOOR:1, WATER:2, DECO:3, BUSH:4 } ; DungeonGen.tileAt(map, x, y) -> 타일값(통행 불가면 -1) ; DungeonGen.clearCache() ; DungeonGen.floorInfo(floor)

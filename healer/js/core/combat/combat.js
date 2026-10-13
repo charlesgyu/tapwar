@@ -12,6 +12,12 @@ const Combat = (() => {
   const DOT_PCT = 0.02;                     // 맹독: 초당 최대 HP 2%
   const LOG_MAX = 50;
   const MAX_SUMMONS = 6;                    // 보스 소환 부하 동시 상한
+  // 한 대상을 동시에 근접 공격할 수 있는 몬스터 수(자리 다툼). 무리 20마리가 탱커 하나를 한꺼번에 때리지 못한다 —
+  // 나머지는 둘러싸고 차례를 기다린다(원거리는 제한 없음). 1초 창으로 센다.
+  const MELEE_SLOTS = 5, MELEE_RANGE_MAX = 60, SLOT_WINDOW = 1;
+  // 일반 몬스터 능력(돌진·내리찍기·장판) 피해 배수: 무리가 커져 능력이 자주 나오고, 파티가 한 덩어리로 붙어 다녀
+  // 범위기 한 번에 여럿이 맞으므로 줄인다. 중간보스·보스는 그대로(×1).
+  const NORMAL_ABILITY_MULT = 0.6;
   const CLEANSE_PRIORITY = ['root', 'heal_down', 'dot', 'def_down', 'atk_down', 'aspd_down', 'spd_down'];
 
   // 브라우저에서 최상위 const 모듈은 window 프로퍼티가 아니므로 typeof 로만 존재를 확인한다(노드 vm 도 동일하게 동작).
@@ -462,12 +468,13 @@ const Combat = (() => {
       return { ok: true, telegraph: tg };
     }
     function makeTelegraph(mon, ab, tgt) {
+      const am = mon.tier === 'normal' ? NORMAL_ABILITY_MULT : 1;
       const common = { id: 'tg' + (++B._tgSeq), t: 0, windup: ab.windup || 0, fill: 0, owner: mon.uid, abilityId: ab.id, resolved: false };
       let tg = null;
-      if (ab.type === 'aoe_circle') tg = Object.assign(common, { type: 'circle', x: tgt.x, y: tgt.y, r: ab.radius, dmg: mon.stats.atk * (ab.dmgMult || 1) });
-      else if (ab.type === 'puddle') tg = Object.assign(common, { type: 'puddle', x: tgt.x, y: tgt.y, r: ab.radius, dps: mon.stats.atk * (ab.dpsMult || 0.5), duration: ab.duration || 5, curse: ab.curse || null, acc: 0, cursed: {}, active: false });
-      else if (ab.type === 'cone') tg = Object.assign(common, { type: 'cone', x: mon.x, y: mon.y, r: ab.radius, angle: ab.angle || 60, facing: Math.atan2(tgt.y - mon.y, tgt.x - mon.x), dmg: mon.stats.atk * (ab.dmgMult || 1) });
-      else if (ab.type === 'charge') { const e = chargeEnd(mon, tgt, ab.range || 10 * TILE); tg = Object.assign(common, { type: 'line', x: mon.x, y: mon.y, x2: e.x, y2: e.y, r: ab.radius || TILE, dmg: mon.stats.atk * (ab.dmgMult || 1) }); }
+      if (ab.type === 'aoe_circle') tg = Object.assign(common, { type: 'circle', x: tgt.x, y: tgt.y, r: ab.radius, dmg: mon.stats.atk * (ab.dmgMult || 1) * am });
+      else if (ab.type === 'puddle') tg = Object.assign(common, { type: 'puddle', x: tgt.x, y: tgt.y, r: ab.radius, dps: mon.stats.atk * (ab.dpsMult || 0.5) * am, duration: ab.duration || 5, curse: ab.curse || null, acc: 0, cursed: {}, active: false });
+      else if (ab.type === 'cone') tg = Object.assign(common, { type: 'cone', x: mon.x, y: mon.y, r: ab.radius, angle: ab.angle || 60, facing: Math.atan2(tgt.y - mon.y, tgt.x - mon.x), dmg: mon.stats.atk * (ab.dmgMult || 1) * am });
+      else if (ab.type === 'charge') { const e = chargeEnd(mon, tgt, ab.range || 10 * TILE); tg = Object.assign(common, { type: 'line', x: mon.x, y: mon.y, x2: e.x, y2: e.y, r: ab.radius || TILE, dmg: mon.stats.atk * (ab.dmgMult || 1) * am }); }
       if (!tg) return null;
       B.telegraphs.push(tg);
       emit('telegraph', { id: tg.id, type: tg.type, x: tg.x, y: tg.y, r: tg.r, windup: tg.windup, owner: mon.uid, abilityId: ab.id });
@@ -587,6 +594,7 @@ const Combat = (() => {
       if (!alive(tgt) || ent.cast || !inRange(ent, tgt, ent.range || 40)) { if (ent.state === 'attack') ent.state = 'idle'; return; }
       ent.state = 'attack'; faceTo(ent, tgt.x - ent.x, tgt.y - ent.y);
       if (ent.atkTimer > 0) return;
+      if (ent.kind === 'monster' && !meleeSlot(ent, tgt)) return;
       ent.atkTimer = attackInterval(ent);
       const power = attackPower(ent);
       // 휘두르기/폭발(Classes splash): 대상 주변 몬스터도 함께 맞는다. 대상이 이 공격으로 죽어도 주변 피해는 들어간다.
@@ -594,6 +602,16 @@ const Combat = (() => {
       const dealt = damage(ent, tgt, power, { type: 'basic' });
       if (splashed) for (const m of splashed) damage(ent, m, power * ent.splash.mult, { type: 'splash', noCrit: true });
       if (dealt > 0 && ent.kind === 'monster') rollCurses(ent, tgt);
+    }
+    // 근접 몬스터 자리: 최근 1초 안에 이 대상을 근접으로 친 다른 몬스터가 MELEE_SLOTS 이상이면 이번엔 못 친다
+    function meleeSlot(mon, tgt) {
+      if ((mon.range || 28) > MELEE_RANGE_MAX) return true;
+      const slots = tgt._melee || (tgt._melee = {});
+      let n = 0;
+      for (const uid in slots) { if (B.time - slots[uid] > SLOT_WINDOW) delete slots[uid]; else if (uid !== mon.uid) n++; }
+      if (n >= MELEE_SLOTS) return false;
+      slots[mon.uid] = B.time;
+      return true;
     }
     function rollCurses(mon, dst) {
       if (!has('Monsters') || !mon.def) return;

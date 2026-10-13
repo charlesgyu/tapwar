@@ -113,7 +113,8 @@ const Floor = (() => {
     fs.kills = ((G.counters && G.counters.kills) || 0) - fs._kills0;
     trackDeaths(fs);
     if (B.result === 'wipe') { fs.result = 'wipe'; return; }
-    if (!alive(p)) { carryHealer(fs, dt); return; }
+    // 힐러가 쓰러져 있어도 길 막힌 몬스터는 포기시킨다 — 안 그러면 교전이 영원히 안 끝나 힐러를 일으켜 세우지 못한다
+    if (!alive(p)) { evadeStuck(fs, B.engagedMonsters(), dt); carryHealer(fs, dt); return; }
     countSteps(fs, G, p);
     if (markVisited(fs, p)) checkChests(fs, G, p);
     const engaged = B.engagedMonsters();
@@ -134,7 +135,8 @@ const Floor = (() => {
   // 쓰러진 힐러: 교전이 끝나고 8초가 지나면 살아남은 파티원이 일으켜 세운다(HP 30%). 전원 사망이면 Combat 이 wipe 를 낸다.
   function carryHealer(fs, dt) {
     const B = fs.battle;
-    if (B.engagedMonsters().length || !B.allies().length) { fs._deadFor = 0; return; }
+    // 활성 반경(힐러 주변 20타일) 안의 교전만 본다 — 멀리서 얼어 있는(갱신되지 않는) 교전 몬스터 때문에 영원히 못 일으키는 일이 없게
+    if (B.inCombat() || !B.allies().length) { fs._deadFor = 0; return; }
     fs._deadFor += dt;
     if (fs._deadFor < PLAYER_REVIVE_WAIT) return;
     fs._deadFor = 0;

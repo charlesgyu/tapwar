@@ -364,8 +364,10 @@ module.exports = {
 
   '통합 시뮬 60초: Combat 이 AI 를 구동하면 힐러가 버프·해제·힐을 하고, 시전이 겹치지 않으며, 파티가 이긴다'(assert) {
     const ctx = boot();
-    const ids = ['zombie', 'zombie', 'zombie', 'skeleton', 'skeleton', 'goblin', 'goblin', 'wolf', 'wolf', 'orc'];
-    const mons = ids.map((id, i) => ({ id, x: 15 * T + (i % 4) * 40, y: 9 * T + Math.floor(i / 4) * 40 }));
+    // 빠른 템포의 큰 무리(30마리): 예전 10마리 무리는 이제 몇 초 만에 녹아 힐러가 할 일이 없다
+    const base = ['zombie', 'zombie', 'zombie', 'skeleton', 'skeleton', 'goblin', 'goblin', 'wolf', 'wolf', 'orc'];
+    const ids = base.concat(base, base);
+    const mons = ids.map((id, i) => ({ id, x: 15 * T + (i % 6) * 36, y: 8 * T + Math.floor(i / 6) * 36 }));
     const { battle, player, events, G } = setup(ctx, { level: 2, monsters: mons, ai: true, seed: 11 });
     sim(battle, 60);
     const mine = events.filter((e) => (e.name === 'cast_start' || e.name === 'cast_done' || e.name === 'cast_cancel') && e.p.uid === player.uid);

@@ -127,7 +127,8 @@ const Stats = (() => {
       healPower: (p.int * 1.6 + flat.heal) * (1 + pct.heal_power / 100) * fatigueMult,
       evasion: Math.min(EVASION_CAP, p.agi * 0.4),
       crit: clamp(5 + p.agi * 0.25 + pct.crit, 0, CRIT_CAP),
-      moveSpeed: 190 * (1 + p.agi * 0.004) * (1 + pct.move_speed / 100),
+      // 기본 이동속도 230px/s(≈7타일/초) — 빠른 전투 템포에 맞춰 예전 190 에서 올렸다
+      moveSpeed: 230 * (1 + p.agi * 0.004) * (1 + pct.move_speed / 100),
       atkSpeed: 1 + p.agi * 0.003,
       castSpeed: 1 / (1 + pct.cast_speed / 100),
       mpRegen: (1 + p.int * 0.05 + flat.mp_regen) * fatigueMult,

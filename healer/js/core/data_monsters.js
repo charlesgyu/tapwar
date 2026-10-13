@@ -254,7 +254,7 @@ const Monsters = (() => {
   const TIER_HP = { normal: 0.6, miniboss: 3, boss: 1 };
   // 바이옴별 템포 보정: 숲(1~5층)은 쉽게, 동굴(6~10층)은 일반 몬스터가 조금 더 버티고(hpNormal) 더 아프게(atk) 때린다.
   // 숲의 hpNormal 은 TIER_HP.normal 과 같다. atk 는 모든 등급에 곱한다(텔레그래프 피해도 atk 기반).
-  const TEMPO = { forest: { hpNormal: 0.6, atk: 1.15 }, cave: { hpNormal: 0.9, atk: 1.4 } };
+  const TEMPO = { forest: { hpNormal: 0.6, atk: 1.25 }, cave: { hpNormal: 0.9, atk: 1.7 } };
   // 교전(aggro) 중 이동속도 배수 — 무리가 우르르 달려든다(AIMonster 가 moveTo 에 넘긴다)
   const AGGRO_SPEED = 1.35;
   function statsAt(def, floor) {
@@ -265,7 +265,7 @@ const Monsters = (() => {
     const tierHp = def.tier === 'normal' ? tempo.hpNormal : (TIER_HP[def.tier] || 1);
     const out = {
       hp: Math.max(1, Math.round((b.hp + p.hp * n) * f.mult.hp * tierHp)),
-      atk: Math.max(1, Math.round((b.atk + p.atk * n) * f.mult.atk * tempo.atk)),
+      atk: Math.max(1, Math.round((b.atk + p.atk * n) * f.mult.atk * tempo.atk * (f.atkTempo || 1))),
       def: Math.max(0, Math.round((b.def + p.def * n) * f.mult.def)),
       spd: b.spd, aspd: b.aspd, range: b.range,
       xp: Math.max(1, Math.round(def.xp * f.xpMult)),
@@ -325,18 +325,20 @@ const Floors = (() => {
   const pool = (...pairs) => pairs.map(([id, weight]) => ({ id, weight }));
   // 랜드마크: [영어 id, 한국어 이름, 종류]. kind 는 생성기 힌트('rock'|'tree'|'water'|'camp'|'ruin'|'crystal'|'path'|'boss').
   const L = (id, name, kind) => ({ id, name, kind });
+  // atkTempo(선택, 기본 1): 무리 구성(원거리 떼·힐러 저격 등)에 따라 층마다 체감 난이도가 튀는 것을 보정하는 공격력 배수.
+  //   시뮬(tools/sim.js) 로 6~10층 클리어율이 점점 낮아지게(대략 80%→50%) 맞춘 값이다. mult 의 단조 증가와는 별개.
   // mult 는 숫자(hp·atk 공통) 또는 { hp, atk, def? }. 동굴은 HP 는 크게(전투가 길어져 힐러 저격·장판이 실제로 발동), 공격력은 완만하게
   // (탱커가 첫 3초 안에 녹지 않게) 따로 둔다. def 생략 시 1 + (hp−1)×0.7.
   const F = (floor, o) => {
     const m = typeof o.mult === 'number' ? { hp: o.mult, atk: o.mult } : o.mult;
     return {
       floor, biome: o.biome, name: o.name, levelRange: o.levelRange, pool: o.pool, minibosses: o.minibosses, boss: o.boss,
-      mult: { hp: m.hp, atk: m.atk, def: m.def != null ? m.def : r2(1 + (m.hp - 1) * 0.7) }, curseMult: o.curseMult, xpMult: o.xpMult, goldMult: o.goldMult,
+      mult: { hp: m.hp, atk: m.atk, def: m.def != null ? m.def : r2(1 + (m.hp - 1) * 0.7) }, atkTempo: o.atkTempo || 1, curseMult: o.curseMult, xpMult: o.xpMult, goldMult: o.goldMult,
       monsterCount: o.monsterCount, chapter: floor, landmarkDefs: o.landmarks, landmarks: o.landmarks.map((l) => l.name), desc: o.desc,
     };
   };
   const LIST = [
-    F(1, { biome: 'forest', name: '속삭이는 숲 입구', levelRange: [1, 3], mult: 1.0, curseMult: 1.0, xpMult: 1, goldMult: 1, monsterCount: 300,
+    F(1, { biome: 'forest', name: '속삭이는 숲 입구', levelRange: [1, 3], mult: 1.0, atkTempo: 0.85, curseMult: 1.0, xpMult: 1, goldMult: 1, monsterCount: 300,
       pool: pool(['goblin', 40], ['goblin_archer', 20], ['wolf', 25], ['sheepie', 15]), minibosses: ['goblin_chief', 'wolf_alpha', 'sheepie_big'], boss: 'boss_goblin_king',
       landmarks: [L('mossy_rock', '이끼 낀 바위', 'rock'), L('old_oak', '늙은 떡갈나무', 'tree'), L('goblin_trail', '고블린 발자국 길', 'path'), L('mushroom_glade', '버섯 공터', 'tree'), L('fallen_signpost', '쓰러진 이정표', 'ruin'), L('whisper_spring', '속삭이는 샘', 'water'), L('king_bonfire', '고블린 왕의 모닥불', 'boss')],
       desc: '탑이 삼킨 숲의 입구. 고블린과 늑대가 발자국을 지운다.' }),
@@ -356,23 +358,23 @@ const Floors = (() => {
       pool: pool(['troll', 30], ['orc', 25], ['orc_berserker', 20], ['treant', 15], ['werewolf', 10]), minibosses: ['troll_warlord', 'orc_berserker_champ', 'treant_guardian'], boss: 'boss_troll_chief',
       landmarks: [L('troll_camp', '트롤 야영지', 'camp'), L('fallen_giant', '쓰러진 거목', 'tree'), L('orc_spoils', '오크 전리품 더미', 'camp'), L('guardian_roots', '수호자의 뿌리', 'tree'), L('wolfman_den', '늑대인간 동굴 입구', 'rock'), L('elda_trace', '엘다의 흔적', 'ruin'), L('chief_fire', '족장의 모닥불', 'boss')],
       desc: '트롤들의 야영지. 엘다의 목소리가 끊긴 곳.' }),
-    F(6, { biome: 'cave', name: '돌 파수꾼의 동굴', levelRange: [11, 13], mult: { hp: 2.4, atk: 1.75 }, curseMult: 2.0, xpMult: 10, goldMult: 3.6, monsterCount: 330,
+    F(6, { biome: 'cave', name: '돌 파수꾼의 동굴', levelRange: [11, 13], mult: { hp: 2.4, atk: 1.75 }, atkTempo: 1.0, curseMult: 2.0, xpMult: 10, goldMult: 3.6, monsterCount: 330,
       pool: pool(['bat', 35], ['cave_spider', 25], ['golem_stone', 25], ['skeleton_knight', 15]), minibosses: ['golem_sentinel', 'bat_matriarch', 'cave_spider_lurker'], boss: 'boss_golem_lord',
       landmarks: [L('first_fork', '첫 번째 갈림길', 'path'), L('stalactite_hall', '종유석 홀', 'crystal'), L('bat_ceiling', '박쥐 둥지 천장', 'rock'), L('mine_rail', '무너진 광산 레일', 'ruin'), L('spider_pit', '거미 알 구덩이', 'rock'), L('golem_row', '골렘 조각상 열', 'ruin'), L('lord_throne', '군주의 돌 왕좌', 'boss')],
       desc: '숲이 끝나고 돌이 시작된다. 여기부터 괴물들이 힐러를 노린다.' }),
-    F(7, { biome: 'cave', name: '깊은 물의 제단', levelRange: [13, 15], mult: { hp: 2.8, atk: 2.0 }, curseMult: 2.2, xpMult: 12, goldMult: 4.4, monsterCount: 336,
+    F(7, { biome: 'cave', name: '깊은 물의 제단', levelRange: [13, 15], mult: { hp: 2.8, atk: 2.0 }, atkTempo: 1.25, curseMult: 2.2, xpMult: 12, goldMult: 4.4, monsterCount: 336,
       pool: pool(['naga', 35], ['naga_priest', 20], ['golem_crystal', 20], ['bat', 15], ['cave_spider', 10]), minibosses: ['naga_oracle', 'naga_guard_captain', 'golem_crystal_core'], boss: 'boss_naga_priestess',
       landmarks: [L('under_lake', '지하 호수', 'water'), L('naga_altar', '나가 제단', 'ruin'), L('crystal_cluster', '빛나는 수정 군락', 'crystal'), L('flooded_stairs', '물에 잠긴 계단', 'water'), L('prophecy_mural', '예언의 벽화', 'ruin'), L('pearl_rock', '진주 조개 바위', 'rock'), L('priestess_sanctum', '여사제의 성소', 'boss')],
       desc: '지하 호수에 나가들이 산다. 그들은 리프가 올 것을 알고 있었다.' }),
-    F(8, { biome: 'cave', name: '오크 전초 요새', levelRange: [15, 17], mult: { hp: 3.2, atk: 2.05 }, curseMult: 2.5, xpMult: 16, goldMult: 5.2, monsterCount: 342,
+    F(8, { biome: 'cave', name: '오크 전초 요새', levelRange: [15, 17], mult: { hp: 3.2, atk: 2.05 }, atkTempo: 1.04, curseMult: 2.5, xpMult: 16, goldMult: 5.2, monsterCount: 342,
       pool: pool(['orc', 30], ['orc_berserker', 20], ['orc_warlord', 15], ['troll_shaman', 20], ['skeleton_knight', 15]), minibosses: ['orc_warlord_krog', 'troll_shaman_elder', 'skeleton_knight_commander'], boss: 'boss_orc_warchief',
       landmarks: [L('orc_outpost', '오크 전초기지', 'camp'), L('skull_tower', '해골 탑', 'ruin'), L('drum_square', '북소리 광장', 'camp'), L('shaman_tent', '트롤 주술 천막', 'camp'), L('loot_store', '약탈품 창고', 'ruin'), L('blood_arena', '피의 투기장', 'rock'), L('warchief_gate', '대족장의 요새 문', 'boss')],
       desc: '망령 왕에게 고용된 오크들의 요새. 북소리가 나는 쪽은 무리가 크다.' }),
-    F(9, { biome: 'cave', name: '잊힌 신전', levelRange: [17, 19], mult: { hp: 3.6, atk: 2.1 }, curseMult: 2.8, xpMult: 20, goldMult: 6.2, monsterCount: 351,
+    F(9, { biome: 'cave', name: '잊힌 신전', levelRange: [17, 19], mult: { hp: 3.6, atk: 2.1 }, atkTempo: 1.05, curseMult: 2.8, xpMult: 20, goldMult: 6.2, monsterCount: 351,
       pool: pool(['wraith', 35], ['skeleton_knight', 25], ['skeleton', 15], ['naga_priest', 10], ['bat', 15]), minibosses: ['wraith_bishop', 'wraith_banshee', 'skeleton_knight_death'], boss: 'boss_wraith_king',
       landmarks: [L('forgotten_temple', '잊힌 신전', 'ruin'), L('wraith_corridor', '망령의 복도', 'path'), L('pillar_hall', '무너진 기둥 홀', 'ruin'), L('asel_altar', '아셀의 제단', 'ruin'), L('white_library', '하얀 사제의 서고', 'ruin'), L('knight_crypt', '기사단 묘실', 'ruin'), L('king_throne', '망령 왕의 옥좌', 'boss')],
       desc: '백 년 전 아셀을 따르던 사제들의 망령이 떠돈다. 성스러운 일격의 층.' }),
-    F(10, { biome: 'cave', name: '용의 둥지', levelRange: [18, 22], mult: { hp: 4.0, atk: 2.35 }, curseMult: 3.2, xpMult: 23, goldMult: 7.5, monsterCount: 360,
+    F(10, { biome: 'cave', name: '용의 둥지', levelRange: [18, 22], mult: { hp: 4.0, atk: 2.35 }, atkTempo: 1.15, curseMult: 3.2, xpMult: 23, goldMult: 7.5, monsterCount: 360,
       pool: pool(['drake', 35], ['golem_crystal', 25], ['naga', 15], ['wraith', 10], ['orc_warlord', 15]), minibosses: ['drake_elder', 'golem_crystal_red', 'naga_dragon_priest'], boss: 'boss_dragon',
       landmarks: [L('dragon_nest', '용의 둥지', 'crystal'), L('burning_rock', '불타는 바위', 'rock'), L('red_crystal_cave', '붉은 수정 동굴', 'crystal'), L('scale_graveyard', '용 비늘 무덤', 'ruin'), L('drake_nests', '새끼 용 둥지', 'rock'), L('heart_stairs', '탑의 심장 계단', 'path'), L('varga_lair', '바르가의 둥지', 'boss')],
       desc: '동굴 끝, 잿빛 드래곤 바르가의 둥지. 1부의 끝.' }),

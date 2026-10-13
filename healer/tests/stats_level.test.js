@@ -34,7 +34,7 @@ module.exports = {
     near(assert, d.healPower, 22.4); near(assert, d.matk, 22.4);
     near(assert, d.atk, 11);                   // 4×2 + 6×0.5
     assert.strictEqual(d.def, 5);
-    near(assert, d.evasion, 2.4); near(assert, d.moveSpeed, 194.56);
+    near(assert, d.evasion, 2.4); near(assert, d.moveSpeed, 235.52);   // 230 × (1 + 6×0.004)
     near(assert, d.mpRegen, 1.7); assert.strictEqual(d.castSpeed, 1); assert.strictEqual(d.mpCostMult, 1);
     assert.strictEqual(d.fatigueMult, 1); assert.strictEqual(d.healTakenMult, 1); assert.strictEqual(d.rooted, false);
     assert.strictEqual(G.player.hp, 154, 'State.newGame 이 Stats 로 현재 HP 를 채움');
@@ -94,7 +94,7 @@ module.exports = {
       curses: [{ id: 'spd_down', until: 100 }, { id: 'heal_down', until: 100 }] };
     let d = Stats.derive(ent, G, 10);
     near(assert, d.def, 5 * 1.2); near(assert, d.evasion, 2.4 + 20); near(assert, d.mpCostMult, 0.75);
-    near(assert, d.moveSpeed, 194.56 * 0.6, '', 1e-2); assert.strictEqual(d.healTakenMult, 0.5);
+    near(assert, d.moveSpeed, 235.52 * 0.6, '', 1e-2); assert.strictEqual(d.healTakenMult, 0.5);
     // 마나 버프는 50 에 끝남
     d = Stats.derive(ent, G, 60);
     assert.strictEqual(d.mpCostMult, 1); near(assert, d.def, 6);

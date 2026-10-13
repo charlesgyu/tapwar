@@ -48,6 +48,9 @@ module.exports = {
     assert.ok(fs.chests.length >= 16 && fs.chests.every((c) => !c.opened));
     assert.ok(fs.chests.filter((c) => c.hidden).every((c) => !c.revealed) && fs.chests.filter((c) => !c.hidden).every((c) => c.revealed), '숨김 상자만 가려짐');
     assert.strictEqual(fs.visited.length, fs.map.cols * fs.map.rows); assert.ok(fs.visited[fs.map.spawn.j * fs.map.cols + fs.map.spawn.i] === 1, '시작점은 밝혀짐');
+    assert.strictEqual(fs.battle.deferGold, false, '기본은 처치 골드 즉시 적용');
+    const ctx2 = load('all'), G2 = ctx2.State.newGame('리프');
+    assert.strictEqual(ctx2.Floor.start(G2, 1, { rng: ctx2.RNG.make(1), deferGold: true }).battle.deferGold, true, 'opts.deferGold 전달');
     assert.strictEqual(fs.bossDefeated, false); assert.strictEqual(fs.cleared, false); assert.strictEqual(fs.steps, 0);
     assert.strictEqual(fs.battle.floor, 1); assert.strictEqual(fs.battle.G, G);
   },
