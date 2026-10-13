@@ -1222,12 +1222,14 @@ class FlyingOrb {
       if (pierceDefense) { flashZone(t, '#7c3aed'); addFx(t, 'piercing'); }
     }
     if (rivalHit && !pierceDefense) {
-      // [아이템 반사 방패] 쏜 곳으로 그대로 되돌림 (되돌린 구슬은 다시 반사되지 않음)
-      if (!this.reflected && this.sourceZone && hasItem(t.owner, 'reflect') && Math.random() < defenseChance(t, 'reflect')) {
-        const back = new FlyingOrb(t, this.sourceZone, t.owner, this.power);
-        back.reflected = true;
-        addFx(t, 'reflect');
-        flyingOrbs.push(back);
+      // [아이템 철벽] 완전히 막고, 쏜 곳으로 그대로 되돌림 (v69: 반사 방패를 합침. 되돌린 구슬은 다시 되돌아가지 않고 막기만)
+      if (hasItem(t.owner, 'fortress') && Math.random() < defenseChance(t, 'fortress')) {
+        if (!this.reflected && this.sourceZone) {
+          const back = new FlyingOrb(t, this.sourceZone, t.owner, this.power);
+          back.reflected = true;
+          flyingOrbs.push(back);
+          addFx(t, 'reflect');
+        } else addFx(t, 'fortress');
         if (atk) atk.done();
         return;
       }
@@ -1253,8 +1255,8 @@ class FlyingOrb {
       atk.chain('curse', ITEM_BAL.chainShots, ITEM_BAL.rareChance); // 저주샷: 상대 다음 공격 동안 상대 카드 효과 없음
       atk.done();
     }
-    // 맞는 쪽: 철벽 (관통샷이 터지면 무시)
-    let power = rivalHit && !pierceDefense ? defenseTake(attack, t) : attack;
+    // 맞는 쪽 철벽은 위에서 이미 판정 (본 타격은 두 번 굴리지 않음)
+    let power = attack;
     const wasRival = t.owner !== OWNER.NEUTRAL && t.owner !== own;
     // [아이템 재건] 내 지역에 쏜 구슬(회복): 10% 확률로 회복량 2배, 그때 30% 확률로 붙어 있는 내 지역들도 같이 회복
     const rbs = this.sourceZone && this.sourceZone.owner === own ? zoneItemState(this.sourceZone) : newItemState();
@@ -2964,8 +2966,7 @@ const ITEMS = [
   { key: 'rapid', name: '속사', desc: '10% 확률로 다음 5공격을 2배 빨리 쏘고 2배 빠르게 날아감' },
   { key: 'curse', name: '저주샷', desc: '10% 확률로 맞은 상대 지역의 다음 5공격에 아이템 효과 없음' },
   { key: 'buff', name: '버프샷', desc: '10% 확률로 내 다음 5공격의 모든 아이템 효과 2배' },
-  { key: 'fortress', name: '철벽', desc: '10% 확률로 상대 공격을 완전히 막음' },
-  { key: 'reflect', name: '반사 방패', desc: '10% 확률로 상대 구슬을 쏜 곳으로 되돌림' },
+  { key: 'fortress', name: '철벽', desc: '10% 확률로 상대 공격을 완전히 막고 쏜 곳으로 되돌림' },
   { key: 'absorb', name: '흡수', desc: '10% 확률로 상대 공격을 막고 그 2배만큼 회복' },
   { key: 'rebuild', name: '재건', desc: '내 지역에 쏘면 10% 확률로 회복 2배, 그때 30% 확률로 붙은 내 지역도 회복' },
   { key: 'longrange', name: '장거리 사격', desc: '모든 내 지역이 원거리 공격 가능' },
@@ -3199,7 +3200,7 @@ function itemChance(st, base) {
 }
 // 맞는 지역의 방어 확률 (그 지역에 보급이 켜져 있으면 +10%p)
 function defenseChance(t, key) { return itemChance(zoneItemState(t), ITEM_BAL.baseChance) + (key ? itemStackBonus(t.owner, key) : 0); }
-// [아이템 철벽] 확률로 상대 공격을 완전히 막음
+// [아이템 철벽] 튕긴 타격·폭발 피해: 확률로 완전히 막음 (되돌릴 곳이 없어 막기만)
 function defenseTake(power, t) {
   if (hasItem(t.owner, 'fortress') && Math.random() < defenseChance(t, 'fortress')) { addFx(t, 'fortress'); return power * ITEM_BAL.fortressTake; }
   return power;
@@ -4669,7 +4670,7 @@ window.restorePurchases = restorePurchases;
 const ITEM_GUIDE_GROUPS = [
   ['공격할 때', ['power', 'crit', 'pierce', 'explode', 'piercing', 'paralyze']],
   ['다음 5공격 동안 (터진 지역에서만)', ['rapid', 'supply', 'buff', 'curse']],
-  ['막을 때 · 회복', ['fortress', 'reflect', 'absorb', 'rebuild']],
+  ['막을 때 · 회복', ['fortress', 'absorb', 'rebuild']],
   ['항상 켜짐', ['longrange']]
 ];
 // 카드 위 짧은 분류 꼬리표
