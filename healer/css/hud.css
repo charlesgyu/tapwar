@@ -1,0 +1,35 @@
+/* 마을 HUD — 상단 상태 카드 + 문 앞 안내 + 하단 고정 버튼 바 (세로 폰 기준) */
+#game { position: relative; width: 100%; height: 100%; }
+#view { display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+#hud { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; z-index: 10;
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
+#hud .top { display: flex; align-items: flex-start; gap: 8px; }
+#hud .card { background: rgba(255,255,255,0.9); border: 1.5px solid #5a4030; border-radius: 10px; box-shadow: 0 2px 0 #5a4030; }
+#hud .status { padding: 6px 10px; min-width: 156px; }
+#hud .status .name { font-weight: 800; font-size: 13px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+#hud .status .lv { font-size: 11px; color: #7a5a3a; font-weight: 700; }
+#hud .bar { position: relative; height: 8px; border-radius: 4px; background: #e6dccb; margin-top: 4px; overflow: hidden; border: 1px solid #c9b89a; }
+#hud .bar i { display: block; height: 100%; border-radius: 4px; transition: width 0.25s; }
+#hud .bar.hp i { background: linear-gradient(#ff8a8a, #e04a4a); }
+#hud .bar.mp i { background: linear-gradient(#8ac8ff, #3a86e0); }
+#hud .bar.fatigue i { background: linear-gradient(#c8a8ff, #8a5ae0); }
+#hud .bar.fatigue { height: 5px; }
+#hud .sub { display: flex; justify-content: space-between; font-size: 9px; color: #8a7a6a; font-weight: 700; margin-top: 2px; }
+#hud .right { margin-left: auto; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+#hud .gold { padding: 6px 10px; font-weight: 800; font-size: 12px; white-space: nowrap; }
+#hud .title { padding: 5px 10px; font-weight: 900; font-size: 12px; color: #4a3a30; letter-spacing: 0.5px; text-align: right; }
+#hud .title small { display: block; font-size: 10px; font-weight: 600; color: #8a7a6a; }
+#hud .bottom { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+/* 문 앞 안내 */
+#prompt { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; font-weight: 800; font-size: 14px; animation: hud-pop 0.18s ease-out; }
+#prompt button { border: 0; border-radius: 8px; padding: 10px 16px; min-height: 44px; font-weight: 800; font-size: 14px; color: #fff; background: #5aa84a; box-shadow: 0 2px 0 #2f6b2f; font-family: inherit; }
+#prompt button:active { transform: translateY(2px); box-shadow: none; }
+#toast { background: rgba(42,32,32,0.88); color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; text-align: center; max-width: 92%; animation: hud-pop 0.18s ease-out; }
+/* 하단 고정 버튼 바 */
+#bottom-bar { pointer-events: auto; width: 100%; max-width: 440px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 6px; background: rgba(251,246,234,0.94); border: 2px solid #5a4030; border-radius: 14px; box-shadow: 0 3px 0 #5a4030; }
+#bottom-bar button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 52px; border: 0; border-radius: 10px; background: #fff; box-shadow: 0 2px 0 #c9b89a; font-family: inherit; color: #4a3a30; font-weight: 800; font-size: 11px; }
+#bottom-bar button .ic { font-size: 20px; line-height: 1; }
+#bottom-bar button:active { transform: translateY(2px); box-shadow: none; }
+#bottom-bar button .badge { position: absolute; top: 4px; right: 8px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #d9534f; color: #fff; font-size: 10px; line-height: 16px; text-align: center; }
+.hidden { display: none !important; }
+@keyframes hud-pop { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
