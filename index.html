@@ -5,6 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>TAPWAR - Minimal Metro Edition</title>
   <style>
+    /* 디자인 토큰: 남색 잉크 + 노랑 신호 두 가지 강조색, 따뜻한 돌색 중성 계열, 둥글기 4단계 */
+    :root {
+      --navy-900: #0f172a;
+      --navy-800: #1e293b;
+      --navy-700: #334155;
+      --paper: #f6f5f0;
+      --card: #ffffff;
+      --inset: #f7f6f2;
+      --line: #e7e5e4;
+      --line-2: #d6d3cd;
+      --ink: #0f172a;
+      --ink-2: #57534e;
+      --muted: #78716c;
+      --faint: #a8a29e;
+      --accent: #fde047;
+      --accent-ground: #eab308;
+      --player: #2563eb;
+      --player-soft: #dbeafe;
+      --enemy: #dc2626;
+      --enemy-soft: #fee2e2;
+      --win: #16a34a;
+      --win-soft: #dcfce7;
+      --lose: #be123c;
+      --r-xs: 10px;
+      --r-sm: 14px;
+      --r-md: 20px;
+      --r-lg: 28px;
+      --pill: 999px;
+      --shadow-card: 0 1px 0 var(--line), 0 8px 24px rgba(15, 23, 42, 0.08);
+      --sky: radial-gradient(120% 90% at 50% 22%, #1e293b 0%, #16213a 55%, #0b1222 100%);
+      --sat: env(safe-area-inset-top, 0px);
+    }
     * {
       box-sizing: border-box;
       user-select: none;
@@ -18,12 +50,8 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background-color: #f6f5f0;
-      background-image:
-        linear-gradient(rgba(0, 0, 0, 0.032) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 0, 0, 0.032) 1px, transparent 1px);
-      background-size: 26px 26px;
-      color: #1e293b;
+      background-color: var(--paper); /* 26px 격자는 game.js(drawWorldGrid)가 지도와 함께 월드 좌표로 그림 */
+      color: var(--navy-800);
       font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", Roboto, sans-serif;
       touch-action: none;
     }
@@ -49,7 +77,7 @@
       justify-content: space-between;
       padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
     }
-    /* Top Floating Bar */
+    /* Top Floating Bar (시계는 캔버스 알약으로 그림 — 아래 #top-timer 는 숨김 자리만 유지) */
     .top-bar {
       align-self: center;
       display: flex;
@@ -59,72 +87,33 @@
       pointer-events: none;
       max-width: 96%;
     }
-    .top-bar-main {
-      background: rgba(255, 255, 255, 0.94);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      border: 1.5px solid #e2e8f0;
-      border-radius: 999px;
-      padding: 6px 14px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-      pointer-events: auto;
-      font-size: 13px;
-      font-weight: 700;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      white-space: nowrap;
-    }
-    .badge-player {
-      color: #2563eb;
-    }
-    .badge-enemy {
-      color: #dc2626;
-    }
-    .speed-control-group {
-      display: flex;
-      gap: 2px;
-      background: #f1f5f9;
-      padding: 2px 4px;
-      border-radius: 999px;
-      border: 1px solid #e2e8f0;
-      pointer-events: auto;
-    }
-    .speed-btn {
-      background: transparent;
-      border: none;
-      color: #64748b;
-      padding: 3px 7px;
-      font-size: 11px;
-      font-weight: 700;
-      border-radius: 999px;
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-    .speed-btn.active {
-      background: #0f172a;
+    .top-timer, .top-timer[hidden] { display: none; }
+
+    /* 안내 알약: 화면 위 가운데, 남색 (게임 중 아이템·경보 등 짧은 안내) */
+    #status-guide {
+      position: fixed;
+      left: 50%;
+      top: calc(var(--sat) + 76px);
+      transform: translateX(-50%);
+      z-index: 42;
+      max-width: calc(100vw - 32px);
+      padding: 7px 14px;
+      border-radius: var(--pill);
+      background: rgba(15, 23, 42, 0.9);
       color: #ffffff;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
-    }
-    .status-banner {
-      background: rgba(255, 255, 255, 0.92);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border: 1px solid #e2e8f0;
-      padding: 4px 14px;
-      border-radius: 999px;
-      color: #475569;
-      font-size: 11.5px;
-      font-weight: 600;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-      white-space: nowrap;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.25);
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 800;
+      line-height: 1.35;
+      text-align: center;
+      word-break: keep-all;
+      white-space: normal;
       pointer-events: none; /* 안내 문구가 아래 지역의 탭을 가로채지 않도록 */
+      opacity: 0;
+      transition: opacity 0.25s;
     }
+    #status-guide.show { opacity: 1; transition-duration: 0.15s; }
 
     /* Bottom Control Bar */
     .bottom-bar {
@@ -135,34 +124,33 @@
       width: 100%;
     }
     .guide-tip {
-      background: rgba(255, 255, 255, 0.88);
-      backdrop-filter: blur(8px);
-      border: 1px solid #e2e8f0;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--line);
       padding: 6px 12px;
-      border-radius: 12px;
+      border-radius: var(--r-sm);
       font-size: 11px;
-      color: #64748b;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      color: var(--muted);
+      box-shadow: var(--shadow-card);
       pointer-events: auto;
       max-width: 60%;
       line-height: 1.35;
     }
 
-    /* Special Skill Button (Mini Metro FAB Style) */
+    /* 지도 출처 (남색 홈 위의 작은 글씨) */
     .map-credit {
       margin-top: 10px;
       font-size: 9.5px;
-      color: #94a3b8;
+      color: rgba(255, 255, 255, 0.45);
       line-height: 1.4;
     }
 
-    /* Minimap */
+    /* Minimap: 남색 카드 */
     .minimap-card {
-      background: rgba(246, 245, 240, 0.94);
-      border: 1.5px solid #e2e8f0;
-      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.92);
+      border: none;
+      border-radius: var(--r-sm);
       padding: 4px;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.3);
       pointer-events: auto;
       touch-action: none;
       line-height: 0;
@@ -174,10 +162,11 @@
       display: block;
       width: auto;
       height: auto;
+      border-radius: 10px;
       cursor: pointer;
     }
 
-    /* Surrender Button (2단계 확인: 첫 탭 ➔ 확인 상태, 3초 안에 다시 탭 ➔ 항복) */
+    /* Surrender Button (2단계 확인: 첫 탭 ➔ 확인 상태, 3초 안에 다시 탭 ➔ 항복) — 남색 알약 */
     .bottom-actions {
       display: flex;
       align-items: flex-end;
@@ -185,38 +174,55 @@
       pointer-events: none;
     }
     .surrender-btn {
-      background: #ffffff;
-      border: 1.5px solid #cbd5e1;
-      border-radius: 14px;
-      padding: 9px 12px;
-      font-size: 12px;
-      font-weight: 700;
-      color: #475569;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-      transition: all 0.15s ease;
-      pointer-events: auto;
+      background: rgba(15, 23, 42, 0.92);
+      border: none;
+      color: #ffffff;
+      border-radius: var(--pill);
+      padding: 9px 14px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.2;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+      position: relative;
+      overflow: hidden;
+      min-width: 64px;
       white-space: nowrap;
+      cursor: pointer;
+      pointer-events: auto;
+      transition: min-width 0.15s ease, background 0.15s ease;
     }
     .surrender-btn:active {
-      transform: scale(0.96);
+      transform: translateY(1px);
     }
     .surrender-btn.armed {
-      background: #dc2626;
-      border-color: #dc2626;
+      background: var(--enemy);
       color: #ffffff;
+      min-width: 128px;
     }
+    /* 확인 대기 3초(SURRENDER_CONFIRM_MS)가 줄어드는 띠 */
+    .surrender-btn.armed::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      height: 3px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.85);
+      animation: surrender-drain 3s linear forwards;
+    }
+    @keyframes surrender-drain { to { width: 0; } }
     .surrender-btn[hidden] {
       display: none;
     }
 
-    /* Modals - Clean Bauhaus/Mini Metro Card System */
+    /* Modals - 하나의 남색 스크림(흐림 없음) 위에 흰 종이 카드 */
     .modal-overlay {
       position: absolute;
       inset: 0;
-      background: rgba(246, 245, 240, 0.88);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: rgba(11, 18, 34, 0.55);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -225,44 +231,22 @@
       padding: 16px;
     }
     .modal-card {
-      background: #ffffff;
-      border: 1.5px solid #e2e8f0;
-      border-radius: 22px;
+      background: var(--card);
+      border: none;
+      border-radius: var(--r-lg);
       padding: 24px 20px;
       text-align: center;
       max-width: 600px;
       width: 100%;
-      box-shadow: 0 16px 45px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
       animation: popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
     @keyframes popIn {
       0% { transform: scale(0.95); opacity: 0; }
       100% { transform: scale(1); opacity: 1; }
     }
-    .modal-brand {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      margin-bottom: 4px;
-    }
-    .modal-brand-line {
-      width: 24px;
-      height: 4px;
-      border-radius: 999px;
-    }
-    .modal-title {
-      font-size: 20px;
-      font-weight: 800;
-      color: #0f172a;
-      letter-spacing: -0.5px;
-    }
-    .modal-desc {
-      font-size: 12.5px;
-      color: #64748b;
-      margin-bottom: 16px;
-      line-height: 1.4;
-    }
+    @keyframes viewIn { from { opacity: 0; } }
+    @keyframes cardIn { from { opacity: 0; transform: translateY(10px) scale(0.97); } }
 
     /* Mini Metro Stage Cards Grid */
     .stage-grid {
@@ -272,9 +256,9 @@
       margin-bottom: 18px;
     }
     .stage-card {
-      background: #f8fafc;
-      border: 2px solid #e2e8f0;
-      border-radius: 16px;
+      background: var(--card);
+      border: 2px solid var(--line);
+      border-radius: var(--r-md);
       padding: 12px 6px;
       cursor: pointer;
       transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -284,13 +268,13 @@
       text-align: center;
     }
     .stage-card:hover {
-      border-color: #cbd5e1;
+      border-color: var(--line-2);
       transform: translateY(-2px);
     }
     .stage-card.active {
-      border-color: #0f172a !important;
-      background: #ffffff !important;
-      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12) !important;
+      border-color: var(--accent);
+      background: var(--card);
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
       transform: translateY(-2px);
     }
     .stage-card-preview {
@@ -305,48 +289,64 @@
     .stage-name {
       font-weight: 800;
       font-size: 13.5px;
-      color: #0f172a;
+      color: var(--ink);
       margin-bottom: 2px;
     }
     .stage-sub {
       font-size: 10px;
-      color: #64748b;
+      color: var(--muted);
       font-weight: 600;
     }
     .stage-record {
       margin-top: 6px;
       padding-top: 5px;
-      border-top: 1px solid #e2e8f0;
+      border-top: 1px solid var(--line);
       font-size: 10px;
-      color: #0f172a;
+      color: var(--ink);
       font-weight: 700;
       width: 100%;
     }
 
-    /* Start Button - Mini Metro Yellow Box Button */
+    /* 주 버튼: 노란 알약 하나 (노랑 = 나 / 시작 / 본진) */
     .start-btn {
       width: 100%;
-      background: #eab308;
-      color: #0f172a;
+      background: var(--accent);
+      color: var(--ink);
       border: none;
       padding: 13px 20px;
+      font-family: inherit;
       font-size: 15px;
       font-weight: 800;
-      border-radius: 14px;
+      border-radius: var(--pill);
       cursor: pointer;
-      box-shadow: 0 4px 15px rgba(234, 179, 8, 0.35);
-      transition: all 0.15s ease;
+      box-shadow: 0 5px 0 var(--accent-ground), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
     }
-    .start-btn:hover {
-      background: #facc15;
-      transform: translateY(-1px);
-    }
     .start-btn:active {
-      transform: scale(0.98);
+      transform: translateY(3px);
+      box-shadow: 0 2px 0 var(--accent-ground), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    }
+    /* 보조 버튼: 흰 알약 (취소 / 이전 / 홈으로) */
+    .btn-secondary {
+      background: var(--card);
+      border: 1.5px solid var(--line);
+      border-radius: var(--pill);
+      box-shadow: 0 3px 0 var(--line);
+      color: var(--ink-2);
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 800;
+      padding: 14px 20px;
+      cursor: pointer;
+      transition: transform 0.12s ease, box-shadow 0.12s ease;
+    }
+    .btn-secondary:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 var(--line);
     }
 
     /* Mobile Responsive Tweaks */
@@ -363,55 +363,70 @@
       .stage-card-preview {
         height: 42px;
       }
-      .top-bar-main {
-        padding: 4px 10px;
-        gap: 6px;
-        font-size: 12px;
-      }
       .guide-tip {
         display: none; /* 화면 작은 폰에서는 간결함을 위해 숨김 */
       }
     }
 
-    /* ---------- Start screen (minimal & cute) ---------- */
+    /* ---------- Start screen: 아이콘과 같은 남색 하늘 위의 흰 종이 카드 ---------- */
     .start-card {
       max-width: 380px;
       padding: 28px 20px 18px;
-      border-radius: 28px;
+      border-radius: var(--r-lg);
       border: none;
-      box-shadow: 0 18px 50px rgba(30, 41, 59, 0.10);
+      background: transparent;
+      box-shadow: none;
+      position: relative;
+      z-index: 1;
     }
+    /* 워드마크: TAPWAR 아래 파랑·노랑·빨강 세 점이 선 위에서 통통 */
     .start-logo {
-      font-size: 34px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      font-size: 54px;
       font-weight: 900;
-      letter-spacing: -1px;
-      color: #1e293b;
-      margin-bottom: 22px;
-      display: inline-flex;
-      align-items: flex-end;
-      gap: 6px;
+      letter-spacing: -2.5px;
+      color: #ffffff;
+      margin-bottom: 30px;
     }
-    .logo-dots {
-      display: inline-flex;
-      gap: 4px;
-      padding-bottom: 9px;
+    .logo-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 3.3em;
+      height: 14px;
+      letter-spacing: 0;
+      background: linear-gradient(rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.35)) center / 100% 2px no-repeat;
     }
-    .logo-dots i {
-      width: 9px;
-      height: 9px;
+    .logo-line i {
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
+      border: 2.5px solid #0b1222;
+      box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.55);
       display: block;
       animation: bob 1.4s ease-in-out infinite;
     }
-    .logo-dots i:nth-child(1) { background: #60a5fa; }
-    .logo-dots i:nth-child(2) { background: #fde047; animation-delay: 0.15s; }
-    .logo-dots i:nth-child(3) { background: #f87171; animation-delay: 0.3s; }
+    .logo-line i:nth-child(1) { background: #60a5fa; }
+    .logo-line i:nth-child(2) { background: #fde047; animation-delay: 0.15s; }
+    .logo-line i:nth-child(3) { background: #f87171; animation-delay: 0.3s; }
     @keyframes bob {
       0%, 100% { transform: translateY(0); }
       50% { transform: translateY(-5px); }
     }
     @media (prefers-reduced-motion: reduce) {
-      .logo-dots i { animation: none; }
+      .logo-line i { animation: none; }
+    }
+    /* 홈 화면 등장: 화면은 살짝 페이드, 카드는 순서대로(--i) 떠오름 */
+    @media (prefers-reduced-motion: no-preference) {
+      .home-view:not([hidden]) { animation: viewIn 0.22s ease both; }
+      .stage-grid .stage-card {
+        animation: cardIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+        animation-delay: min(calc(var(--i, 0) * 40ms), 200ms);
+      }
+      .home-view .start-btn { animation: cardIn 0.32s 0.18s backwards; }
     }
     /* 스테이지: 가로로 넘기는 슬라이드 */
     .start-card .stage-grid {
@@ -439,11 +454,11 @@
       width: 30px;
       height: 30px;
       border-radius: 50%;
-      border: none;
-      background: rgba(255, 255, 255, 0.95);
-      box-shadow: 0 2px 8px rgba(30, 41, 59, 0.18);
+      border: 1.5px solid rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.12);
+      box-shadow: none;
       font: 800 20px/1 -apple-system, sans-serif;
-      color: #1e293b;
+      color: #ffffff;
       cursor: pointer;
       display: none;
     }
@@ -452,34 +467,36 @@
     /* 마우스가 있는 기기(PC)에서만 화살표 표시 */
     @media (hover: hover) and (pointer: fine) {
       .slide-arrow { display: block; }
-      .start-card .stage-grid, .country-row { cursor: grab; }
+      .start-card .stage-grid { cursor: grab; }
     }
     .start-card .stage-grid .stage-card {
       flex: 0 0 44%;
       scroll-snap-align: center;
       padding: 16px 8px 14px;
     }
+    /* 맵·나라 카드: 남색 하늘 위의 흰 종이, 고른 카드는 노란 테두리 */
     .start-card .stage-card {
       font: inherit;
-      background: #f7f6f2;
+      background: var(--card);
       border: 2.5px solid transparent;
-      border-radius: 22px;
+      border-radius: var(--r-md);
       padding: 12px 8px 10px;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 2px;
       cursor: pointer;
-      box-shadow: none;
-      transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.30);
+      transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
     }
     .start-card .stage-card:hover { transform: translateY(-2px); }
     .start-card .stage-card.active {
-      background: #ffffff !important;
-      border-color: #1e293b !important;
-      box-shadow: 0 6px 18px rgba(30, 41, 59, 0.10) !important;
+      background: var(--card);
+      border-color: var(--accent);
+      transform: translateY(-4px);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.40);
     }
-    .start-card .stage-card:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
+    .start-card .stage-card:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     .stage-thumb {
       width: 96px;
       height: 96px;
@@ -488,13 +505,13 @@
     .start-card .stage-name {
       font-size: 15px;
       font-weight: 800;
-      color: #1e293b;
+      color: var(--navy-800);
       margin: 0;
     }
     .start-card .stage-sub {
       font-size: 11px;
       font-weight: 700;
-      color: #a8a29e;
+      color: var(--faint);
     }
     .start-card .stage-record {
       font-size: 11px;
@@ -508,77 +525,36 @@
     }
     .start-card .stage-record:empty { display: none; }
     .start-card .start-btn {
-      border-radius: 999px;
       font-size: 17px;
       padding: 14px 20px;
-      background: #fde047;
-      color: #1e293b;
-      box-shadow: 0 6px 0 #eab308;
     }
-    .start-card .start-btn:hover { background: #fde047; transform: none; }
-    .start-card .start-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #eab308; }
-    .start-card { position: relative; }
     .start-card .map-credit { margin-top: 14px; }
-    .info-btn {
+    /* 둥근 아이콘 버튼 (ⓘ 지도 출처 / ‹ 뒤로): 남색 위 반투명 흰 원 */
+    .info-btn, .back-btn {
       position: absolute;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1.5px solid rgba(255, 255, 255, 0.22);
+      color: #ffffff;
+      padding: 0;
+      font-family: inherit;
+      font-weight: 800;
+      font-style: normal;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .info-btn {
       top: 14px;
       right: 14px;
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      border: 1.5px solid #d6d3cd;
-      background: transparent;
-      color: #a8a29e;
-      font: 700 12px/1 Georgia, serif;
-      font-style: italic;
-      cursor: pointer;
-      padding: 0;
+      font-size: 12px;
     }
-    .info-btn:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
+    .info-btn:focus-visible, .back-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     .map-credit[hidden] { display: none; }
 
     /* ---------- Home: 나라 선택 · 스테이지 잠금 · 튜토리얼 ---------- */
-    .country-row {
-      display: flex;
-      gap: 6px;
-      overflow-x: auto;
-      margin: -6px -4px 14px;
-      padding: 2px 4px;
-      scrollbar-width: none;
-    }
-    .country-row::-webkit-scrollbar { display: none; }
-    .country-chip {
-      flex: 0 0 auto;
-      font: inherit;
-      font-size: 13px;
-      font-weight: 800;
-      padding: 10px 16px;
-      border-radius: 10px;
-      border: 2px solid transparent;
-      background: #f7f6f2;
-      color: #1e293b;
-      cursor: pointer;
-      white-space: nowrap;
-      position: relative;
-      overflow: hidden;
-      isolation: isolate;
-    }
-    /* 국기를 박스에 꽉 차게(비율 유지, 가운데 잘라 쓰기) 반투명 배경으로 */
-    .country-chip .flag-bg {
-      position: absolute;
-      left: 50%; top: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 96px;
-      line-height: 1;
-      opacity: 0.5;
-      z-index: -1;
-      pointer-events: none;
-    }
-    .country-chip .chip-name { position: relative; text-shadow: 0 0 4px #fff, 0 0 2px #fff; }
-    .country-chip.active .chip-name { text-shadow: 0 0 4px #1e293b, 0 0 2px #1e293b; }
-    .country-chip.active { background: #1e293b; color: #fff; }
-    .country-chip.locked { color: #57534e; }
-    .country-chip:focus-visible { outline: 3px solid #60a5fa; outline-offset: 2px; }
     .start-card .stage-card { position: relative; }
     .stage-no {
       position: absolute;
@@ -586,21 +562,54 @@
       left: 10px;
       font-size: 11px;
       font-weight: 900;
-      color: #a8a29e;
+      color: var(--faint);
       font-variant-numeric: tabular-nums;
     }
-    .stage-card.locked { cursor: pointer; }
-    /* 잠긴 맵도 어떤 맵인지 알아볼 수 있게: 색은 살짝 흐리게, 자물쇠는 오른쪽 위에 작게 */
-    .stage-card.locked .stage-thumb { filter: saturate(0.55) opacity(0.7); }
-    .stage-card.locked .stage-name { color: #78716c; }
-    .stage-card.locked .stage-sub { color: #c4c0b8; }
+    .stage-card.locked { cursor: pointer; } /* 탭하면 잠김 안내 시트 */
+    /* 잠긴 맵: 검은 막 대신 점선 빈칸 + 가운데 '잠김/구매' 알약 (썸네일은 캔버스가 회색으로 그림) */
+    .start-card .stage-card.locked {
+      background: rgba(255, 255, 255, 0.06);
+      border: 2.5px dashed rgba(255, 255, 255, 0.28);
+      box-shadow: none;
+    }
+    .stage-card.locked .stage-name { color: rgba(255, 255, 255, 0.6); }
+    .stage-card.locked .stage-no, .stage-card.locked .stage-sub { color: rgba(255, 255, 255, 0.35); }
+    .stage-card.locked .stage-thumb { opacity: 0.55; }
     .stage-lock {
       position: absolute;
-      top: 7px;
-      right: 9px;
+      left: 50%;
+      top: 44%;
+      transform: translate(-50%, -50%);
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: var(--pill);
+      background: rgba(255, 255, 255, 0.94);
+      color: var(--ink);
       font-size: 13px;
+      font-weight: 800;
+      line-height: 1;
+      white-space: nowrap;
+      pointer-events: none;
     }
-    .stage-card.cleared .stage-no::after { content: ' ✓'; color: #16a34a; }
+    .stage-lock svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2.2; }
+    /* 클리어한 맵: 오른쪽 위 초록 ✓ */
+    .stage-done {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--win);
+      color: #ffffff;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1;
+    }
     .home-links {
       display: flex;
       justify-content: center;
@@ -608,14 +617,14 @@
       flex-wrap: wrap;
       gap: 0 8px;
       margin-top: 12px;
-      color: #c4c0b8;
+      color: rgba(255, 255, 255, 0.35);
     }
     .links-break { flex-basis: 100%; height: 0; } /* 소리 켜기/끄기는 둘째 줄 */
     .link-btn {
       font: inherit;
       font-size: 13px;
       font-weight: 700;
-      color: #78716c;
+      color: rgba(255, 255, 255, 0.62);
       background: none;
       border: none;
       padding: 6px 4px;
@@ -625,48 +634,97 @@
     .sheet-overlay { z-index: 300; }
     .guide-card { max-width: 420px; width: calc(100vw - 32px); max-height: calc(100dvh - 48px); display: flex; flex-direction: column; text-align: left; }
     .guide-card .sheet-title { text-align: center; }
-    .guide-sub { font-size: 13px; color: #78716c; line-height: 1.5; text-align: center; margin-bottom: 12px; }
-    .guide-list { overflow-y: auto; -webkit-overflow-scrolling: touch; margin: 0 -6px 14px; padding: 0 6px; }
-    .guide-group { font-size: 12px; font-weight: 800; color: #94a3b8; margin: 12px 0 6px; }
-    .guide-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
-    .guide-row:last-child { border-bottom: none; }
-    .guide-icon { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 11px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; }
-    .guide-name { font-size: 15px; font-weight: 800; color: #1e293b; }
-    .guide-desc { font-size: 13px; color: #57534e; line-height: 1.45; margin-top: 2px; }
-    .top-timer {
-      font: 800 15px/1 ui-monospace, "SF Mono", Menlo, monospace;
-      color: #1e293b;
-      font-variant-numeric: tabular-nums;
-      padding: 8px 16px;
+    .guide-sub { font-size: 13px; color: var(--muted); line-height: 1.5; text-align: center; margin-bottom: 12px; }
+    .guide-list {
+      overflow-y: auto; -webkit-overflow-scrolling: touch; margin: 0 -6px 14px; padding: 0 6px 12px;
+      -webkit-mask-image: linear-gradient(#000 calc(100% - 28px), transparent);
+      mask-image: linear-gradient(#000 calc(100% - 28px), transparent);
     }
-    .top-timer[hidden], .status-banner[hidden] { display: none; }
-    .speed2-btn { font-size: 15px; font-weight: 900; color: #1e293b; min-width: 54px; }
-    .speed2-btn.on { background: #1e293b; color: #fde047; border-color: #1e293b; }
-    /* 구매 전 ×2: 어둡게 (누르면 결제 화면) */
-    .speed2-btn.locked { background: #94a3b8; color: #e2e8f0; border-color: #94a3b8; }
-    #speed-group { display: flex; gap: 6px; }
+    .guide-group { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: var(--faint); margin: 14px 0 6px; }
+    .guide-group::before { content: ''; width: 3px; height: 14px; border-radius: 2px; background: var(--accent); }
+    .guide-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--inset); }
+    .guide-row:last-child { border-bottom: none; }
+    .guide-icon { flex: 0 0 auto; width: 40px; height: 40px; border-radius: var(--r-xs); background: #eff6ff; color: var(--player); display: flex; align-items: center; justify-content: center; }
+    .guide-name { font-size: 15px; font-weight: 800; color: var(--navy-800); }
+    .guide-desc { font-size: 13px; color: var(--muted); line-height: 1.45; margin-top: 2px; }
+    /* 배속 ×1 ×2: 남색 알약 하나 안의 두 칸, 켜진 칸만 노랑 */
+    #speed-group {
+      display: flex;
+      gap: 2px;
+      padding: 3px;
+      background: rgba(15, 23, 42, 0.92);
+      border-radius: var(--pill);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+    }
     #speed-group[hidden] { display: none; }
-    .purchase-price { font-size: 22px; font-weight: 900; color: #1e293b; margin: -6px 0 16px; font-variant-numeric: tabular-nums; }
+    .speed2-btn {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      border-radius: var(--pill);
+      padding: 7px 12px;
+      min-width: 44px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1;
+      color: rgba(255, 255, 255, 0.7);
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .speed2-btn.on { background: var(--accent); color: var(--ink); }
+    /* 구매 전 ×2: 흐리게 + 자물쇠 (누르면 결제 화면) */
+    .speed2-btn.locked { background: transparent; color: rgba(255, 255, 255, 0.38); }
+    .speed2-btn.locked::after {
+      content: '';
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      margin-left: 4px;
+      vertical-align: -1px;
+      background: currentColor;
+      -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M6 10V8a6 6 0 0 1 12 0v2h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h1zm2 0h8V8a4 4 0 0 0-8 0v2z'/></svg>") center / contain no-repeat;
+      mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M6 10V8a6 6 0 0 1 12 0v2h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h1zm2 0h8V8a4 4 0 0 0-8 0v2z'/></svg>") center / contain no-repeat;
+    }
+    .purchase-price { font-size: 22px; font-weight: 900; color: var(--navy-800); margin: -6px 0 16px; font-variant-numeric: tabular-nums; }
     .purchase-close { display: block; margin: 10px auto 0; }
     #confirm-base .tut-nav { margin-top: 4px; }
-    /* 본진 확인 창: 뒤의 지도와 선택한 지역(노란색)이 비쳐 보이도록 흐림 없이 옅게 */
+    /* 본진 확인 창: 폰에서는 아래에서 올라오는 시트, 뒤의 지도와 선택한 지역(노란색)이 비쳐 보이도록 흐림 없이 옅게 */
     #confirm-base {
-      background: rgba(30, 41, 59, 0.12);
+      background: rgba(11, 18, 34, 0.35);
       backdrop-filter: none;
       -webkit-backdrop-filter: none;
-      align-items: center;
+      align-items: flex-end;
+      padding: 0 12px calc(env(safe-area-inset-bottom, 0px) + 12px);
     }
-    #confirm-base .sheet-card { box-shadow: 0 12px 40px rgba(30, 41, 59, 0.22); }
+    #confirm-base .sheet-card {
+      max-width: 420px;
+      width: 100%;
+      border-radius: 24px;
+      box-shadow: 0 12px 40px rgba(15, 23, 42, 0.35);
+      animation: sheet-up 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes sheet-up { from { transform: translateY(24px); opacity: 0; } }
+    #confirm-base .sheet-title { font-size: 22px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .base-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--accent-ground); flex: none; }
     .sheet-card, .tutorial-card {
       max-width: 340px;
-      border-radius: 26px;
+      border-radius: var(--r-lg);
       border: none;
       padding: 26px 22px 20px;
       position: relative;
     }
-    .sheet-icon { font-size: 40px; margin-bottom: 6px; }
-    .sheet-title { font-size: 19px; font-weight: 900; color: #1e293b; margin-bottom: 6px; }
-    .sheet-text { font-size: 14px; color: #57534e; line-height: 1.5; margin-bottom: 18px; white-space: pre-line; }
+    /* 안내 시트: 위쪽 노란 띠 + 둥근 아이콘 타일 */
+    .sheet-card { overflow: hidden; }
+    .sheet-card::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--accent); }
+    .sheet-icon {
+      width: 56px; height: 56px; border-radius: 16px; background: var(--inset);
+      display: grid; place-items: center; margin: 4px auto 10px;
+      color: var(--navy-800); font-size: 26px; line-height: 1;
+    }
+    .sheet-icon:empty { display: none; }
+    .sheet-icon svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .sheet-title { font-size: 19px; font-weight: 900; color: var(--navy-800); margin-bottom: 6px; }
+    .sheet-text { font-size: 14px; color: var(--ink-2); line-height: 1.5; margin-bottom: 18px; white-space: pre-line; }
     #tutorial { z-index: 250; }
     .tut-skip {
       position: absolute;
@@ -675,37 +733,47 @@
       font: inherit;
       font-size: 12px;
       font-weight: 700;
-      color: #a8a29e;
+      color: var(--faint);
       background: none;
       border: none;
       cursor: pointer;
     }
     .tut-art { height: 150px; display: flex; align-items: center; justify-content: center; margin: 8px 0 10px; }
     .tut-art svg { width: 210px; height: 150px; }
-    .tut-title { font-size: 20px; font-weight: 900; color: #1e293b; margin-bottom: 6px; text-wrap: balance; }
-    .tut-text { font-size: 14px; color: #57534e; line-height: 1.55; min-height: 66px; text-wrap: balance; }
+    .tut-title { font-size: 20px; font-weight: 900; color: var(--navy-800); margin-bottom: 6px; text-wrap: balance; }
+    .tut-text { font-size: 14px; color: var(--ink-2); line-height: 1.55; min-height: 66px; text-wrap: balance; }
     .tut-dots { display: flex; justify-content: center; gap: 6px; margin: 14px 0; }
-    .tut-dots i { width: 7px; height: 7px; border-radius: 50%; background: #e7e5e4; display: block; }
-    .tut-dots i.on { background: #1e293b; width: 18px; border-radius: 999px; }
+    .tut-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); display: block; }
+    .tut-dots i.on { background: var(--navy-800); width: 18px; border-radius: var(--pill); }
     .tut-nav { display: flex; gap: 10px; align-items: center; }
-    .tut-prev {
-      font: inherit;
-      font-weight: 800;
-      font-size: 15px;
-      color: #78716c;
-      background: #f7f6f2;
-      border: none;
-      border-radius: 999px;
-      padding: 14px 18px;
-      cursor: pointer;
-    }
+    .tut-nav .start-btn { flex: 1; }
+    .tut-prev { white-space: nowrap; min-width: 72px; font-size: 15px; padding: 14px 18px; }
     .tut-prev[disabled] { visibility: hidden; }
-    .tut-prev { white-space: nowrap; min-width: 72px; }
-    .tutorial-card .start-btn { flex: 1; border-radius: 999px; background: #fde047; box-shadow: 0 5px 0 #eab308; font-size: 16px; }
-    .sheet-card .start-btn { border-radius: 999px; background: #fde047; box-shadow: 0 5px 0 #eab308; }
-    /* 홈 화면: 흰 화면이 휴대폰 전체를 꽉 채움 */
-    #start-modal { padding: 0; background: #ffffff; }
-    .start-card > :not(.info-btn):not(.start-logo) { width: 100%; max-width: 460px; margin-inline: auto; }
+    .tutorial-card .start-btn { flex: 1; font-size: 16px; }
+    /* 홈 화면: 아이콘의 남색 하늘이 휴대폰 전체를 꽉 채움, 별은 두 가지 타일 크기로 반복이 안 보이게 */
+    #start-modal, #splash { background: var(--sky); }
+    #start-modal {
+      padding: 0;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      transition: opacity 0.28s ease;
+    }
+    #start-modal.leaving { opacity: 0; pointer-events: none; }
+    #start-modal::before, #splash::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.8;
+      background:
+        radial-gradient(1.2px 1.2px at 20px 30px, #fff 50%, transparent 51%),
+        radial-gradient(1px 1px at 140px 80px, rgba(255, 255, 255, 0.7) 50%, transparent 51%),
+        radial-gradient(1.6px 1.6px at 90px 170px, #fde047 50%, transparent 51%),
+        radial-gradient(1px 1px at 200px 120px, rgba(255, 255, 255, 0.5) 50%, transparent 51%),
+        radial-gradient(1.3px 1.3px at 300px 40px, rgba(255, 255, 255, 0.85) 50%, transparent 51%);
+      background-size: 260px 220px, 310px 250px, 410px 330px, 340px 290px, 370px 310px;
+    }
+    .start-card > :not(.info-btn):not(.start-logo):not(.page-title) { width: 100%; max-width: 460px; margin-inline: auto; }
     .start-card > .info-btn { top: max(14px, calc(env(safe-area-inset-top) + 4px)); }
     .start-card {
       width: 100%;
@@ -720,84 +788,86 @@
       justify-content: center;
       box-sizing: border-box;
     }
-    .start-logo { font-size: 50px; margin-bottom: 30px; align-self: center; }
-    .country-chip { font-size: 15px; padding: 13px 20px; }
+    .start-logo { align-self: center; }
+    /* 나라 이름 제목: 흰 글씨 아래 노란 형광펜 띠 */
+    .page-title {
+      font-size: 34px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      color: #ffffff;
+      position: relative;
+      isolation: isolate;
+      margin-bottom: 14px;
+      align-self: center;
+    }
+    .page-title::after {
+      content: '';
+      position: absolute;
+      left: -4px;
+      right: -4px;
+      bottom: 4px;
+      height: 10px;
+      background: var(--accent);
+      opacity: 0.9;
+      border-radius: 3px;
+      z-index: -1;
+    }
     .start-card .stage-grid { margin-inline: -24px; padding-inline: calc(50% + 24px - var(--stage-card-w) / 2); scroll-padding-inline: 0; --stage-card-w: min(250px, 62vw); }
     .start-card .stage-grid .stage-card { flex: 0 0 var(--stage-card-w); padding: 22px 10px 20px; box-sizing: border-box; }
     .stage-thumb { width: 170px; height: 170px; }
     /* 맵 카드 글씨 크게: 이름 옆에 지역 수, 아래 최고 기록 */
     .start-card .stage-title { display: flex; align-items: baseline; justify-content: center; gap: 6px; }
     .start-card .stage-name { font-size: 26px; }
-    .start-card .stage-title .stage-sub { font-size: 16px; font-weight: 800; color: #a8a29e; }
+    .start-card .stage-title .stage-sub { font-size: 16px; font-weight: 800; color: var(--faint); }
     .start-card .stage-record { font-size: 22px; font-weight: 900; margin-top: 4px; font-variant-numeric: tabular-nums; }
     .start-card .stage-no { font-size: 14px; }
     .stage-recrow { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 4px; }
     .stage-recrow .stage-record, .stage-recrow .map-rank-pct { margin: 0; font-size: 20px; font-weight: 900; line-height: 1; }
-    .map-rank-pct { font-size: 15px; font-weight: 900; color: #2563eb; }
+    .map-rank-pct { font-size: 15px; font-weight: 900; color: var(--player); }
     .map-rank-pct:empty { display: none; }
     .ranking-card .map-rank-pct { display: flex; flex-direction: column; align-items: center; margin-top: 8px; }
-    .rank-exact { font-size: 34px; font-weight: 900; color: #1e293b; line-height: 1.1; }
-    .rank-of { font-size: 14px; font-weight: 800; color: #a8a29e; }
+    .rank-exact { font-size: 34px; font-weight: 900; color: var(--navy-800); line-height: 1.1; }
+    .rank-of { font-size: 14px; font-weight: 800; color: var(--faint); }
     .start-card .start-btn { font-size: 21px; padding-block: 20px; margin-top: 10px; }
     .home-links { font-size: 15px; }
-    /* 잠긴 맵: 검은 막(투명도 50%)을 씌워 어둡게 */
-    .start-card .stage-card.locked { overflow: hidden; }
-    .start-card .stage-card.locked::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      border-radius: inherit;
-      pointer-events: none;
-    }
-    /* 나라 버튼: 선택한 나라는 국기를 선명하게, 잠긴 나라는 검은 막(50%)으로 어둡게 */
-    .country-chip.active { background: #ffffff; color: #ffffff; border-color: #1e293b; }
-    .country-chip.active .flag-bg { opacity: 1; }
-    .country-chip.active .chip-name { text-shadow: 0 0 4px #000, 0 0 2px #000; }
-    .country-chip.locked { color: #ffffff; }
-    .country-chip.locked .chip-name { z-index: 1; text-shadow: 0 0 3px rgba(0,0,0,0.6); }
-    .country-chip.locked::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.5);
-      pointer-events: none;
-    }
     /* 홈: 국가 고르기 → 도시 맵 고르기 2단계 */
     .home-view { display: flex; flex-direction: column; align-items: center; width: 100%; }
     .home-view[hidden] { display: none; }
-    .home-view > :not(.start-logo):not(.back-btn) { width: 100%; max-width: 460px; }
+    .home-view > :not(.start-logo):not(.back-btn):not(.page-title) { width: 100%; max-width: 460px; }
     .back-btn {
-      position: absolute;
       top: max(14px, calc(env(safe-area-inset-top) + 4px));
       left: 16px;
-      width: 38px; height: 38px;
-      border: none; border-radius: 50%;
-      background: #f7f6f2; color: #1e293b;
-      font: 800 24px/1 -apple-system, sans-serif;
-      cursor: pointer;
+      font-size: 22px;
     }
     .stage-progress {
       text-align: center;
-      font-size: 17px; font-weight: 900; color: #78716c;
+      font-size: 17px; font-weight: 900; color: rgba(255, 255, 255, 0.7);
       margin: -14px 0 4px;
       font-variant-numeric: tabular-nums;
     }
     .start-card .ranking-card { justify-content: center; }
-    .ranking-title { font-size: 40px; font-weight: 900; color: #1e293b; letter-spacing: 2px; }
-    .ranking-time { font-size: 26px; font-weight: 900; color: #2563eb; margin: 10px 0 4px; font-variant-numeric: tabular-nums; }
-    .stage-total-time { text-align: center; font-size: 14px; font-weight: 800; color: #a8a29e; margin-bottom: 16px; min-height: 18px; font-variant-numeric: tabular-nums; }
-    .end-total { font-size: 14px; font-weight: 800; color: #475569; margin-top: 10px; font-variant-numeric: tabular-nums; }
-    .country-flag { font-size: 120px; line-height: 1.25; margin-bottom: 6px; }
-    .country-img { width: 1.05em; height: 1.05em; display: block; margin: 0.1em auto; object-fit: contain; }
-    .start-card .stage-card.locked .country-flag { filter: saturate(0.7); }
+    .ranking-title { font-size: 40px; font-weight: 900; color: var(--navy-800); letter-spacing: 2px; }
+    .start-card .ranking-card.locked .ranking-title { color: rgba(255, 255, 255, 0.6); }
+    .ranking-time { font-size: 26px; font-weight: 900; color: var(--player); margin: 10px 0 4px; font-variant-numeric: tabular-nums; }
+    .stage-total-time { text-align: center; font-size: 14px; font-weight: 800; color: rgba(255, 255, 255, 0.5); margin-bottom: 16px; min-height: 18px; font-variant-numeric: tabular-nums; }
+    /* 나라 카드: 국기를 둥근 타일 안에 */
+    .country-flag {
+      display: flex; align-items: center; justify-content: center;
+      width: 170px; height: 120px; margin: 0 auto 10px;
+      border-radius: 18px; background: var(--inset);
+      box-shadow: inset 0 0 0 1.5px rgba(15, 23, 42, 0.08);
+      font-size: 104px; line-height: 1;
+    }
+    .country-img { width: 100%; height: 100%; object-fit: contain; background: #0b1222; border-radius: inherit; margin: 0; padding: 8px; display: block; }
+    .stage-card.locked .country-flag { filter: grayscale(1); opacity: 0.45; background: rgba(255, 255, 255, 0.08); box-shadow: none; }
     /* 아이패드·폴더블(펼친 화면) 등 넓은 화면: 카드 줄을 넓혀 양옆 카드가 잘리지 않게, 글씨·카드 크게 */
     @media (min-width: 600px) and (min-height: 600px) {
       #start-modal .start-card > .home-view, #start-modal .home-view > .stage-wrap { max-width: min(1000px, 100%); }
       .start-card .stage-grid { --stage-card-w: 300px; }
       .stage-thumb { width: 210px; height: 210px; }
-      .country-flag { font-size: 150px; }
+      .country-flag { width: 210px; height: 148px; font-size: 126px; }
       .start-logo { font-size: 64px; }
+      .page-title { font-size: 40px; }
       .start-card .stage-name { font-size: 30px; }
       #start-modal .home-view > .start-btn { max-width: 520px; }
       .country-concept { max-width: 520px; font-size: 18px; }
@@ -805,23 +875,31 @@
       .slide-arrow { width: 40px; height: 40px; font-size: 22px; }
       .item-pick { max-width: 680px; padding: 28px; }
       .item-card { min-height: 220px; }
+      .item-icon { width: 64px; height: 64px; }
+      .item-icon svg { width: 34px; height: 34px; }
       .item-name { font-size: 21px; }
       .item-desc { font-size: 15px; }
       .item-chip, .item-slot { width: 48px; height: 48px; }
-      #item-bar { right: 24px; bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); }
-      #surrender-btn, .speed2-btn { font-size: 15px; padding: 11px 16px; }
+      #item-bar { right: 24px; bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); padding: 8px; }
+      #surrender-btn { font-size: 15px; padding: 11px 16px; }
+      .speed2-btn { font-size: 15px; padding: 9px 14px; }
       #surrender-btn, #speed-group { top: calc(env(safe-area-inset-top, 0px) + 20px); }
       #surrender-btn { left: 24px; }
       #speed-group { right: 24px; }
+      #status-guide { top: calc(var(--sat) + 84px); font-size: 14px; padding: 9px 18px; }
       #item-tip .item-card { width: 220px; }
+      /* 넓은 화면에서는 본진 확인 창을 가운데에 */
+      #confirm-base { align-items: center; padding: 16px; }
+      #confirm-base .sheet-card { animation: popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
     }
     /* 넓은 가로 화면인데 높이가 800px 이하(아이패드 가로·듀오 펼친 가로): 카드·제목을 중간 크기로 */
     @media (orientation: landscape) and (min-height: 601px) and (max-height: 800px) {
       .start-logo { font-size: 44px; margin-bottom: 14px; }
+      .page-title { font-size: 30px; margin-bottom: 10px; }
       .start-card .stage-grid { --stage-card-w: 230px; }
       .start-card .stage-grid .stage-card { padding: 14px 8px; }
       .stage-thumb { width: 140px; height: 140px; }
-      .country-flag { font-size: 100px; }
+      .country-flag { width: 140px; height: 100px; font-size: 85px; }
       .start-card .stage-name { font-size: 24px; }
       .start-card .start-btn { font-size: 18px; padding-block: 14px; }
       #start-modal .country-concept { margin: 0 auto 12px; font-size: 15px; }
@@ -830,10 +908,11 @@
     /* 세로가 짧은 세로 화면(아이폰 듀오 접은 상태 1:1.4 등): 맵 화면이 한 화면에 들어가게 조금 작게 */
     @media (orientation: portrait) and (max-height: 700px) {
       .start-logo { font-size: 40px; margin-bottom: 16px; }
+      .page-title { font-size: 28px; margin-bottom: 10px; }
       .start-card .stage-grid { --stage-card-w: min(210px, 56vw); }
       .start-card .stage-grid .stage-card { padding: 14px 8px 14px; }
       .stage-thumb { width: 130px; height: 130px; }
-      .country-flag { font-size: 90px; }
+      .country-flag { width: 130px; height: 92px; font-size: 78px; }
       .start-card .stage-name { font-size: 22px; }
       .start-card .start-btn { font-size: 18px; padding-block: 14px; }
       .country-concept { margin: 0 auto 14px; font-size: 14px; }
@@ -842,11 +921,13 @@
     /* 폰 가로 화면(높이가 낮음): 홈·맵 고르기·카드 고르기를 한 화면에 들어가게 작게 */
     @media (orientation: landscape) and (max-height: 600px) {
       .start-card { padding-top: max(10px, env(safe-area-inset-top)); padding-bottom: max(8px, env(safe-area-inset-bottom)); }
-      .start-logo { font-size: 30px; margin-bottom: 8px; }
+      .start-logo { font-size: 30px; margin-bottom: 8px; gap: 6px; }
+      .logo-line { height: 10px; }
+      .logo-line i { width: 10px; height: 10px; border-width: 2px; }
       .start-card .stage-grid { --stage-card-w: 180px; }
       .start-card .stage-grid .stage-card { padding: 8px 8px 8px; }
       .stage-thumb { width: 100px; height: 100px; }
-      .country-flag { font-size: 64px; margin-bottom: 0; }
+      .country-flag { width: 100px; height: 72px; font-size: 61px; margin-bottom: 0; border-radius: 14px; }
       .start-card .stage-name { font-size: 18px; }
       .start-card .stage-title .stage-sub { font-size: 13px; }
       .start-card .stage-record, .stage-recrow .stage-record { font-size: 15px; }
@@ -856,47 +937,67 @@
       .stage-total-time { font-size: 12px; }
       #start-modal .country-concept { margin: 0 auto 10px; font-size: 12px; max-width: 560px; line-height: 1.3; }
       .start-card #country-title, .start-card .start-logo { font-size: 26px; margin-bottom: 4px; }
+      .page-title::after { height: 7px; bottom: 3px; }
       .start-card .stage-grid { --stage-card-w: 160px; }
       .stage-thumb { width: 84px; height: 84px; }
+      .country-flag { width: 84px; height: 60px; font-size: 51px; }
       #start-modal .country-concept b { font-size: 14px; display: inline; margin-right: 6px; }
       .slide-arrow { width: 28px; height: 28px; }
+      .stage-lock { padding: 6px 10px; font-size: 12px; }
       /* 카드 고르기: 한 줄로, 넘치면 창 안에서 스크롤 */
       #item-modal .item-pick { max-width: 760px; max-height: calc(100vh - 16px); overflow-y: auto; padding: 12px 14px; }
       #item-modal .item-pick-title { font-size: 18px; }
       #item-modal .item-pick-sub { margin: 2px 0 8px; font-size: 12px; }
       #item-modal .item-choices { flex-wrap: nowrap; }
       #item-modal .item-choices .item-card, #item-modal .item-choices[data-count="4"] .item-card { flex: 1 1 0; min-height: 0; padding: 10px 6px; gap: 4px; }
-      #item-modal .item-icon svg { width: 34px; height: 34px; }
+      #item-modal .item-icon { width: 44px; height: 44px; }
+      #item-modal .item-icon svg { width: 24px; height: 24px; }
       #item-modal .item-name { font-size: 15px; }
       #item-modal .item-desc { font-size: 11px; }
       #item-tip .item-card { width: 180px; }
-      #item-tip .item-icon svg { width: 44px; height: 44px; }
+      #item-tip .item-icon { width: 44px; height: 44px; }
+      #item-tip .item-icon svg { width: 24px; height: 24px; }
+      #confirm-base { align-items: center; padding: 12px; }
+      #confirm-base .sheet-card { animation: popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+      /* 낮은 화면: 안내 알약·가운데 안내를 위로 당겨 지도를 덜 가리게 */
+      #status-guide { top: calc(var(--sat) + 64px); font-size: 12px; padding: 6px 12px; }
+      #center-toast { top: calc(var(--sat) + 118px); font-size: 17px; padding: 8px 16px; }
     }
-    #enter-btn.locked { opacity: 0.45; }
     #enter-btn[hidden] { display: none; }
     .home-links[hidden] { display: none; }
-    .country-concept { margin: 0 auto 28px; max-width: 340px; font-size: 16px; font-weight: 600; line-height: 1.5; color: #64748b; text-align: center; word-break: keep-all; }
-    .country-concept b { color: #1e293b; font-size: 18px; font-weight: 900; display: block; margin-bottom: 2px; }
+    .country-concept { margin: 0 auto 28px; max-width: 340px; font-size: 16px; font-weight: 600; line-height: 1.5; color: rgba(255, 255, 255, 0.72); text-align: center; word-break: keep-all; }
+    .country-concept b { color: #ffffff; font-size: 18px; font-weight: 900; display: block; margin-bottom: 2px; }
     .country-concept[hidden] { display: none; }
+    /* 앱 첫 실행 연출: 남색 하늘 위에 TAPWAR 가 타이핑되고, 끝나면 아래 선이 펼쳐진 뒤 홈으로 */
     #splash {
       position: fixed; inset: 0; z-index: 400;
-      background: #ffffff;
-      display: flex; align-items: center; justify-content: center;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
       transition: opacity 0.45s ease;
     }
     #splash.hide { opacity: 0; pointer-events: none; }
     .splash-text {
-      font-size: 50px; font-weight: 900; letter-spacing: -1px; color: #1e293b;
+      font-size: 50px; font-weight: 900; letter-spacing: -2.5px; color: #ffffff;
       display: inline-flex; align-items: center;
+      position: relative; z-index: 1;
     }
-    .splash-caret { width: 4px; height: 0.9em; background: #1e293b; margin-left: 4px; animation: caret 0.6s steps(1) infinite; }
+    .splash-caret { width: 4px; height: 0.9em; background: var(--accent); margin-left: 4px; animation: caret 0.6s steps(1) infinite; }
     @keyframes caret { 50% { opacity: 0; } }
-    /* 화면 가운데 글자만 2초 떴다 사라지는 안내 */
+    #splash .logo-line {
+      font-size: 50px; position: relative; z-index: 1;
+      transform: scaleX(0); transform-origin: center;
+      transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    #splash.line .logo-line { transform: scaleX(1); }
+    /* 아이템 모드: 고른 카드 트레이 (남색, 왼쪽 띠 파랑=나 · 빨강=적) */
     #item-bar {
       position: fixed; right: max(16px, env(safe-area-inset-right));
       bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
       display: flex; flex-direction: column; align-items: flex-end; gap: 6px; z-index: 40;
       max-width: calc(100vw - 32px);
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: var(--r-sm);
+      padding: 6px;
+      box-shadow: 0 6px 18px rgba(15, 23, 42, 0.3);
     }
     /* 게임 중 항복은 화면 위 왼쪽, 배속은 위 오른쪽 */
     #surrender-btn, #speed-group {
@@ -905,12 +1006,14 @@
     #surrender-btn { left: max(16px, env(safe-area-inset-left)); }
     #speed-group { right: max(16px, env(safe-area-inset-right)); }
     #item-bar[hidden] { display: none; }
-    .item-side { display: flex; gap: 6px; }
-    .item-slot { width: 38px; height: 38px; border-radius: 9px; border: 2px dashed #93c5fd; box-sizing: border-box; display: inline-block; }
-    .item-slot.theirs { border-color: #fca5a5; }
-    .item-chip { width: 38px; height: 38px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-    .item-chip.mine { color: #2563eb; background: #dbeafe; }
-    .item-chip.theirs { color: #b91c1c; background: #fee2e2; }
+    .item-side { display: flex; gap: 6px; padding-left: 9px; position: relative; }
+    .item-side::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; border-radius: 10px; background: #60a5fa; }
+    .item-side.theirs::before { background: #f87171; }
+    .item-slot { width: 38px; height: 38px; border-radius: var(--r-xs); border: 1.5px dashed rgba(255, 255, 255, 0.22); box-sizing: border-box; display: inline-block; }
+    .item-slot.theirs { border-color: rgba(255, 255, 255, 0.22); }
+    .item-chip { width: 38px; height: 38px; border-radius: var(--r-xs); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+    .item-chip.mine { color: var(--player); background: var(--player-soft); }
+    .item-chip.theirs { color: #b91c1c; background: var(--enemy-soft); }
     #item-modal { z-index: 300; }
     .item-chip { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
     #item-tip {
@@ -918,56 +1021,83 @@
       display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none;
     }
     #item-tip[hidden] { display: none; }
-    #item-tip .item-card { width: 170px; box-shadow: 0 10px 30px rgba(0,0,0,0.18); }
+    #item-tip .item-card { width: 170px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); }
     #item-tip .item-card.theirs { border-color: #b91c1c; }
-    #item-tip .item-card.theirs .item-icon { color: #b91c1c; }
-    .item-tip-owner { font-size: 13px; font-weight: 900; padding: 3px 10px; border-radius: 999px; background: #dbeafe; color: #1d4ed8; }
-    .item-tip-owner.theirs { background: #fee2e2; color: #b91c1c; }
+    #item-tip .item-card.theirs .item-icon { background: var(--enemy-soft); color: #b91c1c; }
+    .item-tip-owner { font-size: 13px; font-weight: 900; padding: 3px 10px; border-radius: var(--pill); background: var(--player-soft); color: #1d4ed8; }
+    .item-tip-owner.theirs { background: var(--enemy-soft); color: #b91c1c; }
     .item-pick { max-width: 480px; width: calc(100vw - 32px); text-align: center; }
-    .item-pick-title { font-size: 22px; font-weight: 900; color: #1e293b; }
-    .item-pick-title span { color: #94a3b8; font-size: 16px; margin-left: 4px; }
-    .item-pick-sub { font-size: 13px; color: #64748b; margin: 6px 0 14px; }
+    .item-pick-title { font-size: 22px; font-weight: 900; color: var(--navy-800); }
+    #item-round { font-size: 16px; color: var(--faint); margin-left: 4px; vertical-align: middle; }
+    /* 몇 번째 카드인지: 점으로 (고른 만큼 남색) */
+    .round-dots { display: inline-flex; gap: 6px; vertical-align: middle; }
+    .round-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); display: block; }
+    .round-dots i.on { background: var(--navy-800); }
+    .item-pick-sub { font-size: 13px; color: var(--muted); margin: 6px 0 14px; }
     .item-choices { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
     .item-choices .item-card { flex: 0 0 calc((100% - 16px) / 3); box-sizing: border-box; }
     .item-choices[data-count="4"] .item-card { flex-basis: calc((100% - 8px) / 2); min-height: 160px; }
+    /* 아이템 카드: 흰 종이 카드 + 둥근 아이콘 타일 */
     .item-card {
-      display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 20px 8px; min-height: 190px;
-      border: 2px solid #1e293b; border-radius: 16px; background: #fff; cursor: pointer; font-family: inherit;
+      display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 8px 16px; min-height: 190px;
+      border: 1.5px solid var(--line); border-radius: var(--r-md); background: var(--card); box-shadow: 0 3px 0 var(--line);
+      cursor: pointer; font-family: inherit; color: var(--navy-800);
+      transition: transform 0.1s, box-shadow 0.1s;
     }
-    .item-card:active { transform: scale(0.97); }
-    .item-icon { color: #2563eb; }
-    .item-name { font-size: 18px; font-weight: 900; color: #1e293b; }
-    .item-desc { font-size: 13px; color: #64748b; line-height: 1.35; word-break: keep-all; }
+    .item-card:active { border-color: var(--navy-800); transform: translateY(2px); box-shadow: 0 1px 0 var(--line); }
+    .item-icon { width: 56px; height: 56px; border-radius: 50%; background: #eff6ff; color: var(--player); display: grid; place-items: center; }
+    .item-icon svg { width: 30px; height: 30px; }
+    .item-cat { font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--faint); }
+    .item-cat:empty { display: none; }
+    .item-name { font-size: 17px; font-weight: 900; color: var(--navy-800); word-break: keep-all; text-wrap: balance; }
+    .item-desc { font-size: 12.5px; color: var(--muted); line-height: 1.35; word-break: keep-all; text-wrap: balance; }
+    /* 화면 가운데 글자만 2초 떴다 사라지는 안내: 남색 알약 */
     #center-toast {
-      position: fixed; left: 0; right: 0; top: 50%;
-      transform: translateY(-50%);
-      text-align: center; z-index: 150; pointer-events: none;
-      font-size: 26px; font-weight: 900; color: #1e293b;
-      text-shadow: 0 0 6px #fff, 0 0 3px #fff, 0 0 12px #fff;
+      position: fixed; left: 50%; top: calc(var(--sat) + 152px); /* 위쪽 안내 알약 아래, 지도 제목 위 */
+      transform: translate(-50%, -50%) scale(0.96);
+      width: max-content; max-width: calc(100vw - 32px);
+      padding: 10px 20px; border-radius: var(--pill);
+      background: rgba(15, 23, 42, 0.92); color: #ffffff;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.25);
+      font-family: inherit; font-size: 20px; font-weight: 900; line-height: 1.2; letter-spacing: -0.3px;
+      text-shadow: none; word-break: keep-all; text-align: center;
+      z-index: 150; pointer-events: none;
       opacity: 0;
     }
     #center-toast.show { animation: center-toast 2.5s ease forwards; } /* 약 2초 보였다 사라짐 */
     @keyframes center-toast {
-      0% { opacity: 0; transform: translateY(-40%); }
-      8% { opacity: 1; transform: translateY(-50%); }
-      88% { opacity: 1; }
-      100% { opacity: 0; }
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+      10% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      85% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
     }
-    /* 결과 창 */
-    .end-card { text-align: center; }
-    .end-sub { font-size: 17px; font-weight: 800; color: #334155; margin-bottom: 22px; }
-    .end-record-label { font-size: 13px; font-weight: 800; color: #94a3b8; letter-spacing: 2px; }
-    .end-record { font-size: 44px; font-weight: 900; color: #111; font-variant-numeric: tabular-nums; line-height: 1.15; }
-    .end-best { font-size: 13px; font-weight: 700; color: #94a3b8; margin-top: 4px; }
-    .end-best.new { color: #16a34a; }
+    /* 결과 창: 점령한 지도 그림 · 7세그먼트 기록 · 신기록 배지 · 색종이 */
+    #end-modal { background: rgba(11, 18, 34, 0.5); }
+    .end-card { max-width: 440px; text-align: center; position: relative; overflow: hidden; }
+    .end-card.lose { border-top: 3px solid var(--lose); }
+    .end-hero { width: 120px; height: 120px; border-radius: 50%; background: var(--win-soft); display: grid; place-items: center; margin: 0 auto 12px; }
+    .end-card.lose .end-hero { background: var(--enemy-soft); }
+    .end-thumb { display: block; width: 96px; height: 96px; }
+    .end-eyebrow { font-size: 13px; font-weight: 800; letter-spacing: 2px; color: var(--win); }
+    .end-eyebrow:empty { display: none; }
+    .end-card.lose .end-eyebrow { color: var(--lose); }
+    .end-title { font-size: 32px; font-weight: 900; color: var(--navy-800); margin: 2px 0 10px; letter-spacing: -0.5px; }
+    .end-sub { font-size: 15px; font-weight: 700; color: var(--ink-2); margin-bottom: 14px; }
+    .end-record-label { font-size: 12px; font-weight: 800; letter-spacing: 2px; color: var(--faint); }
+    #end-clock { display: block; margin: 4px auto; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .end-best { font-size: 13px; font-weight: 800; color: var(--faint); margin-top: 6px; }
+    .end-best.new { display: inline-block; padding: 5px 12px; border-radius: var(--pill); background: var(--win-soft); color: #15803d; animation: badgePop 0.2s 0.7s both; }
+    @keyframes badgePop { from { transform: scale(0.6); opacity: 0; } }
+    .end-total { font-size: 13px; font-weight: 800; color: var(--ink-2); margin-top: 10px; font-variant-numeric: tabular-nums; }
     #end-next-btn[hidden], #end-retry-btn[hidden] { display: none; }
     .end-actions { display: flex; gap: 10px; align-items: stretch; margin-top: 18px; }
     .end-actions .start-btn { flex: 1; width: auto; margin: 0; }
-    .end-home-btn {
-      flex: 1;
-      font: inherit; font-size: 16px; font-weight: 800; color: #57534e;
-      background: #f7f6f2; border: none; border-radius: 999px; padding: 14px; cursor: pointer;
-    }
+    .end-actions .btn-secondary { flex: 1; }
+    .end-confetti { position: fixed; inset: 0; pointer-events: none; z-index: 101; overflow: hidden; }
+    .end-confetti:empty { display: none; }
+    .end-confetti i { position: absolute; top: -12px; width: 8px; height: 12px; border-radius: 2px; animation: confetti 1.6s ease-in forwards; }
+    @keyframes confetti { to { transform: translateY(110vh) rotate(540deg); opacity: 0; } }
   </style>
 </head>
 <body>
@@ -979,14 +1109,10 @@
     <div id="ui-layer">
       <!-- Top Bar -->
       <div class="top-bar">
-        <!-- 상단: 플레이 시간만 표시 -->
-        <div class="top-bar-main top-timer" id="top-timer" hidden>
+        <!-- 진행 시간은 캔버스 알약에 그림 (이 자리는 숨김으로만 유지) -->
+        <div class="top-timer" id="top-timer" hidden>
           <span id="match-timer">00:00</span>
         </div>
-
-        <!-- Guide status banner -->
-        <!-- 본진 고르는 동안에만 표시 -->
-        <div class="status-banner" id="status-guide" hidden>본진을 선택하세요</div>
       </div>
 
       <!-- Bottom Bar -->
@@ -1010,27 +1136,29 @@
       </div>
     </div>
 
-    <!-- 앱 첫 실행 연출: TAPWAR 가 가운데에서 타이핑되듯 완성된 뒤 홈으로 -->
+    <!-- 화면 가운데 2초 안내 / 위쪽 안내 알약 (게임 중 아이템·경보 등, showStatus 가 .show 로 켬) -->
     <div id="center-toast" aria-live="polite"></div>
+    <div id="status-guide" aria-live="polite"></div>
     <!-- 아이템 모드: 고른 카드 (나 파랑 · 적 빨강) -->
     <div id="item-bar" hidden></div>
     <div id="item-tip" hidden></div>
     <!-- 아이템 모드: 카드 3장 중 1장 고르기 (고르는 동안 게임 멈춤) -->
     <div class="modal-overlay" id="item-modal" style="display:none">
       <div class="modal-card item-pick">
-        <div class="item-pick-title">아이템 카드 <span id="item-round">1/4</span></div>
+        <div class="item-pick-title">아이템 카드 <span id="item-round"><span class="round-dots"><i class="on"></i><i></i><i></i><i></i></span></span></div>
         <div class="item-pick-sub">한 장을 고르세요. 적도 한 장을 고릅니다.</div>
         <div class="item-choices" id="item-choices"></div>
       </div>
     </div>
-    <div id="splash" aria-hidden="true"><h1 class="splash-text"><span id="splash-text"></span><i class="splash-caret"></i></h1></div>
+    <!-- 앱 첫 실행 연출: TAPWAR 가 가운데에서 타이핑되듯 완성된 뒤 홈으로 -->
+    <div id="splash" aria-hidden="true"><h1 class="splash-text"><span id="splash-text"></span><i class="splash-caret"></i></h1><span class="logo-line" aria-hidden="true"><i></i><i></i><i></i></span></div>
 
     <!-- Start Choice Modal (Mini Metro Style) -->
     <div class="modal-overlay" id="start-modal">
       <div class="modal-card start-card">
         <!-- 1단계: 국가 고르기 (맵 고르기처럼 가로 슬라이드) -->
         <div class="home-view" id="country-view">
-          <h1 class="start-logo" id="start-logo">TAPWAR</h1>
+          <h1 class="start-logo" id="start-logo">TAPWAR<span class="logo-line" aria-hidden="true"><i></i><i></i><i></i></span></h1>
           <div class="stage-wrap">
             <button class="slide-arrow left" aria-label="이전 국가" onclick="slideGrid('country-grid', -1)">‹</button>
             <div class="stage-grid" id="country-grid"></div>
@@ -1042,7 +1170,7 @@
         <!-- 2단계: 고른 국가의 도시 맵 (구역이 적은 맵부터, 앞 맵을 클리어하면 다음 맵이 열림) -->
         <div class="home-view" id="stage-view" hidden>
           <button class="back-btn" aria-label="국가 선택으로" onclick="showCountryView()">‹</button>
-          <h1 class="start-logo" id="country-title">대한민국</h1>
+          <h1 class="page-title" id="country-title">대한민국</h1>
           <div class="country-concept" id="country-concept" hidden></div>
           <div class="stage-progress" id="stage-progress">0/17</div>
           <div class="stage-total-time" id="stage-total-time"></div>
@@ -1095,10 +1223,10 @@
     <!-- 본진 지정 확인 -->
     <div class="modal-overlay sheet-overlay" id="confirm-base" style="display: none;">
       <div class="modal-card sheet-card">
-        <h2 class="sheet-title" id="confirm-base-name"></h2>
+        <h2 class="sheet-title"><span class="base-swatch"></span><span id="confirm-base-name"></span></h2>
         <p class="sheet-text">본진으로 지정하시겠습니까?</p>
         <div class="tut-nav">
-          <button class="tut-prev" onclick="cancelBaseSelection()">취소</button>
+          <button class="tut-prev btn-secondary" onclick="cancelBaseSelection()">취소</button>
           <button class="start-btn tut-next" onclick="confirmBaseSelection()">확인</button>
         </div>
       </div>
@@ -1107,6 +1235,7 @@
     <!-- 결제 화면 (인앱 구매) -->
     <div class="modal-overlay sheet-overlay" id="purchase" style="display: none;" onclick="if (event.target === this) closePurchase()">
       <div class="modal-card sheet-card">
+        <div class="sheet-icon" id="purchase-icon"></div>
         <h2 class="sheet-title" id="purchase-title"></h2>
         <p class="sheet-text" id="purchase-text"></p>
         <div class="purchase-price" id="purchase-price"></div>
@@ -1124,27 +1253,31 @@
         <p class="tut-text" id="tut-text"></p>
         <div class="tut-dots" id="tut-dots"></div>
         <div class="tut-nav">
-          <button class="tut-prev" id="tut-prev" onclick="tutorialStep(-1)">이전</button>
+          <button class="tut-prev btn-secondary" id="tut-prev" onclick="tutorialStep(-1)">이전</button>
           <button class="start-btn tut-next" id="tut-next" onclick="tutorialStep(1)">다음</button>
         </div>
       </div>
     </div>
 
-    <!-- Game Over Modal -->
+    <!-- Game Over Modal: 점령한 지도 그림 · 기록 · 버튼 -->
     <div class="modal-overlay" id="end-modal" style="display: none;">
-      <div class="modal-card end-card" style="max-width: 440px;">
-        <h2 id="end-title" style="font-size: 26px; font-weight: 900; margin-bottom: 6px;">게임 종료</h2>
-        <div id="end-message" style="margin-bottom: 20px;"></div>
+      <div class="modal-card end-card">
+        <div class="end-hero"><canvas class="end-thumb" id="end-thumb"></canvas></div>
+        <div class="end-eyebrow" id="end-eyebrow"></div>
+        <h2 class="end-title" id="end-title">게임 종료</h2>
+        <div id="end-message"></div>
         <div class="end-actions">
-          <button class="end-home-btn" onclick="location.reload()">홈으로</button>
+          <button class="btn-secondary" id="end-home-btn" onclick="location.reload()">홈으로</button>
           <button class="start-btn" id="end-next-btn" onclick="goNextStage()" hidden>다음 맵으로</button>
           <button class="start-btn" id="end-retry-btn" onclick="retryStage()" hidden>다시 도전</button>
         </div>
       </div>
     </div>
+    <!-- 승리 색종이 (game.js 가 <i> 24개를 넣었다 비움, 움직임 줄이기 설정이면 생략) -->
+    <div class="end-confetti" id="end-confetti" aria-hidden="true"></div>
   </div>
 
-  <script src="audio.js?v=20261012_items_v58"></script>
-  <script src="game.js?v=20261012_items_v58"></script>
+  <script src="audio.js?v=20261012_items_v59"></script>
+  <script src="game.js?v=20261012_items_v59"></script>
 </body>
 </html>
