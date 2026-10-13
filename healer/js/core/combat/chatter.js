@@ -107,7 +107,7 @@ const Chatter = (() => {
     if (!pool.length && set.dps) pool.push(...set.dps);
     const tone = toneOf(ent), base = kind.replace(/_(big|mini|tank|boss|dot|root|puddle|aoe|cone|line|urgent)$/, '');
     const extra = tone && TONE_LINES[tone.id] && (TONE_LINES[tone.id][kind] || TONE_LINES[tone.id][base]);
-    if (extra && rand(st) < 0.45) return extra[Math.floor(rand(st) * extra.length)];
+    if (extra && rand(st) < 0.3) return extra[Math.floor(rand(st) * extra.length)];
     if (!pool.length) return null;
     // 같은 사람이 같은 말을 연달아 하지 않게
     const es = entState(st, ent);

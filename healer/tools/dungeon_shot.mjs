@@ -94,29 +94,6 @@ const fight = await page.evaluate(() => ({ fps: Scenes.fps(), inCombat: window._
 console.log('fight', JSON.stringify(fight));
 shots.push(await shot('fight'));
 
-// 생존 AI: 딜러 HP 를 22% 로 떨어뜨리면(자동 힐 잠시 끔) 힐러 쪽으로 빠지며 💨 + 힐 요청 말풍선
-const retreat = await page.evaluate(async () => {
-  const D = window.__healer.dungeon, B = D.battle, G = State.get();
-  const prevHeal = G.player.settings.autoHeal; G.player.settings.autoHeal = false;
-  const m = B.members.find((e) => e.alive && e.role !== 'tank' && B.engagedMonsters().length);
-  if (!m) { G.player.settings.autoHeal = prevHeal; return null; }
-  m.hp = Math.round(m.maxHp * 0.22);
-  window.__retreatUid = m.uid; window.__prevHeal = prevHeal;
-  return { name: m.name, role: m.role };
-});
-let retreatShot = null;
-if (retreat) {
-  for (let k = 0; k < 20 && !retreatShot; k++) {
-    await wait(100);
-    const st = await page.evaluate(() => { const B = window.__healer.dungeon.battle, m = B.byUid(window.__retreatUid); if (m && m.alive && m.hp / m.maxHp < 0.25) m.hp = Math.round(m.maxHp * 0.22); return { retreat: !!(m && m.retreat), wants: !!(m && m.wantsHeal > B.time), alive: !!(m && m.alive) }; });
-    if (st.retreat && (st.wants || k > 12)) { await wait(250); retreatShot = await shot('retreat'); }
-  }
-  // 회복시키면 "다시 갑니다!"
-  await page.evaluate(() => { const B = window.__healer.dungeon.battle, m = B.byUid(window.__retreatUid); State.get().player.settings.autoHeal = window.__prevHeal; if (m && m.alive) B.heal(B.player, m, m.maxHp); });
-  await wait(700);
-  console.log('retreat', JSON.stringify(retreat), 'after', JSON.stringify(await page.evaluate(() => { const B = window.__healer.dungeon.battle, m = B.byUid(window.__retreatUid); return { retreat: !!(m && m.retreat), says: window.__healer.dungeon.says.map((x) => x.text), log: (B.chatLog || []).slice(-6).map((x) => x.ent.name + ':' + x.text) }; })));
-}
-if (retreatShot) shots.push(retreatShot);
 
 // 연속킬 보너스: 무리를 차례로 찾아가며 10연속킬 배너가 뜨는 순간을 찍는다(최대 24초)
 const nextGroup = () => page.evaluate(() => {
@@ -162,6 +139,30 @@ await page.evaluate(() => {
 let tgSeen = false;
 for (let k = 0; k < 16 && !tgSeen; k++) { await wait(500); tgSeen = await page.evaluate(() => window.__healer.dungeon.battle.telegraphs.length > 0); }
 shots.push(await shot('miniboss'));
+
+// 생존 AI: 딜러 HP 를 22% 로 떨어뜨리면(자동 힐 잠시 끔) 힐러 쪽으로 빠지며 💨 + 힐 요청 말풍선
+const retreat = await page.evaluate(async () => {
+  const D = window.__healer.dungeon, B = D.battle, G = State.get();
+  const prevHeal = G.player.settings.autoHeal; G.player.settings.autoHeal = false;
+  const m = B.members.find((e) => e.alive && e.role !== 'tank' && B.engagedMonsters().length);
+  if (!m) { G.player.settings.autoHeal = prevHeal; return null; }
+  m.hp = Math.round(m.maxHp * 0.22);
+  window.__retreatUid = m.uid; window.__prevHeal = prevHeal;
+  return { name: m.name, role: m.role };
+});
+let retreatShot = null;
+if (retreat) {
+  for (let k = 0; k < 20 && !retreatShot; k++) {
+    await wait(100);
+    const st = await page.evaluate(() => { const B = window.__healer.dungeon.battle, m = B.byUid(window.__retreatUid); if (m && m.alive && m.hp / m.maxHp < 0.25) m.hp = Math.round(m.maxHp * 0.22); return { retreat: !!(m && m.retreat), wants: !!(m && m.wantsHeal > B.time), alive: !!(m && m.alive) }; });
+    if (st.retreat && (st.wants || k > 12)) { await wait(250); retreatShot = await shot('retreat'); }
+  }
+  // 회복시키면 "다시 갑니다!"
+  await page.evaluate(() => { const B = window.__healer.dungeon.battle, m = B.byUid(window.__retreatUid); State.get().player.settings.autoHeal = window.__prevHeal; if (m && m.alive) B.heal(B.player, m, m.maxHp); });
+  await wait(700);
+  console.log('retreat', JSON.stringify(retreat), 'after', JSON.stringify(await page.evaluate(() => { const B = window.__healer.dungeon.battle, m = B.byUid(window.__retreatUid); return { retreat: !!(m && m.retreat), says: window.__healer.dungeon.says.map((x) => x.text), log: (B.chatLog || []).slice(-6).map((x) => x.ent.name + ':' + x.text) }; })));
+}
+if (retreatShot) shots.push(retreatShot);
 
 // 보스: HP 바·페이즈
 await page.evaluate(() => {
