@@ -20,3 +20,5 @@ www/
 
 # Claude Code 워크플로우 임시 worktree
 .claude/worktrees/
+healer/tools/out/*
+!healer/tools/out/.gitkeep
