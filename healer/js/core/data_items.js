@@ -335,8 +335,20 @@ const Items = (() => {
   // 무작위 요소 없는 생성(상점 재고, 보상 소모품, 재료)
   function make(id, qty = 1) { return generate({ id, qty }); }
 
+  // ---- 아이템 레벨(상태창 표시용) ----
+  // 결정적 계산: 템플릿이 나오는 층대 중간값 × 9 + 10, 등급 가산, 접사 1개당 +3. 장비가 아니면 0.
+  // (예: 1~3층 일반 지팡이 28, 6~10층 전설 + 접사 3개 → 82 + 22 + 9 = 113)
+  const GRADE_ILVL = { common: 0, uncommon: 5, rare: 12, legendary: 22 };
+  function itemLevel(inst) {
+    const def = get(inst && inst.id); if (!def || def.kind !== 'equip') return 0;
+    const lo = def.floorMin || 1, hi = def.floorMax || lo;
+    const base = 10 + ((lo + hi) / 2) * 9;
+    const affixes = Array.isArray(inst.affixes) ? inst.affixes.length : 0;
+    return Math.round(base + (GRADE_ILVL[inst.grade] || 0) + affixes * 3);
+  }
+
   return { get, all, list, byKind, equipment, consumables, materials, recipes, recipe, forSlot,
-    generate, make, statsOf, canUse, setBonus, gradeWeights, affixText, gradeName, slotName, kindName, isEquip, isStackable, gradeIndex,
+    generate, make, itemLevel, statsOf, canUse, setBonus, gradeWeights, affixText, gradeName, slotName, kindName, isEquip, isStackable, gradeIndex,
     affixPool, SETS, GRADES, GRADE_ORDER, SLOTS, SLOT_NAMES, ARMOR_SLOTS, ARMOR_CLASSES, WEAPON_CLASSES, SET_BONUSES, BASE_DURABILITY };
 })();
 if (typeof module !== 'undefined') module.exports = Items;
