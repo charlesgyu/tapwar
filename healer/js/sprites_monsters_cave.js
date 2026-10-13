@@ -130,7 +130,7 @@
     crystalRock: ['#44505f', '#6b7a8e', '#9aabbf'], crystal: ['#2e8bb8', '#62cdf2', '#d2f6ff'],
     batFur: ['#4e3d5c', '#75607f', '#9d8aa8'], batWing: ['#3f2c48', '#5e4368', '#7f6189'],
     spider: ['#3d4656', '#5e6a7c', '#8893a6'], spiderMark: ['#9a3e3e', '#c85a4f'],
-    naga: ['#27603f', '#3f9460', '#7fd394'], nagaBelly: ['#7a9a52', '#b9cf7e', '#e4ef b8'],
+    naga: ['#27603f', '#3f9460', '#7fd394'], nagaBelly: ['#7a9a52', '#b9cf7e', '#e4efb8'],
     nagaP: ['#3a3a78', '#625dae', '#9e95da'], robe: ['#9a8a6a', '#e6d9b4', '#fff7e0'], gold: ['#9a6f1e', '#dcb14a', '#fff0a6'],
     orc: ['#3a6529', '#5b9440', '#8dc767'], iron: ['#3a3d47', '#5d6270', '#8b919f'], fur: ['#5a3d26', '#8a6238', '#b88a58'],
     troll: ['#235f5c', '#3a9a90', '#7cd3c6'], hair: ['#b84a1e', '#ea7a2a', '#ffb45a'], bone: ['#9a9381', '#d4ccaf', '#f4efdd'],
@@ -710,13 +710,14 @@
     F.blob(union(ell(40, 14 + by, 13, 10), rbox(28, 17 + by, 24, 7)), SKIN, { rw: 3 });
     if (front) {
       tusk(F, 32, 19 + by); tusk(F, 47, 19 + by); F.px(32, 17 + by, '#f4efe0'); F.px(47, 17 + by, '#f4efe0'); F.dot(35, 20 + by, 10, 1, SKIN[0]);
-      eye(F, 32, 10 + by, 4, 4, '#ffcf3a', '#c07a1a', false); eye(F, 44, 10 + by, 4, 4, '#ffcf3a', '#c07a1a', false); F.px(34, 12 + by, '#2e2230'); F.px(46, 12 + by, '#2e2230');
-      F.dot(31, 9 + by, 6, 1, '#2e2230'); F.dot(43, 9 + by, 6, 1, '#2e2230'); F.px(31, 8 + by, '#2e2230'); F.px(48, 8 + by, '#2e2230'); F.dot(39, 12 + by, 2, 3, SKIN[0]);
+      // 눈: 붉게 빛나는 큰 눈(측면과 동일 색) + 굵은 눈썹(화난 표정)
+      eye(F, 32, 10 + by, 4, 4, '#ff6a4a', '#b32a2a', false); eye(F, 44, 10 + by, 4, 4, '#ff6a4a', '#b32a2a', false);
+      F.dot(31, 8 + by, 6, 1, '#2e2230'); F.dot(43, 8 + by, 6, 1, '#2e2230'); F.px(36, 9 + by, '#2e2230'); F.px(43, 9 + by, '#2e2230'); F.dot(39, 12 + by, 2, 3, SKIN[0]);
       F.dot(29, 13 + by, 1, 5, '#b3302a'); F.dot(50, 13 + by, 1, 5, '#b3302a'); F.dot(36, 7 + by, 1, 2, '#b3302a'); F.dot(43, 7 + by, 1, 2, '#b3302a');
       F.px(40, 21 + by, '#f4efe0');
     } else F.dot(34, 14 + by, 12, 1, SKIN[0]);
     F.blob(union(ell(40, 1 + by, 15, 6), rbox(34, 0 + by, 12, 6), tri(27, 3 + by, 25, -1 + by, 33, -2 + by), tri(53, 3 + by, 55, -1 + by, 47, -2 + by)), WOLF, { rw: 3 });
-    if (front) { F.dot(33, -1 + by, 3, 2, '#ffd84a'); F.px(33, -1 + by, W); F.dot(45, -1 + by, 3, 2, '#ffd84a'); F.px(45, -1 + by, W); F.dot(38, 3 + by, 4, 2, '#2e2230'); F.px(35, 6 + by, '#f4efe0'); F.px(44, 6 + by, '#f4efe0'); F.px(39, 6 + by, '#f4efe0'); F.px(27, 0 + by, '#e0a0a0'); F.px(53, 0 + by, '#e0a0a0'); }
+    if (front) { F.dot(33, 0 + by, 2, 1, '#2e2230'); F.px(33, 0 + by, '#ffd84a'); F.dot(45, 0 + by, 2, 1, '#2e2230'); F.px(46, 0 + by, '#ffd84a'); F.dot(38, 3 + by, 4, 2, '#2e2230'); F.px(35, 6 + by, '#f4efe0'); F.px(44, 6 + by, '#f4efe0'); F.px(39, 6 + by, '#f4efe0'); F.px(27, 0 + by, '#e0a0a0'); F.px(53, 0 + by, '#e0a0a0'); }
     else if (!side) { F.dot(34, 0 + by, 12, 1, WOLF[0]); }
   }));
 
