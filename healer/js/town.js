@@ -29,7 +29,6 @@ const Town = (() => {
   ];
   // 큰 소품(깊이 정렬 대상): type, x,y = 발 기준(타일, 소수 가능)
   const PROPS = [
-    { type: 'well', x: 12, y: 16 },
     // 좌판 두 개 사이(11~12열)는 비워 둬서 대로가 끊기지 않게
     { type: 'stall', x: 9, y: 22.5, color: '#b8706a' },
     { type: 'stall', x: 15, y: 22.5, color: '#6f9a7a' },
@@ -46,9 +45,6 @@ const Town = (() => {
     { type: 'lamp', x: 16.4, y: 17.6 },
     { type: 'sign', x: 17.6, y: 7.8 },
     { type: 'board', x: 12.5, y: 11.4 },
-    { type: 'bench', x: 10.2, y: 13.6 },
-    { type: 'bench', x: 13.8, y: 13.6 },
-    { type: 'bucket', x: 10.4, y: 16.6 },
     { type: 'barrel', x: 6.5, y: 23.3 },
     { type: 'crate', x: 7.5, y: 24.4 },
     { type: 'barrel', x: 16.5, y: 24.4 },
