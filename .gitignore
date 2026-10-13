@@ -17,3 +17,4 @@ assets/south_korea_simplified_zones.json
 # Capacitor / Node
 node_modules/
 www/
+tools/out/
