@@ -174,7 +174,7 @@ const DungeonGen = (() => {
       const near = nearest(centers, a, 2)[1];
       if (near !== undefined && rng.next() < 0.4) edges.push([a, near]);
     }
-    for (const [a, b] of edges) carvePath(c, centers[a], centers[b], { wallBase: 3, width: rng.next() < 0.7 ? 2 : 1 });
+    for (const [a, b] of edges) carvePath(c, centers[a], centers[b], { wallBase: 3, width: 3 });
   }
   // 프림 MST — 가까운 방부터 잇는다
   function mst(points) {
@@ -225,7 +225,8 @@ const DungeonGen = (() => {
     const { tiles, rng } = c, side = rng.next() < 0.5 ? 1 : COLS;
     for (const cell of path) {
       open(tiles, cell);
-      if (opt.width >= 2) open(tiles, cell + side);
+      if (opt.width >= 3) { open(tiles, cell + 1); open(tiles, cell - 1); open(tiles, cell + COLS); open(tiles, cell - COLS); } // 넓은 길: 파티가 막힘 없이 지나가게
+      else if (opt.width >= 2) open(tiles, cell + side);
       else if (opt.bump && rng.next() < opt.bump) open(tiles, cell + rng.pick(OFF4)); // 오솔길 가장자리를 울퉁불퉁하게
     }
   }
@@ -300,7 +301,7 @@ const DungeonGen = (() => {
     for (let k = 0; k < count; k++) {
       const a = randomWhere(c, () => true), b = randomWhere(c, (cell) => cheb(cell, a) >= 45);
       if (a < 0 || b < 0) continue;
-      carvePath(c, a, b, { wallBase: 2, width: c.info.biome === 'forest' ? 1 : 2, bump: 0.3 });
+      carvePath(c, a, b, { wallBase: 2, width: 3, bump: 0.3 });
     }
   }
 
@@ -514,7 +515,7 @@ const DungeonGen = (() => {
       const cell = idx(i, j);
       if (tiles[cell] === T.WALL) { if (countOpen8(tiles, cell) >= 2 && rng.next() < 0.08) tiles[cell] = T.BUSH; continue; } // 숲 가장자리 덤불
       if (tiles[cell] !== T.FLOOR || c.reserved[cell]) continue;
-      if (distW[cell] === 1) { if (rng.next() < 0.12 && safeToBlock(tiles, cell)) tiles[cell] = T.BUSH; }
+      if (distW[cell] === 1) { if (rng.next() < 0.02 && safeToBlock(tiles, cell)) tiles[cell] = T.BUSH; } // 길가 덤불은 드물게(이동 방해 최소화)
       else if (rng.next() < 0.04) tiles[cell] = T.DECO;
     }
     clusters(c, 30, 2, T.DECO, 0.6, (cell) => distW[cell] >= 2); // 꽃밭·풀 군락
@@ -524,13 +525,13 @@ const DungeonGen = (() => {
     for (let k = 0; k < 36; k++) { // 수정 군락: 벽가에 모여 자란다. 가운데 큰 수정은 통행 불가
       const center = randomWhere(c, (cell) => distW[cell] >= 1 && distW[cell] <= 2);
       if (center < 0) continue;
-      if (rng.next() < 0.5 && safeToBlock(tiles, center)) tiles[center] = T.BUSH;
+      if (rng.next() < 0.15 && safeToBlock(tiles, center)) tiles[center] = T.BUSH;
       forDisc(ci(center), cj(center), rng.int(1, 2), (cell) => { if (tiles[cell] === T.FLOOR && !c.reserved[cell] && rng.next() < 0.55) tiles[cell] = T.DECO; });
     }
     for (let j = 1; j < ROWS - 1; j++) for (let i = 1; i < COLS - 1; i++) { // 넓은 방 한가운데 바위·자잘한 돌
       const cell = idx(i, j);
       if (tiles[cell] !== T.FLOOR || c.reserved[cell]) continue;
-      if (distW[cell] >= 3 && rng.next() < 0.025 && safeToBlock(tiles, cell)) tiles[cell] = T.BUSH;
+      if (distW[cell] >= 3 && rng.next() < 0.004 && safeToBlock(tiles, cell)) tiles[cell] = T.BUSH; // 방 한가운데 바위는 거의 없게
       else if (rng.next() < 0.02) tiles[cell] = T.DECO;
     }
   }
@@ -592,7 +593,7 @@ const DungeonGen = (() => {
     const need = info.monsterCount - c.groups.reduce((s, g) => s + g.members.length, 0);
     const sizes = [];
     for (let total = 0; total < need;) {
-      const swarm = rng.next() < PACK.swarmChance;
+      const swarm = sizes.length === 0 || rng.next() < PACK.swarmChance; // 층마다 큰 떼가 최소 하나는 있게
       const n = Math.min(need - total, swarm ? rng.int(PACK.swarm[0], PACK.swarm[1]) : rng.int(PACK.normal[0], PACK.normal[1]));
       if (n < PACK.normal[0] && sizes.length) { const lo = sizes.indexOf(Math.min(...sizes)); sizes[lo] += n; break; }   // 자투리는 가장 작은 무리에 얹는다
       sizes.push(n); total += n;

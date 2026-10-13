@@ -66,7 +66,8 @@ const Scenes = (() => {
 
   function joyAim(x, y) {
     const dx = x - joy.ox, dy = y - joy.oy, d = Math.hypot(dx, dy);
-    const k = joy.fixed && d < 6 ? 0 : Math.min(1, d / JOY_R);   // 받침 한가운데는 데드존
+    // 살짝만 기울여도 바로 최고 속도(아날로그 감속 없음) — 엄지를 끝까지 밀지 않아도 시원하게 달린다
+    const k = d < 6 ? 0 : 1;
     joy.dx = d ? (dx / d) * k : 0; joy.dy = d ? (dy / d) * k : 0;
   }
   // 고정 조이스틱 받침 위치(CSS px). 씬이 joyRest 를 선언했을 때만
