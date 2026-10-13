@@ -121,7 +121,9 @@
   function statsLine(inst) {
     const out = [];
     const st = Items.statsOf ? Items.statsOf(inst) : {};
-    for (const [k, v] of Object.entries(st)) out.push(`${(Stats.NAMES && Stats.NAMES[k]) || UI.STAT_NAMES[k] || k} +${v}`);
+    const pool = Items.affixPool || [];
+    // 접사와 같은 이름의 기본 스탯(마나 회복·치유량 등)은 접사 표기(단위 포함)를 그대로 쓴다
+    for (const [k, v] of Object.entries(st)) out.push(pool.some((a) => a.stat === k) ? Items.affixText({ stat: k, value: v }) : `${(Stats.NAMES && Stats.NAMES[k]) || UI.STAT_NAMES[k] || k} +${v}`);
     for (const a of inst.affixes || []) out.push(Items.affixText(a));
     return out.join(' · ');
   }
@@ -292,13 +294,14 @@
   function simulate(g, inst, slot) {
     const d = K.def(inst); if (!d) return null;
     const p = g.player, eq = Object.assign({}, p.equipment);
-    if (d.slot === 'main' && d.hands === 'two') eq.off = null;
-    if (d.slot === 'off' && eq.main && (K.def(eq.main) || {}).hands === 'two') eq.main = null;
+    const drops = [];
+    if (d.slot === 'main' && d.hands === 'two' && eq.off) { eq.off = null; drops.push('보조'); }
+    if (d.slot === 'off' && eq.main && (K.def(eq.main) || {}).hands === 'two') { eq.main = null; drops.push('양손 무기'); }
     eq[slot] = inst;
     try {
       const before = Stats.derive(Object.assign({}, p, { equipment: Object.assign({}, p.equipment) }), g);
       const after = Stats.derive(Object.assign({}, p, { equipment: eq }), g);
-      return { before, after };
+      return { before, after, drops };
     } catch (e) { return null; }
   }
   function compareSpans(sim) {
@@ -311,6 +314,7 @@
     }
     const cs = (sim.before.castSpeed || 1) / (sim.after.castSpeed || 1) - 1;
     if (Math.abs(cs) >= 0.005) out.push(el('span', { class: cs > 0 ? 'up' : 'dn', text: `시전 속도 ${cs > 0 ? '▲' : '▼'}${Math.round(Math.abs(cs) * 100)}%` }));
+    if (sim.drops && sim.drops.length) out.push(el('span', { class: 'dn', text: `${sim.drops.join('·')} 해제` }));
     if (!out.length) out.push(el('span', { class: 'eq', text: '능력치 변화 없음' }));
     return out;
   }

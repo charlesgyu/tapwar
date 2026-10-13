@@ -140,6 +140,7 @@ Items.make(id, qty?) -> itemInst      // 무작위 요소 없는 생성(상점 �
 Items.canUse(def, cls) -> bool        // 재질(Classes.canWear)·무기 종류(WEAPON_CLASSES) 착용 가능 여부. 장신구·가방은 누구나
 Items.gradeWeights(floor) -> [ { id, weight } ] ; Items.setBonus(setId, count) ; Items.statsOf(inst) -> 등급·내구도 반영 스탯(UI용)
 Items.affixText({stat,value}) -> '시전 속도 +8%' ; Items.gradeName(g) / slotName(s) / kindName(k) ; Items.isStackable(def) ; Items.gradeIndex(g)
+Items.itemLevel(inst) -> number   // 상태창 '아이템 레벨'. 결정적: 10 + (floorMin+floorMax)/2 × 9 + 등급 가산(common 0 / uncommon 5 / rare 12 / legendary 22) + 접사 수×3, 반올림. 장비가 아니면 0
 Items.affixPool, Items.SETS, Items.GRADES ({ name, mult, priceMult, beltSlots, affixCount, color }), Items.GRADE_ORDER, Items.SLOTS, Items.ARMOR_SLOTS, Items.WEAPON_CLASSES
 Items.all() / list() / equipment() / consumables() / materials() / byKind(kind) / forSlot(slot) / recipes() / recipe(id)
 itemDef = { id, name, kind: 'equip'|'consume'|'material'|'misc'|'quest', slot?: SLOT, hands?: 'two'|'main'|'off',
@@ -254,7 +255,7 @@ Level.unlockedSkills(level) -> [skillId] (사제, 해금순) ; Level.newlyUnlock
 Inventory.add(G, itemInst) -> bool(전부 못 들어가면 false, 아무것도 안 바뀜) ; remove(G, uid, qty?) -> 뺀 수량 ; consume(G, itemId, qty) -> bool ; find(G, uid) (가방+장비) ; locate(G, uid) -> { where: 'bag'|'equip', index|slot, inst } ; count(G, itemId)
   // 스택(stack>1)은 기존 스택에 합치고 넘치면 새 칸(새 uid). 모든 획득은 add 를 거치므로 'item_gained' { id, qty, uid, inst } 는 여기서만 낸다. remove 는 'item_removed'.
 Inventory.bagSize(G) -> 20 + 가방 장비 bagSize ; ensureBag(G) (bag 배열 길이 맞춤) ; items(G) ; emptySlots(G) ; isFull(G)
-Inventory.equip(G, uid) -> { ok, slot?, unequipped?: [inst], reason?: 'not_found'|'not_equip'|'wrong_armor'|'wrong_weapon'|'level'|'bag_full' }
+Inventory.equip(G, uid, slotHint?) -> { ok, slot?, unequipped?: [inst], reason?: 'not_found'|'not_equip'|'wrong_armor'|'wrong_weapon'|'level'|'bag_full' }
   // 재질은 Items.canUse(def, G.player.cls)(사제는 천만), 무기는 지팡이/책만. 양손 지팡이 → off 해제, 책(off) → 양손 main 해제. 반지는 빈 ring1/ring2 우선, 둘 다 차면 ring1 교체.
   // 벗은 장비는 가방으로(장착하는 칸이 비므로 꽉 차도 1:1 교체는 됨). 가방 장비 교체는 "새 칸 수"에 들어가야 하고, 벨트 교체는 belt 배열을 새 칸 수로 자른다. 'equip_changed' { slot, uid, id, unequipped }.
 Inventory.unequip(G, slot) -> { ok, inst?, reason?: 'empty'|'bag_full' } ; Inventory.canEquip(G, inst) ; Inventory.equipped(G) -> [ { slot, inst } ] ; Inventory.wear(G, amount, slots?) (내구도 감소, 기본 가방·벨트 제외)
@@ -479,7 +480,7 @@ UI.tabs(container, [{ id, label, render(pane) }], activeId) ; UI.itemCard(instOr
 UI.el(tag, attrs, children) ; UI.gold(n) ; UI.bar(value, max, 'hp'|'mp'|'xp'|'fatigue') ; UI.empty(text) ; UI.row(children, cls) ; UI.section(title, children)
 UI.STAT_NAMES / SLOT_NAMES / ARMOR_NAMES / ROLE_NAMES
 ```
-화면 이름(각 ui_*.js 가 register): `shop`(상인), `auction`, `bank`, `smithy`, `inn`, `engraver`, `temple`, `adventurer`(모험가 사무소: 구인구직 게시판 메뉴 → 파티 찾기/파티원 모집/내 파티·모집 현황/의뢰 게시판, params.view), `guild`, `tower`(층 선택·입장), `inventory`(가방+장비+벨트), `status`(스탯 분배·스킬 선택·설정), `quests`(진행/완료, 힌트), `party`(파티원 상세), `title`(새 게임/이어하기), `result`(층 결과).
+화면 이름(각 ui_*.js 가 register): `shop`(상인), `auction`, `bank`, `smithy`, `inn`, `engraver`, `temple`, `adventurer`(모험가 사무소: 구인구직 게시판 메뉴 → 파티 찾기/파티원 모집/내 파티·모집 현황/의뢰 게시판, params.view), `guild`, `tower`(층 선택·입장), `inventory`(가방+장비+벨트), `status`(WoW 풍 캐릭터 시트: 초상+양옆 장비 칸(아이템 레벨, 탭하면 그 칸용 가방 장비 비교·교체 창)+아이템 레벨 평균·능력치·강화 수치 / 탭: 스탯 분배·스킬·설정, css/status.css), `quests`(진행/완료, 힌트), `party`(파티원 상세), `title`(새 게임/이어하기), `result`(층 결과).
 - 모든 시설 화면은 `Facilities.*` 의 { ok, reason } 를 토스트로 보여주고 `api.refresh()` 로 다시 그린다. 골드 표시는 `UI.gold`.
 - 씬: `Scenes.register(name, scene)`, `Scenes.go(name, params)`, `Scenes.current()`, `Scenes.update(dt)`, `Scenes.draw()`. scene = `{ enter(params), exit(), update(dt), draw(ctx), onTap(x,y)?, onJoy(dx,dy)? }`. 캔버스·DPR·zoom·조이스틱·탭 판정은 `js/scenes/scene.js` 가 공통으로 관리하고 현재 씬에 콜백.
 - 마을 씬(`town_scene.js`): 기존 main.js 의 마을 로직을 씬으로 옮긴 것. NPC 터치 → `UI.dialog`(Dialogue.greet + 수주 가능 퀘스트 선택지) ; 시설 문 → `UI.open(시설)` ; 성문 → `UI.open('tower')` ; 하단 고정 버튼: 가방·상태·퀘스트·파티.
