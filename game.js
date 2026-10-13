@@ -5355,11 +5355,11 @@ const easeInOut = t => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
 // 육지 윤곽 한 개를 정사영으로 그림: 지구 뒤편으로 넘어가는 구간은 직선이 아니라
 // 지평선(원 둘레)을 따라가게 해서, 확대 시 바다 위에 땅 색이 잘못 칠해지지 않게 함
-function traceOrthoRing(ctx, ring, lon0, lat0, R, cx, cy) {
+function traceOrthoRing(ctx, ring, lon0, lat0, R, cx, cy, isLand) {
   const d2r = Math.PI / 180;
   const φ0 = lat0 * d2r, λ0 = lon0 * d2r;
   const sφ0 = Math.sin(φ0), cφ0 = Math.cos(φ0);
-  let started = false, prevHidden = false, prevAng = 0, anyVisible = false;
+  let started = false, prevHidden = false, prevAng = 0, anyVisible = false, sweep = 0;
   for (let j = 0; j < ring.length; j++) {
     const φ = ring[j][1] * d2r, dλ = ring[j][0] * d2r - λ0;
     const cφ = Math.cos(φ), sφ = Math.sin(φ), cdl = Math.cos(dλ);
@@ -5382,6 +5382,7 @@ function traceOrthoRing(ctx, ring, lon0, lat0, R, cx, cy) {
         while (d > Math.PI) d -= 2 * Math.PI;
         while (d < -Math.PI) d += 2 * Math.PI;
         ctx.arc(cx, cy, R, prevAng, prevAng + d, d < 0);
+        sweep += d;
       } else {
         ctx.lineTo(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R);
       }
@@ -5390,7 +5391,25 @@ function traceOrthoRing(ctx, ring, lon0, lat0, R, cx, cy) {
     }
   }
   if (started) ctx.closePath();
+  // 지구 반대편 정중앙(시선 뒤쪽 끝 점)이 이 육지 안에 있으면, 뒤편을 지평선으로 따라간 길이
+  // 지구 둘레를 한 바퀴 더 감아 바다 전체가 땅색으로 칠해짐(예: 한국을 볼 때 남미) → 반대 방향 원으로 상쇄
+  if (isLand && anyVisible && Math.abs(sweep) > Math.PI) {
+    let alon = lon0 + 180; if (alon > 180) alon -= 360;
+    if (pointInLonLatRing(ring, alon, -lat0)) {
+      ctx.moveTo(cx + R, cy);
+      ctx.arc(cx, cy, R, 0, Math.PI * 2, sweep > 0);
+      ctx.closePath();
+    }
+  }
   return anyVisible;
+}
+function pointInLonLatRing(ring, x, y) {
+  let c = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+  }
+  return c;
 }
 
 // 정사영(orthographic) 투영: 지구 뒤편 점은 지평선(원 둘레)으로 붙임
@@ -5482,7 +5501,7 @@ function drawIntro(ctx) {
   for (let i = 0; i < worldLand.length; i++) {
     // 화면에 보이는 점이 없는 윤곽(지구 뒤편 전체)은 그리지 않음
     const sub = new Path2D();
-    if (traceOrthoRing(sub, worldLand[i], lon0, lat0, R, cx, cy)) landPath.addPath(sub);
+    if (traceOrthoRing(sub, worldLand[i], lon0, lat0, R, cx, cy, true)) landPath.addPath(sub);
   }
   ctx.fillStyle = mixColor('#85b06f', '#edebe3', seaBlend); // 아이콘의 초록 육지 → 지도 땅색
   ctx.fill(landPath);
