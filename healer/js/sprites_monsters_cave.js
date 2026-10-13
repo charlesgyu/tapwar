@@ -682,13 +682,13 @@
       F.blob(union(ell(42, 14 + by, 12, 10), rbox(34, 18 + by, 20, 8)), SKIN, { rw: 3 });
       tusk(F, 50, 19 + by); tusk(F, 46, 20 + by); eye(F, 48, 9 + by, 3, 3, '#ff6a4a', '#b32a2a'); F.dot(46, 7 + by, 6, 1, '#2e2230');
       F.dot(50, 12 + by, 4, 1, '#b3302a');
-      F.blob(union(ell(40, 6 + by, 14, 8), tri(30, 6 + by, 33, -3 + by, 38, 4 + by), rbox(44, 4 + by, 14, 7)), WOLF, { rw: 3 }); F.px(55, 6 + by, O); F.dot(46, 6 + by, 2, 2, '#ffd84a');
+      F.blob(union(ell(40, 3 + by, 14, 6), tri(30, 3 + by, 32, -6 + by, 38, 0 + by), rbox(44, 1 + by, 14, 6)), WOLF, { rw: 3 }); F.px(56, 4 + by, O); F.dot(47, 3 + by, 2, 2, '#ffd84a'); F.px(47, 3 + by, W);
       const ax = atk >= 0 ? (atk === 0 ? 50 : 66) : 60, ay = atk >= 0 ? (atk === 0 ? -2 : 44) : 12;
       F.blob(union(line(52, 32 + by, ax, ay + 20, 6), ell(ax, ay + 20, 5, 4)), SKIN, { rw: 2 });
       if (atk === 1) axe(70, 44, true); else axe(ax, ay, false);
       return;
     }
-    const front = dir === 'down';
+    const front = dir === 'down', side = false;
     F.blob(union(rbox(18, 50 - (step > 0 ? 1 : 0), 14, 14), rbox(16, 62, 18, 12)), BOOT); F.blob(union(rbox(48, 50 - (step < 0 ? 1 : 0), 14, 14), rbox(46, 62, 18, 12)), BOOT);
     F.dot(19, 64, 12, 1, BOOT[0]); F.dot(49, 64, 12, 1, BOOT[0]);
     // 늑대 가죽 망토(뒤) + 허리 가죽
@@ -710,13 +710,14 @@
     F.blob(union(ell(40, 14 + by, 13, 10), rbox(28, 17 + by, 24, 7)), SKIN, { rw: 3 });
     if (front) {
       tusk(F, 32, 19 + by); tusk(F, 47, 19 + by); F.px(32, 17 + by, '#f4efe0'); F.px(47, 17 + by, '#f4efe0'); F.dot(35, 20 + by, 10, 1, SKIN[0]);
-      eye(F, 32, 10 + by, 4, 3, '#ff6a4a', '#b32a2a', false); eye(F, 44, 10 + by, 4, 3, '#ff6a4a', '#b32a2a', false);
-      F.dot(31, 9 + by, 6, 1, '#2e2230'); F.dot(43, 9 + by, 6, 1, '#2e2230'); F.dot(39, 12 + by, 2, 3, SKIN[0]);
+      eye(F, 32, 10 + by, 4, 4, '#ffcf3a', '#c07a1a', false); eye(F, 44, 10 + by, 4, 4, '#ffcf3a', '#c07a1a', false); F.px(34, 12 + by, '#2e2230'); F.px(46, 12 + by, '#2e2230');
+      F.dot(31, 9 + by, 6, 1, '#2e2230'); F.dot(43, 9 + by, 6, 1, '#2e2230'); F.px(31, 8 + by, '#2e2230'); F.px(48, 8 + by, '#2e2230'); F.dot(39, 12 + by, 2, 3, SKIN[0]);
       F.dot(29, 13 + by, 1, 5, '#b3302a'); F.dot(50, 13 + by, 1, 5, '#b3302a'); F.dot(36, 7 + by, 1, 2, '#b3302a'); F.dot(43, 7 + by, 1, 2, '#b3302a');
       F.px(40, 21 + by, '#f4efe0');
     } else F.dot(34, 14 + by, 12, 1, SKIN[0]);
-    F.blob(union(ell(40, 4 + by, 15, 7), rbox(34, 4 + by, 12, 7), tri(27, 4 + by, 27, -6 + by, 34, 1 + by), tri(53, 4 + by, 53, -6 + by, 46, 1 + by)), WOLF, { rw: 3 });
-    if (front) { F.dot(33, 2 + by, 3, 2, '#ffd84a'); F.px(33, 2 + by, W); F.dot(45, 2 + by, 3, 2, '#ffd84a'); F.px(45, 2 + by, W); F.dot(38, 8 + by, 4, 2, '#2e2230'); F.px(36, 10 + by, '#f4efe0'); F.px(43, 10 + by, '#f4efe0'); F.px(39, 10 + by, '#f4efe0'); F.px(29, -3 + by, '#e0a0a0'); F.px(51, -3 + by, '#e0a0a0'); }
+    F.blob(union(ell(40, 1 + by, 15, 6), rbox(34, 0 + by, 12, 6), tri(27, 3 + by, 25, -1 + by, 33, -2 + by), tri(53, 3 + by, 55, -1 + by, 47, -2 + by)), WOLF, { rw: 3 });
+    if (front) { F.dot(33, -1 + by, 3, 2, '#ffd84a'); F.px(33, -1 + by, W); F.dot(45, -1 + by, 3, 2, '#ffd84a'); F.px(45, -1 + by, W); F.dot(38, 3 + by, 4, 2, '#2e2230'); F.px(35, 6 + by, '#f4efe0'); F.px(44, 6 + by, '#f4efe0'); F.px(39, 6 + by, '#f4efe0'); F.px(27, 0 + by, '#e0a0a0'); F.px(53, 0 + by, '#e0a0a0'); }
+    else if (!side) { F.dot(34, 0 + by, 12, 1, WOLF[0]); }
   }));
 
   // 15. 망령 왕 아셀 — 옛 대사제: 해골 얼굴 + 왕관, 찢어진 흰 사제 로브(금 장식), 부러진 사제장 지팡이, 보라 기운
