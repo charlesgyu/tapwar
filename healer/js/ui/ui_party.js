@@ -128,7 +128,7 @@ const PartyUI = (() => {
   }
   // 구성 조언 한 줄 — 1~5층에선 탱커가 없으면 힐러가 맞기 시작하므로 가장 먼저 알린다
   function roleAdvice(c, n) {
-    if (n === 0) return { warn: true, text: '파티원이 없어요. 모험가 사무소에서 동료를 고용해 보세요.' };
+    if (n === 0) return { warn: true, text: '파티원이 없어요. 모험가 사무소 구인구직 게시판에서 힐러를 구하는 파티에 지원해 보세요.' };
     if (!c.tank) return { warn: true, text: '탱커가 없어요! 몬스터가 힐러를 노리기 쉬워요.' };
     if (!c.melee && !c.ranged) return { warn: true, text: '딜러가 없어요. 전투가 아주 길어질 거예요.' };
     if (c.tank >= 3) return { warn: true, text: '탱커가 많아 화력이 약해요.' };
@@ -146,7 +146,7 @@ const PartyUI = (() => {
     for (let i = 0; i < 5; i++) {
       const m = list[i];
       if (!m) {
-        row.appendChild(el('button', { class: 'pt-slot empty', onClick: () => { api.open('adventurer', { tab: 'hire' }); } }, [el('span', { class: 'plus', text: '＋' }), el('small', { text: '고용' })]));
+        row.appendChild(el('button', { class: 'pt-slot empty', onClick: () => { api.open('adventurer', { view: 'find' }); } }, [el('span', { class: 'plus', text: '＋' }), el('small', { text: '파티 찾기' })]));
         continue;
       }
       row.appendChild(el('button', { class: 'pt-slot' + (m.uid === selUid ? ' sel' : ''), onClick: () => onPick(m.uid) }, [
