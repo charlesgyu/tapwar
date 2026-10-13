@@ -16,12 +16,17 @@ let view = {
 // 화면(논리) 크기와 기기 픽셀 비율: 캔버스는 실제 픽셀 수(×DPR)로 그려 레티나에서도 선명하게
 let viewW = window.innerWidth, viewH = window.innerHeight;
 let DPR = Math.min(window.devicePixelRatio || 1, 3);
+let safeTop = 0; // 상단 안전 영역(px)
+let endModalShownAt = 0; // 종료 카드가 뜬 시각 (1.5초 뒤 루프 정지)
+let endPending = false; // 승패 확정 후 마지막 색 변화를 보여 주는 대기
 function resizeCanvas() {
   viewW = window.innerWidth;
   viewH = window.innerHeight;
   DPR = Math.min(window.devicePixelRatio || 1, 3);
   canvas.width = Math.round(viewW * DPR);
   canvas.height = Math.round(viewH * DPR);
+  safeTop = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sat')) || 0; // 노치 여백 (매 프레임 읽지 않음)
+  if (endModalShownAt) endModalShownAt = performance.now(); // 회전하면 멈춘 마지막 화면을 다시 그림
   updateZoneScreenPositions();
 }
 window.addEventListener('resize', resizeCanvas);
@@ -81,7 +86,6 @@ const ENEMY_CONFIG = {
 
 // 작전 소요 시간 측정 (스톱워치 기록계)
 let gameElapsedTime = 0;
-let lastTimerText = '';
 
 // 작전 수행 기록 관리 (localStorage 기반)
 const STORAGE_KEY_RECORDS = 'tapwar_battle_records';
@@ -383,7 +387,7 @@ function useSpecialSkill(sourceZone) {
   const enemyZones = buildSkillTargetList(OWNER.ENEMY);
   const enemyMainAlive = !!(enemyMainZone && enemyMainZone.owner === OWNER.ENEMY);
   if (enemyZones.length === 0) {
-    document.getElementById('status-guide').innerText = '특수 기술로 공격할 적 지역이 없습니다! (적 메인 지역은 특수 기술 면역)';
+    showStatus('특수 기술로 공격할 적 지역이 없습니다! (적 메인 지역은 특수 기술 면역)');
     flashZone(sourceZone, SKILL_DENIED_FLASH);
     return;
   }
@@ -420,7 +424,7 @@ function useSpecialSkill(sourceZone) {
   updateEnemyPowerZone();
 
   const names = targetEnemyZones.map(tz => tz.name).join(', ');
-  document.getElementById('status-guide').innerText = `[특수 기술 발동!]: 적지 [${names}] ${targetEnemyZones.length}곳 피 10 감소! ([${sourceZone.name}] 충전 사용, 남은 충전: ${getReadySkillZones(OWNER.PLAYER).length}발)`;
+  statusQuiet(`[특수 기술 발동!]: 적지 [${names}] ${targetEnemyZones.length}곳 피 10 감소! ([${sourceZone.name}] 충전 사용, 남은 충전: ${getReadySkillZones(OWNER.PLAYER).length}발)`);
 }
 
 // 적군 AI 전용 특수 기술 (아군과 동일한 충전 규칙)
@@ -469,7 +473,7 @@ function useEnemySpecialSkill() {
   updateEnemyPowerZone();
 
   const names = targetPlayerZones.map(tz => tz.name).join(', ');
-  document.getElementById('status-guide').innerText = `[적군 특수 기술 발동!]: 아군 점령지 [${names}] ${targetPlayerZones.length}곳 피 10 감소!`;
+  statusQuiet(`[적군 특수 기술 발동!]: 아군 점령지 [${names}] ${targetPlayerZones.length}곳 피 10 감소!`);
 }
 
 // 지역별 충전 상태 갱신: state = null(완전점령 아님) | 'charging' | 'ready' | 'spent'
@@ -721,6 +725,8 @@ let hoveredZone = null;
 let lastSelectedPlayerZone = null; // Currently focused zone for tap burst
 let hanRiverData = null;
 let hanRiverPath = null;
+let mapSilhouette = null; // 지도 전체(지역+배경 지역) 실루엣 Path2D - 그림자 비트맵 재료
+let mapShadow = null;     // { canvas, x, y, w, h } 한 번 구운 그림자. 화면 크기가 바뀌면 다시 만듦
 
 function projectGeo(lng, lat, mapArea) {
   const normX = (lng - currentMapBounds.minLng) / (currentMapBounds.maxLng - currentMapBounds.minLng);
@@ -762,6 +768,9 @@ function loadSelectedMap(mapKey) {
   if (cfg.bounds) currentMapBounds = { ...cfg.bounds };
 
   // Reset in-game entities
+  endPending = false;
+  flashUntil = 0;
+  camTween = null;
   flyingOrbs = [];
   particles = [];
   focusRings = [];
@@ -788,7 +797,6 @@ function loadSelectedMap(mapKey) {
   resetItems();
   enemyCommandTimer = ENEMY_COMMAND_SEC;
   lastEnemyCommandCheck = 0;
-  lastTimerText = '';
   currentState = GAME_STATE.SELECT_START;
   startGuideShown = false;
   hanRiverData = null;
@@ -863,12 +871,9 @@ function loadSelectedMap(mapKey) {
 
       updateZoneScreenPositions();
       updateRecordDisplays();
-      const timerEl = document.getElementById('match-timer');
-      if (timerEl) timerEl.innerText = '00:00';
-
-      document.getElementById('status-guide').innerText = START_GUIDE_TEXT;
+      releaseSceneVeil();
     })
-    .catch(err => console.error('Failed to load map data:', err));
+    .catch(err => { console.error('Failed to load map data:', err); releaseSceneVeil(); });
 }
 
 function updateZoneScreenPositions() {
@@ -901,6 +906,7 @@ function updateZoneScreenPositions() {
     });
     z.path = path;
     z.bbox = { minX, maxX, minY, maxY };
+    z._g = null; z._gm = null; // 월드 좌표가 바뀌었으니 면 그라데이션 캐시 무효화
   });
 
   backdropZones.forEach(b => {
@@ -932,6 +938,45 @@ function updateZoneScreenPositions() {
     }));
     hanRiverPath = rPath;
   }
+
+  // 지도 실루엣(그림자용): 월드 좌표가 바뀔 때마다 새로 모으고 그림자 비트맵은 버림
+  mapSilhouette = new Path2D();
+  rawZones.forEach(z => z.path && mapSilhouette.addPath(z.path));
+  backdropZones.forEach(b => b.path && mapSilhouette.addPath(b.path));
+  mapShadow = null;
+}
+
+// 지도 아래 그림자: 실루엣을 흐림 그림자로 한 번만 구워 둔 비트맵 (지도 안쪽은 도려내 바깥 그림자만 남김)
+// 최대 2048px 한 변, 로드·회전 때 한 번 20~60ms. 프레임마다 ctx.shadowBlur 는 절대 쓰지 않음
+function getMapShadow() {
+  if (mapShadow) return mapShadow;
+  if (!mapSilhouette) return null;
+  const area = getMapArea(), pad = 36;
+  let r = Math.min(DPR, 2);
+  const w = area.w + pad * 2, h = area.h + pad * 2;
+  if (!isFinite(w) || !isFinite(h) || w <= 0 || h <= 0) return null; // 맵 교체 중(범위 미정)엔 캐시하지 않음
+  if (Math.max(w, h) * r > 2048) r = 2048 / Math.max(w, h);
+  try {
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(w * r);
+    cv.height = Math.ceil(h * r);
+    const g = cv.getContext('2d');
+    g.setTransform(r, 0, 0, r, (pad - area.x) * r, (pad - area.y) * r);
+    g.shadowColor = 'rgba(30,41,59,0.20)';
+    g.shadowBlur = 16 * r;
+    g.shadowOffsetY = 4 * r;
+    g.fillStyle = '#000';
+    g.fill(mapSilhouette);
+    g.shadowColor = 'transparent';
+    g.shadowBlur = 0;
+    g.shadowOffsetY = 0;
+    g.globalCompositeOperation = 'destination-out';
+    g.fill(mapSilhouette);
+    mapShadow = { canvas: cv, x: area.x - pad, y: area.y - pad, w, h };
+  } catch (e) {
+    mapShadow = null;
+  }
+  return mapShadow;
 }
 
 function screenToWorld(sx, sy) {
@@ -941,6 +986,20 @@ function screenToWorld(sx, sy) {
     x: (sx - cx - view.offsetX) / view.scale + cx,
     y: (sy - cy - view.offsetY) / view.scale + cy
   };
+}
+
+// 지금 화면에 보이는 월드 좌표 범위 (그리기 전 컬링용. 흔들림 오프셋은 무시)
+function visibleWorldRect() {
+  const tl = screenToWorld(0, 0);
+  const br = screenToWorld(viewW, viewH);
+  return { minX: tl.x, minY: tl.y, maxX: br.x, maxY: br.y };
+}
+
+// 지역 가운데가 화면 안(여유 40px)에 있는지: 조각·흔들림 같은 '보일 때만' 효과용
+function zoneOnScreen(z) {
+  const vr = visibleWorldRect();
+  const mg = 40 / view.scale;
+  return z.cx >= vr.minX - mg && z.cx <= vr.maxX + mg && z.cy >= vr.minY - mg && z.cy <= vr.maxY + mg;
 }
 
 function isPointInPoly(pt, poly) {
@@ -1085,7 +1144,9 @@ class FlyingOrb {
 
     this.x = sourceZone.cx;
     this.y = sourceZone.cy;
-    
+    this.px = this.x; // 직전 프레임 위치 (꼬리 그리기용)
+    this.py = this.y;
+
     const dx = targetZone.cx - sourceZone.cx;
     const dy = targetZone.cy - sourceZone.cy;
     this.dist = Math.hypot(dx, dy);
@@ -1106,6 +1167,8 @@ class FlyingOrb {
 
   update() {
     if (this.isDead) return true;
+    this.px = this.x;
+    this.py = this.y;
     this.progress += (this.speed * gameSpeed) / this.dist;
     if (this.progress >= 1) {
       this.arrive();
@@ -1140,7 +1203,7 @@ class FlyingOrb {
       const base = this.bounceBase || this.power;
       const atkPow = base + (this.power - base) * f;
       const pw = rivalHit ? defenseTake(atkPow, t) : atkPow;
-      addFx(t, 'hit', OWNER_DOT[own] || '#7c3aed');
+      this.hitFx(t, own, rivalHit);
       applyOrbHit(t, own, pw, null);
       const para = Math.round((this.bounceParalyze || 0) * f);
       if (rivalHit && para > 0) { t.paralyzedShots = para; flashZone(t, '#0ea5e9'); addFx(t, 'paralyze'); }
@@ -1205,7 +1268,7 @@ class FlyingOrb {
         t.neighbors.forEach(n => { if (n.owner === own) { n.orbs = Math.min(n.maxOrbs, n.orbs + power); addFx(n, 'rebuildSpread'); } });
       }
     }
-    addFx(t, 'hit', OWNER_DOT[own] || '#7c3aed');
+    this.hitFx(t, own, rivalHit);
     applyOrbHit(t, own, power, src);
     // [아이템 폭발] 맞힌 상대 지역에 붙어 있는 모든 상대 지역에 공격력의 50% (각 지역 철벽은 따로 계산)
     if (explodeRatio > 0) explodeAround(t, own, attack * explodeRatio);
@@ -1218,6 +1281,32 @@ class FlyingOrb {
       this.bounceParalyze = paralyzeShots;
       this.bounceOn(t, own, wasRival);
     }
+  }
+
+  // 맞는 순간 효과: 상대 땅이면 쏜 쪽에서 오는 호 + 튀는 조각(화면 안일 때만), 내 땅이면 안으로 모이는 작은 고리
+  // 대포는 큰 고리 + 조각 8개 + 화면 흔들림
+  hitFx(t, own, rivalHit) {
+    const col = OWNER_DOT[own] || '#7c3aed';
+    const seen = zoneOnScreen(t);
+    if (this.isCannon) {
+      addFx(t, 'cannonHit', col);
+      if (seen) {
+        for (let a = 0; a < 8; a++) pushParticle(t.cx, t.cy, Math.cos(a * Math.PI / 4 + 0.4) * 2.6, Math.sin(a * Math.PI / 4 + 0.4) * 2.6, col, 2.6, 380);
+        addShake(2, 140);
+      }
+    }
+    if (rivalHit) {
+      const ang = Math.atan2(this.sourceZone.cy - t.cy, this.sourceZone.cx - t.cx);
+      addFx(t, 'hit', col, ang);
+      t.hitAt = performance.now();
+      t.hitColor = col;
+      if (seen) {
+        for (let i = 0; i < (this.power > 1 ? 2 : 1); i++) {
+          const v = 1.5 + Math.random() * 1.5, j = (Math.random() - 0.5) * 0.8;
+          pushParticle(t.cx, t.cy, -Math.cos(ang + j) * v, -Math.sin(ang + j) * v, col, 2, 260);
+        }
+      }
+    } else addFx(t, 'hitIn', col);
   }
 
   // 튕기기: 옆의 (상대 땅 / 다친 내 땅) 으로 다음 구슬. 이미 맞힌 곳 제외
@@ -1240,89 +1329,144 @@ class FlyingOrb {
     b.bounceParalyze = this.bounceParalyze || 0;
     flyingOrbs.push(b);
   }
-
-  draw(ctx) {
-    // Mini Metro flat passenger token style: Solid colored circle with clean white ring
-    ctx.beginPath();
-    const r = this.power > 1 ? 4.5 : 3.2;
-    ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = (this.owner === OWNER.PLAYER) ? '#2563eb' : '#dc2626';
-    ctx.fill();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-  }
 }
 
-// 2회 단일 Draw Call로 전체 비행 구슬을 렌더링하는 초경량 일괄 렌더러 (미니 메트로 스타일)
+// 구슬 색 (진영·완전점령 여부별). 7가지 모두 6자리 hex (빛 스프라이트가 알파를 뒤에 붙임)
+const ORB_PASSES = [
+  [OWNER.PLAYER, false, '#2563eb'], [OWNER.PLAYER, true, '#1e3a8a'],
+  [OWNER.ENEMY, false, '#dc2626'], [OWNER.ENEMY, true, '#7f1d1d'],
+  [OWNER.ENEMY2, false, '#8b5cf6'], [OWNER.ENEMY2, true, '#4c1d95'],
+  ['rebel', false, '#7c3aed'] // REBEL (아래에서 선언됨, 로드 순서 때문에 문자열 그대로)
+];
+function passColorFor(orb) {
+  for (let i = 0; i < ORB_PASSES.length; i++) {
+    const p = ORB_PASSES[i];
+    if (p[0] === orb.owner && p[1] === !!orb.fromFull) return p[2];
+  }
+  return '#7c3aed';
+}
+// 게임에서 유일한 '빛': 미리 그려 둔 원형 그라데이션 스프라이트 (shadowBlur 금지, drawImage 한 번)
+const glowCache = {};
+function glowSprite(hex) {
+  if (glowCache[hex]) return glowCache[hex];
+  const s = document.createElement('canvas');
+  s.width = s.height = 64;
+  const g = s.getContext('2d');
+  const rg = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  rg.addColorStop(0, hex + '66');
+  rg.addColorStop(0.5, hex + '22');
+  rg.addColorStop(1, hex + '00');
+  g.fillStyle = rg;
+  g.fillRect(0, 0, 64, 64);
+  return glowCache[hex] = s;
+}
+function orbRadius(orb, k) {
+  return (orb.isCannon ? 10.5 : (orb.power > 1 || orb.fromFull) ? 5.4 : 3.8) * k;
+}
+
+// 진영별 묶음 그리기: 빛(대포·강한 구슬만) → 꼬리 한 번 → 몸통 채우기+흰 테두리 한 번 (미니 메트로 스타일)
 function drawFlyingOrbs(ctx) {
   if (flyingOrbs.length === 0) return;
   // 확대해도 구슬이 지역을 덮지 않도록 배율에 따라 크기 보정 (화면상 크기 증가를 완만하게)
   const k = 1 / Math.sqrt(view.scale);
+  const now = performance.now();
+  const fog = isFogActive(); // [영국 안개] 적 구슬은 전혀 안 보임
 
-  // 진영·완전점령 여부별로 한 번에 그림 (아군 파랑 / 아군 완전점령 진한 파랑 / 적 빨강 / 적 완전점령 진한 빨강)
   ctx.save();
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 1.2 * k;
-  const passes = [
-    [OWNER.PLAYER, false, '#2563eb'], [OWNER.PLAYER, true, '#1e3a8a'],
-    [OWNER.ENEMY, false, '#dc2626'], [OWNER.ENEMY, true, '#7f1d1d'],
-    [OWNER.ENEMY2, false, '#8b5cf6'], [OWNER.ENEMY2, true, '#4c1d95'],
-    [REBEL, false, '#7c3aed']
-  ];
-  const fog = isFogActive(); // [영국 안개] 적 구슬은 막 출발할 때 방향만 살짝 보임
-  passes.forEach(([owner, full, color]) => {
-    ctx.fillStyle = color;
+  ctx.lineCap = 'round';
+  // 1) 빛: 대포와 공격력 1 초과(완전점령 구슬은 제외) 구슬 아래에 스프라이트
+  for (let i = 0; i < flyingOrbs.length; i++) {
+    const orb = flyingOrbs[i];
+    if (orb.isDead || !(orb.isCannon || orb.power > 1) || orb.fromFull) continue;
+    if (fog && orb.owner === OWNER.ENEMY) continue;
+    const r = orbRadius(orb, k);
+    const g = r * 2.6 * (orb.isCannon ? 1 + 0.08 * Math.sin(now / 120) : 1);
+    ctx.drawImage(glowSprite(passColorFor(orb)), orb.x - g, orb.y - g, 2 * g, 2 * g);
+  }
+  for (let p = 0; p < ORB_PASSES.length; p++) {
+    const owner = ORB_PASSES[p][0], full = ORB_PASSES[p][1], color = ORB_PASSES[p][2];
+    if (fog && owner === OWNER.ENEMY) continue;
+    // 2) 꼬리: 움직인 방향 반대로 짧은 선 (대포는 2배 길이)
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4.2 * k;
+    ctx.globalAlpha = 0.28;
     ctx.beginPath();
     let count = 0;
     for (let i = 0; i < flyingOrbs.length; i++) {
       const orb = flyingOrbs[i];
       if (orb.isDead || orb.owner !== owner || !!orb.fromFull !== full) continue;
-      if (fog && owner === OWNER.ENEMY) continue; // [영국 안개] 적 구슬은 전혀 안 보임
-      const r = (orb.isCannon ? 9.6 : orb.power > 1 ? 4.5 : 3.2) * k;
+      count++;
+      const dx = orb.x - orb.px, dy = orb.y - orb.py, step = Math.hypot(dx, dy);
+      if (step < 0.01) continue;
+      const len = Math.min((orb.isCannon ? 28 : 14) * k, 3 * step) / step;
+      ctx.moveTo(orb.x, orb.y);
+      ctx.lineTo(orb.x - dx * len, orb.y - dy * len);
+    }
+    if (count === 0) continue;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    // 3) 몸통: 반란군은 흰 몸통에 보라 테두리, 나머지는 진영 색 몸통에 흰 테두리
+    const rebel = owner === REBEL;
+    ctx.fillStyle = rebel ? '#ffffff' : color;
+    ctx.strokeStyle = rebel ? '#7c3aed' : '#ffffff';
+    ctx.lineWidth = (rebel ? 1.4 : 1.2) * k;
+    ctx.beginPath();
+    for (let i = 0; i < flyingOrbs.length; i++) {
+      const orb = flyingOrbs[i];
+      if (orb.isDead || orb.owner !== owner || !!orb.fromFull !== full) continue;
+      const r = orbRadius(orb, k);
       ctx.moveTo(orb.x + r, orb.y);
       ctx.arc(orb.x, orb.y, r, 0, Math.PI * 2);
-      count++;
     }
-    if (count > 0) { ctx.fill(); ctx.stroke(); }
-  });
+    ctx.fill();
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
 // 집중포화 완충/점령 시 날아가던 구슬이 일제히 소멸할 때 연출되는 초경량 이펙트 시스템 (리소스 최소화)
 
+// 불꽃 조각(선 모양 스파크): 최대 140개, 수명은 실제 시간(ms) 기준이라 배속과 상관없이 같은 길이로 보임
+const PARTICLE_MAX = 140;
+function pushParticle(x, y, vx, vy, color, size, ms) {
+  if (particles.length >= PARTICLE_MAX) particles.shift();
+  particles.push({ x, y, vx, vy, color, size, ms, t0: performance.now() });
+}
+// (옛 호출 자리용) 무작위 방향의 작은 조각
 function createDisintegrateParticle(x, y, color = '#38bdf8') {
-  if (particles.length >= 15) return; // 최대 15개로 리소스 엄격 제한
-  particles.push({
-    x, y,
-    vx: (Math.random() - 0.5) * 2.0,
-    vy: (Math.random() - 0.5) * 2.0,
-    alpha: 0.9,
-    size: 2.0,
-    color
-  });
+  pushParticle(x, y, (Math.random() - 0.5) * 2.0, (Math.random() - 0.5) * 2.0, color, 2, 300);
 }
 
 function updateParticles() {
+  const now = performance.now();
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.x += p.vx * gameSpeed;
     p.y += p.vy * gameSpeed;
-    p.alpha -= 0.05 * gameSpeed;
-    if (p.alpha <= 0) particles.splice(i, 1);
+    if (now - p.t0 >= p.ms) particles.splice(i, 1);
   }
 }
 
+// 조각은 움직이는 방향으로 짧은 선(꼬리)으로 그림. 화면 밖은 건너뜀
 function drawParticles(ctx) {
   if (particles.length === 0) return;
+  const now = performance.now();
+  const vr = visibleWorldRect();
+  const mg = 20 / view.scale;
   ctx.save();
-  particles.forEach(p => {
-    ctx.globalAlpha = Math.max(0, p.alpha);
-    ctx.fillStyle = p.color;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    if (p.x < vr.minX - mg || p.x > vr.maxX + mg || p.y < vr.minY - mg || p.y > vr.maxY + mg) continue;
+    const k = Math.min(1, (now - p.t0) / p.ms);
+    ctx.globalAlpha = 1 - k;
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = p.size * (1 - 0.5 * k);
     ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    ctx.fill();
-  });
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x - p.vx * 2.5, p.y - p.vy * 2.5);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -1410,13 +1554,24 @@ function applyOrbHit(zone, hitOwner, power, sourceZone) {
 
     zone.orbs -= power;
     if (zone.orbs <= 0) {
+      const prevOwner = zone.owner;
+      const wasMain = isMainZone(zone);
       zone.owner = OWNER.NEUTRAL;
+      if (prevOwner === OWNER.PLAYER) { addFx(zone, 'lostZone'); flashZone(zone, '#0f172a'); } // 내 땅을 잃음: 안으로 모이는 어두운 고리
       extraMains.delete(zone);
       zone.maxOrbs = ZONE_MAX_HP; // 메인이었다면 중립이 되면서 일반 지역(피 50)으로
       zone.claimant = hitOwner;
       zone.targetZones = [];
       zone.isManualTarget = false;
       zone.orbs = Math.abs(zone.orbs);
+      if (wasMain) { // 본진 함락: 결정적 한 박자 — 화면 번쩍 + 흔들림 + 큰 고리 + 불꽃
+        const mine = hitOwner === OWNER.PLAYER;
+        addScreenFlash(mine ? '#fde047' : '#dc2626', 420, mine ? 0.35 : 0.30);
+        addShake(6, 450);
+        addFx(zone, 'mainFall', mine ? ZONE_COLORS.mainCharged : ZONE_COLORS.enemyMain);
+        for (let a = 0; a < 16; a++) pushParticle(zone.cx, zone.cy, Math.cos(a * Math.PI / 8) * 3, Math.sin(a * Math.PI / 8) * 3, mine ? '#fde047' : '#f87171', 3, 600);
+        haptic('strong');
+      }
       if (zone.orbs >= zone.maxOrbs) {
         conquerZone(zone, hitOwner, sourceZone);
       } else {
@@ -1463,7 +1618,10 @@ function resolveOrbCollisions() {
       const hit = Math.min(f.power, k.power);
       f.power -= hit;
       k.power -= hit;
-      createDisintegrateParticle((f.x + k.x) / 2, (f.y + k.y) / 2, '#a855f7');
+      // 공중 충돌: 양쪽 진영 색 조각이 중간에서 튐
+      const mx = (f.x + k.x) / 2, my = (f.y + k.y) / 2;
+      pushParticle(mx, my, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, OWNER_DOT[f.owner] || '#7c3aed', 2, 300);
+      pushParticle(mx, my, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, OWNER_DOT[k.owner] || '#7c3aed', 2, 300);
       if (f.power <= 0) { f.isDead = true; i++; }
       if (k.power <= 0) { k.isDead = true; j++; }
     }
@@ -1485,7 +1643,12 @@ function conquerZone(conqueredZone, newOwner, conqueredBySource) {
   conqueredZone.orbs = conqueredZone.maxOrbs; // Full garrison upon capture
   conqueredZone.claimant = null;
   conqueredZone.protectedUntil = gameElapsedTime + CAPTURE_PROTECT_SEC;
-  flashZone(conqueredZone, newOwner === OWNER.PLAYER ? ZONE_COLORS.playerStroke : newOwner === OWNER.ENEMY2 ? ZONE_COLORS.enemy2Stroke : ZONE_COLORS.enemyStroke);
+  const sc = newOwner === OWNER.PLAYER ? ZONE_COLORS.playerStroke : newOwner === OWNER.ENEMY2 ? ZONE_COLORS.enemy2Stroke : ZONE_COLORS.enemyStroke;
+  flashZone(conqueredZone, sc);
+  // 점령 연출: 지역 안쪽 흰 물결(그리기 쪽) + 퍼지는 고리 + 조각 8개
+  conqueredZone.conqueredAt = performance.now();
+  addFx(conqueredZone, 'conquer', sc);
+  for (let a = 0; a < 8; a++) pushParticle(conqueredZone.cx, conqueredZone.cy, Math.cos(a * Math.PI / 4) * 2.2, Math.sin(a * Math.PI / 4) * 2.2, sc, 2.4, 420);
 
   // 1. Conquered Zone immediately starts advancing towards an adjacent front!
   const newTarget = pickAutoTarget(conqueredZone);
@@ -1602,7 +1765,7 @@ function updatePowerZone() {
     const activePlayerZones = rawZones.filter(z => z.owner === OWNER.PLAYER && !isFullyConquered(z));
     if (activePlayerZones.length > 0) {
       currentPowerZone = activePlayerZones[Math.floor(Math.random() * activePlayerZones.length)];
-      document.getElementById('status-guide').innerText = `[${currentPowerZone.name}] 지역에 파워 구슬 거점 이전!`;
+      statusQuiet(`[${currentPowerZone.name}] 지역에 파워 구슬 거점 이전!`);
     } else {
       currentPowerZone = null;
     }
@@ -1622,7 +1785,7 @@ function chooseBuff(itemCode) {
     hud.innerHTML = `<div class="buff-badge">생성 속도 (${secStr}s)</div>` + hud.innerHTML;
   } else if (itemCode === 'INSTANT') {
     isInstantConquerMode = true;
-    document.getElementById('status-guide').innerText = '[즉시 점령]: 즉시 점령하고 싶은 도시를 클릭하세요!';
+    statusQuiet('[즉시 점령]: 즉시 점령하고 싶은 도시를 클릭하세요!');
   }
 
   const itemModal = document.getElementById('item-modal');
@@ -1717,11 +1880,10 @@ function beginGameAtZone(zone) {
   enemyBuffs.interval = ENEMY_CONFIG.enemyInterval;
   enemyBuffs.powerLevel = 0;
   gameElapsedTime = 0;
-  lastTimerText = '';
 
   currentState = GAME_STATE.PLAYING;
   if (window.Sound) Sound.setMode('game');
-  document.getElementById('status-guide').innerText = `${zone.name} 기지 확보! 작전 개시! (적 전면 섬멸 작전)`;
+  statusQuiet(`${zone.name} 기지 확보! 작전 개시! (적 전면 섬멸 작전)`);
   if (itemMode) { nextItemAt = 0; openItemPick(); }
 }
 
@@ -1815,7 +1977,7 @@ function buyProduct() {
     if (r.status === 'purchased') {
       setOwnedFromStore(r.owned);
       closePurchase();
-      openSheet('', '구매 완료', `${p.title}을(를) 쓸 수 있어요.`);
+      openSheet('cart', '구매 완료', `${p.title}을(를) 쓸 수 있어요.`);
     } else if (r.status === 'pending') {
       buy.textContent = '승인 대기 중이에요';
     } else {
@@ -1885,10 +2047,8 @@ function updateHudVisibility() {
   const key = `${playing}|${choosing}`;
   if (key === lastHudKey) return;
   lastHudKey = key;
-  document.getElementById('top-timer').hidden = true; // 진행 시간은 지도 위 맵 이름 아래에 새김
   document.getElementById('speed-group').hidden = !playing;
   // 시작 안내는 상단 띠 대신, 처음 한 번 화면 가운데에 글자만 1초 떴다 사라짐
-  document.getElementById('status-guide').hidden = true;
   if (choosing && !startGuideShown) {
     startGuideShown = true;
     flashCenterText(START_GUIDE_TEXT);
@@ -1896,6 +2056,23 @@ function updateHudVisibility() {
 }
 
 let startGuideShown = false;
+// 상단 안내 알약: 글자를 넣고 .show 로 띄웠다가 ms 뒤에 스르륵 사라짐
+let statusTimer = null;
+// 예전부터 화면에 띄우지 않던 긴 안내(적 카드·집중포화 경보 등)는 조용히 넘김
+function statusQuiet() {}
+function showStatus(text, ms = 2200) {
+  const el = document.getElementById('status-guide');
+  if (!el) return;
+  el.hidden = false;
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => el.classList.remove('show'), ms);
+}
+function hideStatus() {
+  const el = document.getElementById('status-guide');
+  if (el) el.classList.remove('show');
+}
 function flashCenterText(text) {
   const el = document.getElementById('center-toast');
   if (!el) return;
@@ -1918,7 +2095,7 @@ function handleZoneDoubleClick(targetZone) {
 
   // [방어 지원]: 내 점령지역에 집중 포격하면 아군 구슬이 들어가 피를 회복(최대 50)
   if (targetZone.owner === OWNER.PLAYER && targetZone.orbs >= targetZone.maxOrbs) {
-    document.getElementById('status-guide').innerText = `[${targetZone.name}]은(는) 이미 피가 가득 찼습니다!`;
+    showStatus(`[${targetZone.name}]은(는) 이미 피가 가득 찼습니다!`);
     return;
   }
 
@@ -1926,7 +2103,7 @@ function handleZoneDoubleClick(targetZone) {
   // [실험] 적 완전점령 지역은 내 완전점령 지역만 사격에 참여
   const targetIsFortress = targetZone.owner === OWNER.ENEMY && isFullyConquered(targetZone);
   if (targetIsFortress && !EXPERIMENT_NO_SKILL) {
-    document.getElementById('status-guide').innerText = `[${targetZone.name}]은(는) 완전 점령된 철벽 기지입니다!`;
+    showStatus(`[${targetZone.name}]은(는) 완전 점령된 철벽 기지입니다!`);
     return;
   }
 
@@ -1936,7 +2113,7 @@ function handleZoneDoubleClick(targetZone) {
     (canRangeAttack(z) || z.neighbors.includes(targetZone))); // 원거리 불가 지역은 맞닿은 경우만 참여
 
   if (allPlayerZones.length === 0) {
-    document.getElementById('status-guide').innerText = `출격 가능한 전선 아군 점령지가 없습니다! (완전점령지역은 집중포화 제외)`;
+    showStatus(`출격 가능한 전선 아군 점령지가 없습니다! (완전점령지역은 집중포화 제외)`);
     return;
   }
 
@@ -1957,6 +2134,7 @@ function handleZoneDoubleClick(targetZone) {
   rawZones.forEach(z => { z.focusOptOut = false; });
   addPlayerFocus(targetZone);
   haptic('short'); // 집중포화 시전
+  addFx(targetZone, 'lock', ZONE_COLORS.playerStroke); // 조여드는 점선 고리
   focusFireCooldown = 0; // 쿨타임 없음!
 
   // 전선의 모든 아군 기지(완전점령 제외, 메인 포함)가 목표를 고정 타겟으로 지정하고
@@ -1971,9 +2149,9 @@ function handleZoneDoubleClick(targetZone) {
   // 집중 포화 지정 순간: 목표 지역 테두리 번쩍 (내 지역 보급이면 초록)
   flashZone(targetZone, targetZone.owner === OWNER.PLAYER ? ZONE_COLORS.playerFullCharged : ZONE_COLORS.playerStroke);
 
-  document.getElementById('status-guide').innerText = targetZone.owner === OWNER.PLAYER
+  showStatus(targetZone.owner === OWNER.PLAYER
     ? `[${targetZone.name}] 방어 지원! 아군 ${allPlayerZones.length}개 거점에서 피가 찰 때까지 보급!`
-    : `[${targetZone.name}] 집중 포화! 아군 ${allPlayerZones.length}개 거점에서 점령할 때까지 일제 사격!`;
+    : `[${targetZone.name}] 집중 포화! 아군 ${allPlayerZones.length}개 거점에서 점령할 때까지 일제 사격!`);
 }
 
 function getEventCoords(e) {
@@ -2019,7 +2197,7 @@ function onPointerDown(e) {
       isInstantConquerMode = false;
       conquerZone(targetZone, OWNER.PLAYER, null);
       createHitParticles(targetZone.cx, targetZone.cy, OWNER.PLAYER);
-      document.getElementById('status-guide').innerText = `[${targetZone.name}] 즉시 점령 완료! 아군 영토로 편입되었습니다.`;
+      statusQuiet(`[${targetZone.name}] 즉시 점령 완료! 아군 영토로 편입되었습니다.`);
       return;
     }
   }
@@ -2090,21 +2268,20 @@ function onPointerUp(e) {
 
     // [특수 기술]: 드래그 없이 아군 완전점령 지역을 탭하면 그 지역의 충전 1발 사용
     if (!EXPERIMENT_NO_SKILL && endZone === dragSourceZone && isFullyConquered(endZone)) {
-      const guide = document.getElementById('status-guide');
       if (!skillUnlocked[OWNER.PLAYER]) {
         const n = rawZones.filter(z => z.owner === OWNER.PLAYER && isFullyConquered(z)).length;
-        guide.innerText = `특수 기술은 완전점령 지역 ${SKILL_UNLOCK_FULL_COUNT}곳을 처음 확보하면 열립니다 (${n}/${SKILL_UNLOCK_FULL_COUNT})`;
+        showStatus(`특수 기술은 완전점령 지역 ${SKILL_UNLOCK_FULL_COUNT}곳을 처음 확보하면 열립니다 (${n}/${SKILL_UNLOCK_FULL_COUNT})`);
         flashZone(endZone, SKILL_DENIED_FLASH);
       } else if (endZone.chargeState === 'ready' && gameElapsedTime < playerSkillGcdUntil) {
-        guide.innerText = `특수 기술 글로벌 쿨타임 (${Math.ceil(playerSkillGcdUntil - gameElapsedTime)}초 남음)`;
+        showStatus(`특수 기술 글로벌 쿨타임 (${Math.ceil(playerSkillGcdUntil - gameElapsedTime)}초 남음)`);
         flashZone(endZone, SKILL_DENIED_FLASH);
       } else if (endZone.chargeState === 'ready') {
         useSpecialSkill(endZone);
       } else if (endZone.chargeState === 'charging') {
-        guide.innerText = `[${endZone.name}] 특수 기술 충전 중 (${Math.max(1, Math.ceil(SKILL_CHARGE_SEC - endZone.chargeTime))}초 남음)`;
+        showStatus(`[${endZone.name}] 특수 기술 충전 중 (${Math.max(1, Math.ceil(SKILL_CHARGE_SEC - endZone.chargeTime))}초 남음)`);
         flashZone(endZone, SKILL_DENIED_FLASH);
       } else if (endZone.chargeState === 'spent') {
-        guide.innerText = `[${endZone.name}] 특수 기술 사용 완료. 이제 메인처럼 공격해요.`;
+        showStatus(`[${endZone.name}] 특수 기술 사용 완료. 이제 메인처럼 공격해요.`);
       }
     }
 
@@ -2119,7 +2296,7 @@ function onPointerUp(e) {
         // 원거리 지정은 완전점령 지역만 가능: 맞닿지 않은 곳은 무시
         flashZone(dragSourceZone, SKILL_DENIED_FLASH);
       } else if (!canAttackTarget(dragSourceZone, endZone)) {
-        document.getElementById('status-guide').innerText = `[${endZone.name}]은(는) 완전 점령된 철벽 기지입니다! [즉시 점령] 아이템으로만 공략 가능합니다.`;
+        showStatus(`[${endZone.name}]은(는) 완전 점령된 철벽 기지입니다! [즉시 점령] 아이템으로만 공략 가능합니다.`);
         createImmuneShieldParticles(endZone.cx, endZone.cy);
       } else {
         dragSourceZone.isManualTarget = true;
@@ -2227,17 +2404,7 @@ function selectModalMap(mapKey) {
   Object.keys(MAP_CONFIGS).forEach(key => {
     const card = document.getElementById(`modal-map-${key.toLowerCase()}`);
     if (card) {
-      if (key === mapKey) {
-        card.classList.add('active');
-        card.style.borderColor = '#0f172a';
-        card.style.background = '#ffffff';
-        card.style.boxShadow = '0 8px 24px rgba(15, 23, 42, 0.12)';
-      } else {
-        card.classList.remove('active');
-        card.style.borderColor = '#e2e8f0';
-        card.style.background = '#f8fafc';
-        card.style.boxShadow = 'none';
-      }
+      card.classList.toggle('active', key === mapKey); // 모양은 CSS(.active)가 맡음
     }
   });
   centerStageCard(mapKey);
@@ -2259,22 +2426,18 @@ function switchBattlefield(mapKey) {
   selectedModalMapKey = mapKey;
   loadSelectedMap(mapKey);
   updateMapButtonsUI(mapKey);
-  const guideEl = document.getElementById('status-guide');
-  if (guideEl) guideEl.innerText = START_GUIDE_TEXT;
 }
 window.switchBattlefield = switchBattlefield;
 
 function onStartBtnClick() {
   if (isBrowsingCountry()) { openPurchase('all_countries'); return; } // 둘러보는 중: 구매
   const modal = document.getElementById('start-modal');
-  if (modal) modal.style.display = 'none';
-  startIntroZoom(selectedModalMapKey);
-  if (currentMapKey !== selectedModalMapKey) {
-    switchBattlefield(selectedModalMapKey);
-  } else {
-    const guideEl = document.getElementById('status-guide');
-    if (guideEl) guideEl.innerText = START_GUIDE_TEXT;
+  if (modal) { // 홈이 280ms 동안 스르륵 사라지며 인트로 밤하늘로 이어짐
+    modal.classList.add('leaving');
+    setTimeout(() => { modal.style.display = 'none'; modal.classList.remove('leaving'); }, 280);
   }
+  startIntroZoom(selectedModalMapKey);
+  if (currentMapKey !== selectedModalMapKey) switchBattlefield(selectedModalMapKey);
 }
 window.onStartBtnClick = onStartBtnClick;
 
@@ -2329,11 +2492,11 @@ function triggerEnemyItemSelection() {
     hasEnemyUsedPower = true;
     enemyBuffs.powerLevel = 1;
     updateEnemyPowerZone();
-    document.getElementById('status-guide').innerText = `[적군 아이템 발동]: 적군이 파워 거점(+2 파워 구슬)을 확보했습니다!`;
+    statusQuiet(`[적군 아이템 발동]: 적군이 파워 거점(+2 파워 구슬)을 확보했습니다!`);
   } else if (choice === 'C') {
     enemyBuffs.interval = Math.max(100, enemyBuffs.interval - 100);
     const secStr = (enemyBuffs.interval / 1000).toFixed(1);
-    document.getElementById('status-guide').innerText = `[적군 아이템 발동]: 적군 구슬 생성 속도 단축 (${secStr}s)!`;
+    statusQuiet(`[적군 아이템 발동]: 적군 구슬 생성 속도 단축 (${secStr}s)!`);
   } else if (choice === 'INSTANT') {
     // Enemy instantly claims an unconquered or player-held frontier zone!
     const candidates = rawZones.filter(z => z.owner !== OWNER.ENEMY && !z.isHidden);
@@ -2346,7 +2509,7 @@ function triggerEnemyItemSelection() {
       const target = candidates[0];
       conquerZone(target, OWNER.ENEMY, null);
       createHitParticles(target.cx, target.cy, OWNER.ENEMY);
-      document.getElementById('status-guide').innerText = `[적군 즉시 점령 발동!]: 적군이 [${target.name}]을(를) 강탈했습니다!`;
+      statusQuiet(`[적군 즉시 점령 발동!]: 적군이 [${target.name}]을(를) 강탈했습니다!`);
     }
   }
 }
@@ -2429,7 +2592,7 @@ function triggerEnemyFocusFire() {
   });
   flashZone(target, AI === OWNER.ENEMY2 ? ZONE_COLORS.enemy2Stroke : ZONE_COLORS.enemyStroke); // 적 집중 포화 목표 번쩍
 
-  document.getElementById('status-guide').innerText = `[${AI === OWNER.ENEMY2 ? '보라 적군' : '적군'} 집중포화 경보!]: 적 기지 ${firingBases.length}곳에서 [${target.name}]에 일제 사격을 개시했습니다!`;
+  statusQuiet(`[${AI === OWNER.ENEMY2 ? '보라 적군' : '적군'} 집중포화 경보!]: 적 기지 ${firingBases.length}곳에서 [${target.name}]에 일제 사격을 개시했습니다!`);
 }
 
 // AI Expansion Engine
@@ -2609,6 +2772,8 @@ function currentCountryKey() {
 // 지역을 중립으로 되돌림 (전차·반란)
 function neutralizeZone(z) {
   if (isMainZone(z)) return;
+  const prevOwner = z.owner;
+  if (prevOwner === OWNER.PLAYER) { addFx(z, 'lostZone'); flashZone(z, '#0f172a'); }
   z.owner = OWNER.NEUTRAL;
   z.maxOrbs = ZONE_MAX_HP;
   z.orbs = 0;
@@ -2653,9 +2818,21 @@ function updateTank() {
       if (tk.hit.has(z) || z.owner === OWNER.NEUTRAL) return;
       if (Math.hypot(z.cx - x, z.cy - y) < tk.w) {
         tk.hit.add(z);
-        if (!isMainZone(z)) { neutralizeZone(z); flashZone(z, COUNTRY_EVENT_CFG.DE.color); }
+        if (!isMainZone(z)) {
+          neutralizeZone(z); flashZone(z, COUNTRY_EVENT_CFG.DE.color);
+          for (let a = 0; a < 4; a++) pushParticle(z.cx, z.cy, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, '#d6d3d1', 2.4, 360);
+          if (zoneOnScreen(z)) addShake(1.5, 120);
+        }
       }
     });
+    // 뒤쪽에 60ms 마다 흙먼지 조각 하나
+    const nowMs = performance.now();
+    if (!tk.lastDust || nowMs - tk.lastDust > 60) {
+      tk.lastDust = nowMs;
+      const ang = Math.atan2(tk.y1 - tk.y0, tk.x1 - tk.x0), s = tk.w * 0.9;
+      const bx = x - Math.cos(ang) * s * 1.2, by = y - Math.sin(ang) * s * 1.2;
+      pushParticle(bx, by, -Math.cos(ang) * 0.6 + (Math.random() - 0.5) * 0.8, -Math.sin(ang) * 0.6 + (Math.random() - 0.5) * 0.8, '#d6d3d1', 2.2 + Math.random() * 1.4, 520);
+    }
     return true;
   });
 }
@@ -2669,17 +2846,59 @@ function drawOneTank(ctx, tk) {
   const s = tk.w * 0.9;
   ctx.save();
   ctx.translate(x, y); ctx.rotate(ang);
-  ctx.fillStyle = 'rgba(63, 98, 18, 0.18)';
-  ctx.fillRect(-s * 6, -s * 0.8, s * 6, s * 1.6); // 지나온 자국
+  // 지나온 자국: 궤도 두 줄 (점선)
+  ctx.strokeStyle = 'rgba(63, 98, 18, 0.3)';
+  ctx.lineWidth = s * 0.3;
+  ctx.setLineDash([s * 0.5, s * 0.35]);
+  ctx.beginPath();
+  ctx.moveTo(-s * 7, -s * 0.5); ctx.lineTo(-s, -s * 0.5);
+  ctx.moveTo(-s * 7, s * 0.5); ctx.lineTo(-s, s * 0.5);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // 차체 (둥근 사각형: roundRect 대신 arcTo)
   ctx.fillStyle = '#3f6212'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 / view.scale;
-  ctx.beginPath(); ctx.roundRect(-s, -s * 0.7, s * 2, s * 1.4, s * 0.25); ctx.fill(); ctx.stroke();
+  roundRectPath(ctx, -s, -s * 0.7, s * 2, s * 1.4, s * 0.25); ctx.fill(); ctx.stroke();
+  // 양옆 무한궤도 띠
+  ctx.fillStyle = '#365314';
+  ctx.fillRect(-s, -s * 0.7, s * 2, s * 0.18);
+  ctx.fillRect(-s, s * 0.52, s * 2, s * 0.18);
+  // 포탑 + 포신
   ctx.fillStyle = '#4d7c0f';
   ctx.beginPath(); ctx.arc(0, 0, s * 0.45, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   ctx.fillRect(0, -s * 0.12, s * 1.5, s * 0.24);
   ctx.restore();
 }
+// 둥근 사각형 경로 (iOS 16 미만에는 roundRect 가 없음)
+function roundRectPath(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
 let countryEventNext = 0;
-let quakeUntilMs = 0;
+// 화면 흔들림 (지진·본진 함락·대포·폭발·전차). 더 센 흔들림이 들어오면 덮어쓰고, 약한 건 남은 흔들림을 끊지 않음
+// 화면 전체 번쩍 (본진 함락). 화면 좌표에서 카메라 밖에 덧칠
+let flashUntil = 0, flashMs = 1, flashColor = '#fff', flashAlpha = 0;
+function addScreenFlash(color, ms, a) { flashUntil = performance.now() + ms; flashMs = ms; flashColor = color; flashAlpha = a; }
+let shakeUntil = 0, shakeMs = 1, shakeAmp = 0;
+function addShake(amp, ms) {
+  const now = performance.now();
+  const rem = shakeUntil > now ? shakeAmp * ((shakeUntil - now) / shakeMs) : 0;
+  if (rem > 0 && (amp <= rem || amp <= 2.5)) return;
+  shakeUntil = now + ms;
+  shakeMs = ms;
+  shakeAmp = amp;
+}
+function shakeOffset() {
+  const now = performance.now();
+  if (shakeUntil <= now) return { x: 0, y: 0 };
+  const k = (shakeUntil - now) / shakeMs, a = shakeAmp * k * k;
+  return { x: Math.sin(now * 0.055) * a, y: Math.cos(now * 0.071) * a * 0.7 };
+}
 // -------------------------------------------------------------
 // 아이템 모드: 시작할 때 카드 3장 중 1장, 이후 30초마다 또 1장 (총 4번). 이미 고른 카드는 다시 안 나옴.
 // 적도 같은 때 무작위로 1장씩 고름. 고른 카드는 화면 아래에 아이콘으로 (나: 파랑, 적: 빨강)
@@ -2775,28 +2994,51 @@ function bounceEffectScale(step) { return ITEM_BAL.bounceFirstScale * Math.pow(I
 const ZONE_DOT_PX = 3.2;
 const FX_MAX = 400;
 let fxList = [];
+// shape: burst = 고리 + 8방향 눈금 (공격), shield = 육각형 (방어), double = 겹 고리 (다음 N공격 버프). 없으면 고리
+// 맵 효과 색은 아이템마다 따로 (파워샷 분홍, 속사 청록: 적 빨강·본진 노랑과 겹치지 않게)
 const FX = {
-  hit: { r0: 2, r1: 11, w: 1.6, ms: 380 },
-  crit: { color: '#f59e0b', r0: 4, r1: 28, w: 3.2, ms: 520 },
-  power: { color: '#dc2626', r0: 4, r1: 20, w: 2.6, ms: 460 },
+  hit: { r0: 3, r1: 14, w: 2.2, ms: 360 },
+  hitIn: { r0: 10, r1: 3, w: 1.4, ms: 300 },
+  conquer: { r0: 4, r1: 44, w: 3.5, ms: 650 },
+  lostZone: { color: '#64748b', r0: 30, r1: 6, w: 2.4, ms: 500 },
+  cannonHit: { r0: 6, r1: 36, w: 4.5, ms: 520 },
+  mainFall: { r0: 10, r1: 110, w: 7, ms: 900 },
+  lock: { color: '#2563eb', r0: 34, r1: 7, w: 2.6, ms: 360, dash: true },
+  crit: { color: '#f59e0b', r0: 4, r1: 28, w: 3.2, ms: 520, shape: 'burst' },
+  power: { color: '#ec4899', r0: 4, r1: 20, w: 2.6, ms: 460, shape: 'burst' },
   piercing: { color: '#7c3aed', r0: 4, r1: 24, w: 3, ms: 500, dash: true },
   paralyze: { color: '#0ea5e9', r0: 22, r1: 4, w: 2.6, ms: 560, dash: true },
-  explode: { color: '#ea580c', r0: 6, r1: 48, w: 4, ms: 620 },
+  explode: { color: '#ea580c', r0: 6, r1: 48, w: 4, ms: 620, shape: 'burst' },
   explodeHit: { color: '#ea580c', r0: 2, r1: 14, w: 2, ms: 420 },
-  reflect: { color: '#38bdf8', r0: 16, r1: 16, w: 4, ms: 420, shield: true },
-  absorb: { color: '#16a34a', r0: 26, r1: 3, w: 3, ms: 520 },
-  fortress: { color: '#64748b', r0: 15, r1: 15, w: 4.5, ms: 420, shield: true },
+  reflect: { color: '#38bdf8', r0: 16, r1: 16, w: 4, ms: 420, shield: true, shape: 'shield' },
+  absorb: { color: '#16a34a', r0: 26, r1: 3, w: 3, ms: 520, shield: true, shape: 'shield' },
+  fortress: { color: '#64748b', r0: 15, r1: 15, w: 4.5, ms: 420, shield: true, shape: 'shield' },
   rebuild: { color: '#22c55e', r0: 3, r1: 22, w: 2.6, ms: 520 },
   rebuildSpread: { color: '#22c55e', r0: 2, r1: 12, w: 2, ms: 460 },
-  rapid: { color: '#eab308', r0: 4, r1: 18, w: 2.4, ms: 420, dash: true },
-  supply: { color: '#10b981', r0: 4, r1: 18, w: 2.4, ms: 460 },
-  buff: { color: '#facc15', r0: 4, r1: 26, w: 3.4, ms: 560 },
-  curse: { color: '#4c1d95', r0: 24, r1: 4, w: 3, ms: 620, dash: true }
+  rapid: { color: '#14b8a6', r0: 4, r1: 18, w: 2.4, ms: 420, dash: true, shape: 'double' },
+  supply: { color: '#10b981', r0: 4, r1: 18, w: 2.4, ms: 460, shape: 'double' },
+  buff: { color: '#facc15', r0: 4, r1: 26, w: 3.4, ms: 560, shape: 'double' },
+  curse: { color: '#4c1d95', r0: 24, r1: 4, w: 3, ms: 620, dash: true, shape: 'double' }
 };
+// 카드 아이콘(SVG 문자열)을 Path2D 로: 아이템 효과가 터질 때 점 아래에 잠깐 떠오름 (roundRect 없이 path/circle/rect 만)
+const ITEM_ICON_PATH = {};
+Object.keys(ITEM_ICON).forEach(key => {
+  const svg = ITEM_ICON[key];
+  const p = new Path2D();
+  let m;
+  const rePath = /<path d="([^"]+)"/g;
+  while ((m = rePath.exec(svg))) p.addPath(new Path2D(m[1]));
+  const reCircle = /<circle cx="(\S+)" cy="(\S+)" r="(\S+)"/g;
+  while ((m = reCircle.exec(svg))) { const cx = +m[1], cy = +m[2], r = +m[3]; p.moveTo(cx + r, cy); p.arc(cx, cy, r, 0, Math.PI * 2); }
+  const reRect = /<rect x="(\S+)" y="(\S+)" width="(\S+)" height="(\S+)"/g;
+  while ((m = reRect.exec(svg))) p.rect(+m[1], +m[2], +m[3], +m[4]);
+  ITEM_ICON_PATH[key] = p;
+});
 const OWNER_DOT = { player: '#2563eb', enemy: '#dc2626', neutral: '#a8a29e' };
-function addFx(zone, kind, color) {
+// ang: 있으면 그 방향(쏜 곳 쪽)으로 열린 호만 그림
+function addFx(zone, kind, color, ang) {
   if (!zone) return;
-  fxList.push({ x: zone.cx, y: zone.cy, zone, kind, color, t0: performance.now() });
+  fxList.push({ x: zone.cx, y: zone.cy, zone, kind, color, ang, t0: performance.now() });
   if (fxList.length > FX_MAX) fxList.splice(0, fxList.length - FX_MAX);
   // 큰 아이템 발동만 소리 (안개에 가려진 곳은 소리도 없음)
   if (window.Sound && (kind === 'crit' || kind === 'explode' || kind === 'reflect') &&
@@ -2807,16 +3049,19 @@ function drawZoneDots(ctx) {
   const fogNow = isFogActive();
   const now = performance.now();
   const base = ZONE_DOT_PX / view.scale;
+  // 속이 빈 점(흰 속 + 진영 색 테두리): 날아가는 구슬(색 몸통)과 구분됨. 맞는 순간 잠깐 쏜 쪽 색으로 채움
   ctx.save();
-  ctx.lineWidth = 1.2 / view.scale;
-  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.5 / view.scale;
   for (let i = 0; i < rawZones.length; i++) {
     const z = rawZones[i];
     if (z.isHidden || !z.path) continue;
     if (fogNow && z.owner !== OWNER.PLAYER) continue;
     const t = z.firedAt ? (now - z.firedAt) / 220 : 1;
-    const r = base * (t < 1 ? 1 + 0.9 * (1 - t) : 1);
-    ctx.fillStyle = OWNER_DOT[z.owner] || OWNER_DOT.neutral;
+    let r = base * (t < 1 ? 1 + 0.9 * (1 - t) : 1);
+    const h = z.hitAt ? (now - z.hitAt) / 140 : 1;
+    if (h < 1) { r *= 0.7 + 0.3 * h; ctx.fillStyle = z.hitColor; }
+    else ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = OWNER_DOT[z.owner] || OWNER_DOT.neutral;
     ctx.beginPath();
     ctx.arc(z.cx, z.cy, r, 0, Math.PI * 2);
     ctx.fill();
@@ -2830,26 +3075,106 @@ function drawFx(ctx) {
   const fogNow = currentState !== GAME_STATE.SELECT_START && isFogActive();
   const sc = 1 / view.scale;
   fxList = fxList.filter(f => now - f.t0 < FX[f.kind].ms);
+  let iconCount = 0; // 떠오르는 카드 아이콘은 한 프레임에 12개까지
   ctx.save();
-  fxList.forEach(f => {
-    if (fogNow && f.zone && f.zone.owner !== OWNER.PLAYER) return; // 안개: 가려진 지역의 효과는 숨김
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (let i = 0; i < fxList.length; i++) {
+    const f = fxList[i];
+    if (fogNow && f.zone && f.zone.owner !== OWNER.PLAYER) continue; // 안개: 가려진 지역의 효과는 숨김
     const d = FX[f.kind];
     const k = (now - f.t0) / d.ms;
     const e = 1 - Math.pow(1 - k, 2);
     const r = (d.r0 + (d.r1 - d.r0) * e) * sc;
+    const color = f.color || d.color;
     ctx.globalAlpha = Math.max(0, 1 - k);
-    ctx.strokeStyle = f.color || d.color;
+    ctx.strokeStyle = color;
     ctx.lineWidth = d.w * sc;
     ctx.setLineDash(d.dash ? [4 * sc, 3 * sc] : []);
     ctx.beginPath();
-    ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+    if (d.shape === 'burst') { // 고리 + 8방향 눈금
+      ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+      for (let a = 0; a < 8; a++) {
+        const ca = Math.cos(a * Math.PI / 4), sa = Math.sin(a * Math.PI / 4);
+        ctx.moveTo(f.x + ca * r, f.y + sa * r);
+        ctx.lineTo(f.x + ca * r * 1.35, f.y + sa * r * 1.35);
+      }
+    } else if (d.shape === 'shield') { // 육각형
+      for (let a = 0; a < 6; a++) {
+        const th = Math.PI / 6 + a * Math.PI / 3;
+        const px = f.x + Math.cos(th) * r, py = f.y + Math.sin(th) * r;
+        if (a === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+    } else if (d.shape === 'double') { // 겹 고리
+      ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+      ctx.moveTo(f.x + r * 0.72, f.y);
+      ctx.arc(f.x, f.y, r * 0.72, 0, Math.PI * 2);
+    } else if (f.ang !== undefined) { // 맞은 방향으로 열린 호
+      ctx.arc(f.x, f.y, r, f.ang - 1.05, f.ang + 1.05);
+    } else {
+      ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+    }
     ctx.stroke();
     if (d.shield) { // 방패: 안쪽을 옅게 채움
       ctx.globalAlpha = Math.max(0, 0.25 * (1 - k));
       ctx.fillStyle = d.color;
       ctx.fill();
     }
-  });
+    const icon = ITEM_ICON_PATH[f.kind];
+    if (icon && iconCount < 12) { // 카드 아이콘: 점 아래 18px 에서 10px 로 떠오르며 사라짐
+      iconCount++;
+      ctx.globalAlpha = Math.max(0, 1 - k);
+      ctx.setLineDash([]);
+      ctx.save();
+      ctx.translate(f.x, f.y + (18 - 8 * e) * sc);
+      const is = 16 / 24 * sc;
+      ctx.scale(is, is);
+      ctx.translate(-12, -12);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 5;
+      ctx.stroke(icon);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.2;
+      ctx.stroke(icon);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+// 집중포화 표시: 내 목표는 파란 점선 고리(천천히 돎), 적 목표는 빨간 고리 + 네 눈금 (안개에 가려진 곳은 숨김)
+const SHOW_FOCUS_MARKER = true;
+function drawFocusMarkers(ctx) {
+  if (!SHOW_FOCUS_MARKER || currentState !== GAME_STATE.PLAYING) return;
+  const enemyMark = currentEnemyFocusZone && enemyFocusReticleTimer > 0 && !(isFogActive() && currentEnemyFocusZone.owner !== OWNER.PLAYER);
+  if (!playerFocusList.length && !enemyMark) return;
+  const sc = 1 / view.scale, now = performance.now();
+  ctx.save();
+  ctx.setLineDash([3 * sc, 3 * sc]);
+  ctx.lineDashOffset = -((now / 40) % (6 * sc));
+  ctx.lineWidth = 1.4 * sc;
+  ctx.strokeStyle = '#2563eb';
+  ctx.beginPath();
+  for (let i = 0; i < playerFocusList.length; i++) {
+    const z = playerFocusList[i];
+    ctx.moveTo(z.cx + 8 * sc, z.cy);
+    ctx.arc(z.cx, z.cy, 8 * sc, 0, Math.PI * 2);
+  }
+  ctx.stroke();
+  if (enemyMark) {
+    const z = currentEnemyFocusZone;
+    ctx.setLineDash([]);
+    ctx.strokeStyle = '#dc2626';
+    ctx.beginPath();
+    ctx.arc(z.cx, z.cy, 8 * sc, 0, Math.PI * 2);
+    for (let a = 0; a < 4; a++) {
+      const ca = Math.cos(a * Math.PI / 2), sa = Math.sin(a * Math.PI / 2);
+      ctx.moveTo(z.cx + ca * 10 * sc, z.cy + sa * 10 * sc);
+      ctx.lineTo(z.cx + ca * 14 * sc, z.cy + sa * 14 * sc);
+    }
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -2857,6 +3182,7 @@ function drawFx(ctx) {
 function explodeAround(t, own, dmg) {
   flashZone(t, '#ea580c');
   addFx(t, 'explode');
+  if (t.owner === OWNER.PLAYER && zoneOnScreen(t)) addShake(2.5, 160); // 내 땅에서 터지면 화면이 살짝 흔들림
   t.neighbors.forEach(n => {
     if (n.owner !== OWNER.NEUTRAL && n.owner !== own) { addFx(n, 'explodeHit'); applyOrbHit(n, own, defenseTake(dmg, n), null); }
   });
@@ -2909,8 +3235,8 @@ function isRivalMarked(t, attacker) {
 }
 function hasItem(owner, key) { return itemMode && !!itemsOf[owner] && itemsOf[owner].includes(key); }
 function itemRival(owner) { return owner === OWNER.PLAYER ? OWNER.ENEMY : OWNER.PLAYER; }
-function itemIconSvg(key, size = 28) {
-  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ITEM_ICON[key]}</svg>`;
+function itemIconSvg(key, size = 28, sw = 2) {
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ITEM_ICON[key]}</svg>`;
 }
 
 
@@ -2940,7 +3266,8 @@ function openItemPick() {
   itemChoices = shuffled(ITEMS.filter(it => !itemsOf.player.includes(it.key))).slice(0, itemChoiceCount());
   const m = document.getElementById('item-modal');
   const list = document.getElementById('item-choices');
-  document.getElementById('item-round').textContent = `${itemRound + 1}/${itemRounds()}`;
+  // 라운드 표시: 점 n개, 지난·지금 라운드는 켜짐
+  document.getElementById('item-round').innerHTML = `<span class="round-dots">${Array.from({ length: itemRounds() }, (_, i) => `<i class="${i <= itemRound ? 'on' : ''}"></i>`).join('')}</span>`;
   list.innerHTML = '';
   list.dataset.count = itemChoices.length; // 4장은 2×2, 5장은 3+2
   itemChoices.forEach(it => {
@@ -2958,7 +3285,7 @@ function openItemPick() {
 
 // 카드 모양 (고르기 화면·고른 카드 크게 보기 공통)
 function itemCardHtml(it) {
-  return `<span class="item-icon">${itemIconSvg(it.key, 52)}</span><span class="item-name">${it.name}</span><span class="item-desc">${it.desc}</span>`;
+  return `<span class="item-icon">${itemIconSvg(it.key, 30)}</span><span class="item-cat">${ITEM_CAT[it.key] || ''}</span><span class="item-name">${it.name}</span><span class="item-desc">${it.desc}</span>`;
 }
 function gainItem(owner, key) {
   itemsOf[owner].push(key);
@@ -2977,7 +3304,7 @@ function chooseItem(key) {
   currentState = GAME_STATE.PLAYING;
   renderItemBar();
   const mine = ITEMS.find(it => it.key === key).name, theirs = ITEMS.find(it => it.key === ek).name;
-  document.getElementById('status-guide').innerText = `[${mine}] 선택! 적은 [${theirs}]을(를) 골랐습니다.`;
+  statusQuiet(`[${mine}] 선택! 적은 [${theirs}]을(를) 골랐습니다.`);
 
 }
 window.chooseItem = chooseItem;
@@ -2995,7 +3322,7 @@ function renderItemBar() {
     let h = '';
     for (let i = 0; i < n; i++) {
       const k = itemsOf[owner][i];
-      h += k ? `<span class="item-chip ${cls}" data-key="${k}" data-owner="${owner}">${itemIconSvg(k, 26)}</span>`
+      h += k ? `<span class="item-chip ${cls}" data-key="${k}" data-owner="${owner}">${itemIconSvg(k, 24, 2.2)}</span>`
              : `<span class="item-slot ${cls}"></span>`;
     }
     return `<div class="item-side ${cls}">${h}</div>`;
@@ -3060,7 +3387,27 @@ const WORLD_TANKS = 3;          // 전세계 독일: 사방에서 전차 3대
 const WORLD_EVENT_KEYS = ['KR', 'JP', 'CN', 'US', 'FR', 'DE', 'ES', 'GB'];
 const WORLD_FOG_SEC = 30;
 const WORLD_FOG_CHANCE = 0.5; // 전세계에서 영국 안개가 뽑혔을 때 실제로 일어날 확률
-const FOG_COLOR = '#0b0f19';
+const FOG_FILL = '#334155';
+const FOG_COLOR = FOG_FILL; // (옛 이름) 미니맵 등 단색이 필요한 곳
+let fogPattern = null;
+// 안개 타일: 남색 바탕 + 45도 흰 빗금(8px 반복). 한 번만 만들어 재사용
+function getFogPattern() {
+  if (fogPattern) return fogPattern;
+  const t = document.createElement('canvas');
+  t.width = t.height = 8;
+  const g = t.getContext('2d');
+  g.fillStyle = FOG_FILL;
+  g.fillRect(0, 0, 8, 8);
+  g.strokeStyle = 'rgba(255,255,255,0.08)';
+  g.lineWidth = 1;
+  g.beginPath();
+  g.moveTo(-2, 10); g.lineTo(10, -2);
+  g.moveTo(-2, 2); g.lineTo(2, -2);
+  g.moveTo(6, 10); g.lineTo(10, 6);
+  g.stroke();
+  fogPattern = ctx.createPattern(t, 'repeat') || FOG_FILL;
+  return fogPattern;
+}
 let fogUntil = 0;
 function isFogActive() { return currentCountryKey() === 'GB' || gameElapsedTime < fogUntil; }
 // 맵이 클수록 이벤트가 걸리는 지역 수를 늘림 (전세계 300구역 → 3배)
@@ -3071,7 +3418,7 @@ function resetCountryEvent() {
   const country = currentCountryKey();
   const c = COUNTRY_EVENT_CFG[country];
   countryEventNext = country === 'WD' ? WORLD_EVENT_FIRST : (c ? c.every : 0);
-  quakeUntilMs = 0;
+  shakeUntil = 0;
   revoltUntil = 0; revoltNextShot = 0; tanks = []; fogUntil = 0; eventBanners = []; cannonUntil = 0; cannonNextShot = 0; resolveUntil = 0; fxList = [];
 }
 // 대항해시대: 양쪽 각각 무작위 완전점령 지역 1곳이 전선으로 대포(큰 구슬, 공격력 20) 발사
@@ -3156,7 +3503,7 @@ function triggerCountryEvent(country) {
     if (country === 'US') z.boostUntil = gameElapsedTime + c.duration;
     flashZone(z, c.color);
   });
-  if (country === 'JP') quakeUntilMs = performance.now() + 700;
+  if (country === 'JP') addShake(7, 700);
 }
 // 나라 컨셉 발동 알림: 화면 위쪽에 컨셉 이름 글씨가 딱 떴다가 사라짐. 여러 개면 위아래로 겹치지 않게 쌓임
 const EVENT_BANNER_COLORS = { KR: '#b91c1c', JP: '#b45309', CN: '#d97706', US: '#ca8a04', FR: '#7c3aed', DE: '#3f6212', ES: '#9a3412', GB: '#334155' };
@@ -3201,34 +3548,62 @@ function drawEventBanners(ctx, tx, midY, labelW, size) {
     ctx.restore();
   });
 }
-function quakeShakeOffset() {
-  const left = quakeUntilMs - performance.now();
-  if (left <= 0) return { x: 0, y: 0 };
-  const a = 7 * (left / 700);
-  return { x: (Math.random() - 0.5) * 2 * a, y: (Math.random() - 0.5) * 2 * a };
+// 모래폭풍: 8px 사선 빗금 무늬 (한 번 만들어 둠, 배율에 맞춰 화면 8px 유지)
+let sandPattern = null;
+function getSandPattern() {
+  if (sandPattern) return sandPattern;
+  const t = document.createElement('canvas');
+  t.width = t.height = 8;
+  const g = t.getContext('2d');
+  g.strokeStyle = 'rgba(217,119,6,0.55)';
+  g.lineWidth = 1.2;
+  g.beginPath(); g.moveTo(-2, 10); g.lineTo(10, -2); g.moveTo(-2, 2); g.lineTo(2, -2); g.moveTo(6, 10); g.lineTo(10, 6); g.stroke();
+  sandPattern = ctx.createPattern(t, 'repeat');
+  return sandPattern;
 }
-// 사막(모래색)·호황(금색) 효과가 걸린 지역 표시: 지역 위에 반투명 색 + 테두리
+// 나라 컨셉이 걸린 지역 표시: 혁명 보라 / 지진 갈색 + 점선 테두리 / 모래폭풍 빗금 / 호황 금색 + 도는 점선 고리
 function drawCountryEventMarks(ctx) {
   const t = gameElapsedTime;
   const fogNow = currentState !== GAME_STATE.SELECT_START && isFogActive();
+  const now = performance.now();
+  const pulse = 0.28 + 0.12 * Math.sin(now / 180);
+  const sc = 1 / view.scale;
+  let sand = null;
   for (let i = 0; i < rawZones.length; i++) {
     const z = rawZones[i];
     if (!z.path) continue;
     if (fogNow && z.owner !== OWNER.PLAYER) continue; // [영국 안개] 가려진 지역의 표시도 숨김
-    let color = null;
-    if (t < revoltUntil && z.owner === OWNER.NEUTRAL && z.neighbors.some(n => n.owner !== OWNER.NEUTRAL)) color = COUNTRY_EVENT_CFG.FR.color;
-    else if (z.stunUntil && t < z.stunUntil) color = COUNTRY_EVENT_CFG.JP.color;
-    else if (z.slowUntil && t < z.slowUntil) color = COUNTRY_EVENT_CFG.CN.color;
-    else if (z.boostUntil && t < z.boostUntil) color = COUNTRY_EVENT_CFG.US.color;
-    if (!color) continue;
+    let kind = null;
+    if (t < revoltUntil && z.owner === OWNER.NEUTRAL && z.neighbors.some(n => n.owner !== OWNER.NEUTRAL)) kind = 'FR';
+    else if (z.stunUntil && t < z.stunUntil) kind = 'JP';
+    else if (z.slowUntil && t < z.slowUntil) kind = 'CN';
+    else if (z.boostUntil && t < z.boostUntil) kind = 'US';
+    if (!kind) continue;
+    const color = COUNTRY_EVENT_CFG[kind].color;
     ctx.save();
-    ctx.globalAlpha = 0.28 + 0.12 * Math.sin(performance.now() / 180);
-    ctx.fillStyle = color;
-    ctx.fill(z.path);
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3 / view.scale;
-    ctx.stroke(z.path);
+    if (kind === 'CN') { // 빗금만, 테두리·깜빡임 없음
+      if (!sand) { sand = getSandPattern(); if (sand.setTransform) sand.setTransform(new DOMMatrix([sc, 0, 0, sc, 0, 0])); }
+      ctx.fillStyle = sand;
+      ctx.fill(z.path);
+    } else {
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle = color;
+      ctx.fill(z.path);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 3 * sc;
+      if (kind === 'JP') ctx.setLineDash([5 * sc, 4 * sc]); // 지진: 갈라진 점선
+      ctx.stroke(z.path);
+      if (kind === 'US') { // 호황: 점 둘레에 도는 점선 고리
+        ctx.setLineDash([3 * sc, 3 * sc]);
+        ctx.lineDashOffset = -((now / 40) % (6 * sc));
+        ctx.lineWidth = 1.4 * sc;
+        ctx.strokeStyle = '#eab308';
+        ctx.beginPath();
+        ctx.arc(z.cx, z.cy, 10 * sc, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
     ctx.restore();
   }
 }
@@ -3253,16 +3628,13 @@ function checkWinConditions(isTimeUp = false) {
   if (pFullEl) pFullEl.innerText = `${pFull}`;
   if (eFullEl) eFullEl.innerText = `${eFull}`;
 
-  // 패배 요건: 아군 점령지 0곳
-  if (pCount === 0) {
-    gameOver(false);
-    return;
-  }
-
-  // 승리 요건: 적군 전멸 (적 거점 0곳)
-  if (eCount === 0) {
-    gameOver(true);
-    return;
+  // 패배 요건: 아군 점령지 0곳 / 승리 요건: 적군 전멸 (적 거점 0곳)
+  // 바로 끝내지 않고 잠깐 기다려 마지막 지역의 색 변화·불꽃이 보이게 함 (기록은 endPending 동안 멈춤)
+  if (pCount === 0 || eCount === 0) {
+    if (endPending) return;
+    endPending = true;
+    const win = eCount === 0 && pCount > 0;
+    setTimeout(() => { if (currentState === GAME_STATE.PLAYING) gameOver(win); }, win ? 900 : 700);
   }
 }
 
@@ -3295,7 +3667,7 @@ function onSurrenderClick() {
   surrenderArmedUntil = now + SURRENDER_CONFIRM_MS;
   if (btn) {
     btn.classList.add('armed');
-    btn.innerText = '한 번 더 누르면 항복';
+    btn.innerText = '한 번 더 → 항복';
   }
   clearTimeout(surrenderResetTimer);
   surrenderResetTimer = setTimeout(resetSurrenderButton, SURRENDER_CONFIRM_MS);
@@ -3311,7 +3683,11 @@ function goHome() {
   view.offsetX = 0;
   view.offsetY = 0;
   const modal = document.getElementById('start-modal');
-  if (modal) modal.style.display = 'flex';
+  if (modal) { // 220ms 동안 서서히 나타남 (두 프레임에 걸쳐 클래스 토글)
+    modal.classList.add('leaving');
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => requestAnimationFrame(() => modal.classList.remove('leaving')));
+  }
 }
 window.goHome = goHome;
 
@@ -3349,6 +3725,7 @@ function goNextStage() {
   if (!next || !MAP_CONFIGS[next]) { location.reload(); return; }
   // 화면을 빠져나갔다 들어오는 시작 연출 없이 그 자리에서 바로 다음 맵을 불러옴
   document.getElementById('end-modal').style.display = 'none';
+  startSceneVeil();
   selectedModalMapKey = next;
   selectModalMap(next);
   updateStageProgress();
@@ -3359,45 +3736,111 @@ window.goNextStage = goNextStage;
 function retryStage() {
   const key = currentMapKey;
   document.getElementById('end-modal').style.display = 'none';
+  startSceneVeil();
   selectedModalMapKey = key;
   selectModalMap(key);
 }
 window.retryStage = retryStage;
 
+// 승리 연출: 본진에서 흰 물결이 내 영토로 퍼지고, 불꽃이 터지고, 카메라가 6% 숨을 들이쉼
+let camTween = null;
+function celebrateWin() {
+  flyingOrbs.length = 0;
+  focusRings.length = 0;
+  const m = playerMainZone;
+  const now = performance.now();
+  if (m) {
+    let maxD = 1;
+    rawZones.forEach(z => { if (z.owner === OWNER.PLAYER) maxD = Math.max(maxD, Math.hypot(z.cx - m.cx, z.cy - m.cy)); });
+    rawZones.forEach(z => {
+      if (z.owner === OWNER.PLAYER) { z.flashAt = now + Math.hypot(z.cx - m.cx, z.cy - m.cy) / maxD * 900; z.flashColor = '#ffffff'; }
+    });
+    m.flashAt = now + 950;
+    m.flashColor = ZONE_COLORS.main;
+    const cols = ['#fde047', '#ffffff', '#60a5fa'];
+    for (let i = 0; i < 90; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 5;
+      pushParticle(m.cx, m.cy, Math.cos(a) * sp, Math.sin(a) * sp, cols[i % 3], 2.5 + Math.random() * 1.5, 900);
+    }
+  }
+  camTween = { from: view.scale, to: Math.min(view.maxScale, view.scale * 1.06), t0: now, ms: 900 };
+}
+// 종료 카드의 기록: 7세그먼트 숫자가 0에서 기록까지 700ms 동안 올라감
+function runEndClockCountUp(sec) {
+  const c = document.getElementById('end-clock');
+  if (!c) return;
+  const g = c.getContext('2d');
+  const t0 = performance.now();
+  const step = () => {
+    if (!document.getElementById('end-clock')) return; // 카드가 바뀌면 중단
+    const k = Math.min(1, (performance.now() - t0) / 700);
+    g.setTransform(2, 0, 0, 2, 0, 0);
+    g.clearRect(0, 0, 200, 48);
+    drawSevenSegment(g, formatTimeString(sec * k), 100, 6, 36, { stroke: false, fill: '#0f172a' });
+    if (k < 1) requestAnimationFrame(step);
+  };
+  step();
+}
+// 종이 꽃가루 24장 (DOM). 움직임 줄이기 설정이면 생략
+function spawnConfetti() {
+  const box = document.getElementById('end-confetti');
+  if (!box || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+  const cols = ['#60a5fa', '#fde047', '#f87171', '#22c55e'];
+  let h = '';
+  for (let i = 0; i < 24; i++) {
+    h += `<i style="left:${(Math.random() * 100).toFixed(1)}%;background:${cols[i % 4]};animation-delay:${Math.round(Math.random() * 300)}ms"></i>`;
+  }
+  box.innerHTML = h;
+  setTimeout(() => { box.innerHTML = ''; }, 2600);
+}
 function gameOver(isWin, isSurrender = false) {
   currentState = GAME_STATE.GAME_OVER;
+  endPending = false;
+  flashUntil = 0;
+  endModalShownAt = 0;
+  setGameSpeed(1); // 끝나면 배속 해제 (버튼도 함께 갱신)
+  refreshSpeedButtons();
   haptic(isWin ? 'triple' : 'long');
   if (window.Sound) { Sound.setMode('end'); Sound.sfx(isWin ? 'win' : 'lose'); }
   const im = document.getElementById('item-modal');
   if (im) im.style.display = 'none';
   const toast = document.getElementById('center-toast');
   if (toast) toast.classList.remove('show');
+  hideStatus();
   const modal = document.getElementById('end-modal');
+  const card = modal ? modal.querySelector('.end-card') : null;
+  const eyebrow = document.getElementById('end-eyebrow');
   const title = document.getElementById('end-title');
   const desc = document.getElementById('end-message');
   const timeStr = formatTimeString(gameElapsedTime);
-  const mapName = MAP_CONFIGS[currentMapKey] ? MAP_CONFIGS[currentMapKey].name : currentMapKey;
-  
+  const cfg = MAP_CONFIGS[currentMapKey];
+  const label = cfg && cfg.label ? cfg.label : currentMapKey;
+  const countryName = (COUNTRIES.find(x => x.key === selectedCountryKey) || COUNTRIES[0]).name;
+
   const nextBtn = document.getElementById('end-next-btn');
   if (nextBtn) nextBtn.hidden = true;
   // 패배·항복이면 같은 맵 다시 도전 버튼
   const retryBtn = document.getElementById('end-retry-btn');
   if (retryBtn) retryBtn.hidden = !!isWin;
+  if (card) card.classList.toggle('lose', !isWin);
+  if (title) { title.style.color = ''; title.innerText = label; }
 
   if (isWin) {
-    // 승리: 축하합니다. / [맵이름]을 점령했습니다. / 기록 / 다음 맵으로 · 홈으로
-    const label = MAP_CONFIGS[currentMapKey] ? MAP_CONFIGS[currentMapKey].label : currentMapKey;
-    title.style.color = '#1e293b';
-    title.innerText = '축하합니다.';
-
+    // 승리: 점령 완료 / [맵이름] / 지도 썸네일 / 기록 카운트업 / 최고 기록 / 총 시간
+    const prevBest = (getBattleRecords()[currentMapKey] || {}).bestTime;
     const recordResult = saveBattleRecord(currentMapKey, gameElapsedTime);
     const bestStr = formatTimeString(recordResult.bestTime);
+    let bestLine;
+    if (prevBest == null) bestLine = `<div class="end-best new">첫 기록</div>`;
+    else if (recordResult.isNewBest) bestLine = `<div class="end-best new">최고 기록 갱신 ↑ −${formatTimeString(prevBest - gameElapsedTime)}</div>`;
+    else bestLine = `<div class="end-best">최고 ${bestStr}</div>`;
+    if (eyebrow) eyebrow.textContent = '점령 완료';
     desc.innerHTML =
       `<div class="end-sub">${label}${josaEulReul(label)} 점령했습니다.</div>` +
       `<div class="end-record-label">기록</div>` +
-      `<div class="end-record">${timeStr}</div>` +
-      (recordResult.isNewBest ? `<div class="end-best new">최고 기록</div>` : `<div class="end-best">최고 기록 ${bestStr}</div>`) +
-      `<div class="end-total">${(COUNTRIES.find(x => x.key === selectedCountryKey) || COUNTRIES[0]).name} 총 시간 ${formatLongTime(getCampaignTotalTime().sum)}</div>`;
+      `<canvas id="end-clock" width="400" height="96" style="width:200px;height:48px"></canvas><span class="sr-only">${timeStr}</span>` +
+      bestLine +
+      `<div class="end-total">${countryName} 총 시간 ${formatLongTime(getCampaignTotalTime().sum)}</div>`;
     submitMapRanking(selectedCountryKey || 'KR', currentMapKey, gameElapsedTime);
     submitCountryRanking(selectedCountryKey || 'KR');
 
@@ -3405,18 +3848,24 @@ function gameOver(isWin, isSurrender = false) {
     const order = getCampaignOrder();
     nextStageAfterWin = order[order.indexOf(currentMapKey) + 1] || null;
     if (nextBtn) nextBtn.hidden = !nextStageAfterWin;
+    celebrateWin();
   } else {
-    title.style.color = '#ef4444';
-    if (isSurrender) {
-      title.innerText = '항복... 작전 중단';
-      desc.innerHTML = `<div style="font-size: 14px; color: #475569; margin-bottom: 10px;">작전 진행 시간: <b>${timeStr}</b></div><div style="font-size: 13px; color: #334155;">스스로 항복하여 작전을 중단했습니다.<br>전열을 가다듬고 다시 도전하세요!</div>`;
-      if (modal) modal.style.display = 'flex';
-      return;
-    }
-    title.innerText = '본진 함락... 작전 실패!';
-    desc.innerHTML = `<div style="font-size: 14px; color: #475569; margin-bottom: 10px;">작전 진행 시간: <b>${timeStr}</b></div><div style="font-size: 13px; color: #334155;">적의 공세에 아군의 모든 거점이 함락되었습니다.<br>전열을 가다듬고 다시 도전하세요!</div>`;
+    if (eyebrow) eyebrow.textContent = isSurrender ? '작전 중단' : '본진 함락';
+    desc.innerHTML =
+      `<div class="end-sub">${isSurrender ? '스스로 항복하여 작전을 중단했습니다.' : '적의 공세에 아군의 모든 거점이 함락되었습니다.'}</div>` +
+      `<div class="end-record-label">작전 진행 시간</div>` +
+      `<canvas id="end-clock" width="400" height="96" style="width:200px;height:48px"></canvas><span class="sr-only">${timeStr}</span>` +
+      `<div class="end-total">전열을 가다듬고 다시 도전하세요!</div>`;
   }
-  if (modal) modal.style.display = 'flex';
+  const showEnd = () => {
+    if (currentState !== GAME_STATE.GAME_OVER) return;
+    if (modal) modal.style.display = 'flex';
+    endModalShownAt = performance.now();
+    drawMapThumb(document.getElementById('end-thumb'), currentMapKey, isWin ? 'cleared' : 'lost');
+    runEndClockCountUp(gameElapsedTime);
+    if (isWin) spawnConfetti();
+  };
+  setTimeout(showEnd, isWin ? 1100 : 400);
 }
 
 // -------------------------------------------------------------
@@ -3480,7 +3929,13 @@ const ZONE_COLORS = {
   enemy2FullCharged: '#7c3aed',
   enemy2FullStroke: '#5b21b6',
   enemy2Main: '#6d28d9',
-  enemy2MainCharged: '#4c1d95'
+  enemy2MainCharged: '#4c1d95',
+  // 점령지 바탕: 피가 적어도 누구 땅인지 읽히도록 연한 소유 진영 색 (게이지는 그 위로 차오름)
+  playerBase: '#e3edfb',
+  enemyBase: '#fae7e5',
+  enemy2Base: '#ece8fa',
+  mainBase: '#fdf6c9',
+  enemyMainBase: '#f5dfe4'
 };
 const ZONE_FLASH_MS = 700;
 
@@ -3489,23 +3944,34 @@ function flashZone(zone, color) {
   zone.flashColor = color;
 }
 
-// 지역 모양 안을 아래에서부터 ratio(0~1)만큼 color로 채움
-function fillZoneFromBottom(ctx, zone, ratio, color) {
-  if (ratio <= 0 || !zone.bbox) return;
-  const r = Math.min(1, ratio);
-  const { minX, maxX, minY, maxY } = zone.bbox;
-  const h = (maxY - minY) * r;
-  ctx.save();
-  ctx.clip(zone.path);
-  ctx.fillStyle = color;
-  ctx.fillRect(minX - 1, maxY - h, maxX - minX + 2, h + 1);
-  ctx.restore();
+// 지역 면 채우기 스타일: 바탕색 위로 아래에서부터 ratio(0~1)만큼 게이지 색이 차오르는 그라데이션
+// (클립 대신 부드러운 경계 한 번으로 끝. 그라데이션은 월드 좌표 기준이라 지역마다 캐시해 두고 색·비율이 바뀔 때만 다시 만듦)
+// slot: 미니맵은 경계 폭(dPx)이 달라 따로 캐시(_gm)
+function zoneFillStyle(c, zone, st, dPx, slot) {
+  if (!(st.ratio > 0) || !zone.bbox) return st.base; // NaN 포함
+  if (st.ratio >= 1) return st.gauge;
+  const { minY, maxY } = zone.bbox;
+  const r = Math.min(1, st.ratio);
+  // 맵을 바꾸는 순간(새 맵 범위가 아직 없어 배율이 NaN)에도 addColorStop 이 터지지 않게 유한값만
+  const d = Math.min(0.08, dPx / (maxY - minY)) || 0;
+  if (!isFinite(minY) || !isFinite(maxY)) return st.base;
+  const key = st.base + '|' + st.gauge + '|' + Math.round(r * 200) + '|' + Math.round(d * 1000);
+  const gk = slot ? '_gmKey' : '_gKey', gs = slot ? '_gm' : '_g';
+  if (zone[gk] === key && zone[gs]) return zone[gs];
+  const g = c.createLinearGradient(0, maxY, 0, minY);
+  g.addColorStop(0, st.gauge);
+  g.addColorStop(Math.max(0, r - d), st.gauge);
+  g.addColorStop(Math.min(1, r + d), st.base);
+  g.addColorStop(1, st.base);
+  zone[gk] = key;
+  zone[gs] = g;
+  return g;
 }
 
 function getZoneStyle(zone) {
   // [영국 안개] 내 지역이 아닌 곳은 모두 검게 (중립·적 구분 안 됨)
   if (zone.owner !== OWNER.PLAYER && currentState !== GAME_STATE.SELECT_START && isFogActive()) {
-    return { base: FOG_COLOR, gauge: FOG_COLOR, ratio: 0, stroke: '#1f2937', width: 1.0 };
+    return { base: getFogPattern(), gauge: getFogPattern(), ratio: 0, stroke: '#475569', width: 1.0 };
   }
   const isFull = isFullyConquered(zone);
   const isPlayer = zone.owner === OWNER.PLAYER;
@@ -3520,25 +3986,25 @@ function getZoneStyle(zone) {
   if (zone.owner === OWNER.ENEMY2) {
     if (zone === enemy2MainZone) {
       return isFull && hpRatio >= 1
-        ? { base: ZONE_COLORS.enemy2Main, gauge: ZONE_COLORS.enemy2MainCharged, ratio: chargeRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 }
-        : { base: ZONE_COLORS.base, gauge: ZONE_COLORS.enemy2Main, ratio: hpRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
+        ? { base: ZONE_COLORS.enemy2Main, gauge: ZONE_COLORS.enemy2MainCharged, ratio: chargeRatio, stroke: ZONE_COLORS.mainStroke, width: 2.8 }
+        : { base: ZONE_COLORS.enemy2Base, gauge: ZONE_COLORS.enemy2Main, ratio: hpRatio, stroke: ZONE_COLORS.mainStroke, width: 2.8 };
     }
     return isFull && hpRatio >= 1
       ? { base: ZONE_COLORS.enemy2Full, gauge: ZONE_COLORS.enemy2FullCharged, ratio: chargeRatio, stroke: ZONE_COLORS.enemy2FullStroke, width: 2.0 }
-      : { base: ZONE_COLORS.base, gauge: ZONE_COLORS.enemy2, ratio: hpRatio, stroke: ZONE_COLORS.enemy2Stroke, width: 2.0 };
+      : { base: ZONE_COLORS.enemy2Base, gauge: ZONE_COLORS.enemy2, ratio: hpRatio, stroke: ZONE_COLORS.enemy2Stroke, width: 2.0 };
   }
   const isEnemyMain = zone.owner === OWNER.ENEMY && (zone === enemyMainZone || isExtraMainOf(zone, OWNER.ENEMY));
   if (isEnemyMain) {
     if (isFull && hpRatio >= 1) {
-      return { base: ZONE_COLORS.enemyMain, gauge: ZONE_COLORS.enemyMainCharged, ratio: chargeRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
+      return { base: ZONE_COLORS.enemyMain, gauge: ZONE_COLORS.enemyMainCharged, ratio: chargeRatio, stroke: ZONE_COLORS.mainStroke, width: 2.8 };
     }
-    return { base: ZONE_COLORS.base, gauge: ZONE_COLORS.enemyMain, ratio: hpRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
+    return { base: ZONE_COLORS.enemyMainBase, gauge: ZONE_COLORS.enemyMain, ratio: hpRatio, stroke: ZONE_COLORS.mainStroke, width: 2.8 };
   }
   if (isMyMain) {
     if (isFull && hpRatio >= 1) {
-      return { base: ZONE_COLORS.main, gauge: ZONE_COLORS.mainCharged, ratio: chargeRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
+      return { base: ZONE_COLORS.main, gauge: ZONE_COLORS.mainCharged, ratio: chargeRatio, stroke: ZONE_COLORS.mainStroke, width: 2.8 };
     }
-    return { base: ZONE_COLORS.base, gauge: ZONE_COLORS.main, ratio: hpRatio, stroke: ZONE_COLORS.mainStroke, width: 3.2 };
+    return { base: ZONE_COLORS.mainBase, gauge: ZONE_COLORS.main, ratio: hpRatio, stroke: ZONE_COLORS.mainStroke, width: 2.8 };
   }
   if (isFull && hpRatio >= 1) {
     return isPlayer
@@ -3546,8 +4012,8 @@ function getZoneStyle(zone) {
       : { base: ZONE_COLORS.enemyFull, gauge: ZONE_COLORS.enemyFullCharged, ratio: chargeRatio, stroke: ZONE_COLORS.enemyFullStroke, width: 2.0 };
   }
   return isPlayer
-    ? { base: ZONE_COLORS.base, gauge: ZONE_COLORS.player, ratio: hpRatio, stroke: ZONE_COLORS.playerStroke, width: 2.0 }
-    : { base: ZONE_COLORS.base, gauge: ZONE_COLORS.enemy, ratio: hpRatio, stroke: ZONE_COLORS.enemyStroke, width: 2.0 };
+    ? { base: ZONE_COLORS.playerBase, gauge: ZONE_COLORS.player, ratio: hpRatio, stroke: ZONE_COLORS.playerStroke, width: 2.0 }
+    : { base: ZONE_COLORS.enemyBase, gauge: ZONE_COLORS.enemy, ratio: hpRatio, stroke: ZONE_COLORS.enemyStroke, width: 2.0 };
 }
 
 // 특수 기술 글로벌 쿨타임 표시: 해당 진영의 충전 완료 지역 위 어두운 부채꼴이 시계 방향으로 걷힘
@@ -3587,7 +4053,7 @@ const SEG_DIGITS = {
   '0': 'abcdef', '1': 'bc', '2': 'abged', '3': 'abgcd', '4': 'fgbc',
   '5': 'afgcd', '6': 'afgedc', '7': 'abc', '8': 'abcdefg', '9': 'abcdfg', '-': 'g'
 };
-function drawSevenSegment(ctx, text, cx, top, h) {
+function drawSevenSegment(ctx, text, cx, top, h, opts = {}) {
   const w = h * 0.56, t = h * 0.17, gap = t * 0.14, space = h * 0.16, colonW = h * 0.26;
   let total = 0;
   for (const ch of text) total += (ch === ':' ? colonW : w) + space;
@@ -3622,11 +4088,13 @@ function drawSevenSegment(ctx, text, cx, top, h) {
     x += w + space;
   }
   ctx.save();
-  ctx.lineJoin = 'round';
-  ctx.lineWidth = t * 0.45;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-  paths.forEach(p => ctx.stroke(p));
-  ctx.fillStyle = '#111111';
+  if (opts.stroke !== false) {
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = t * 0.45;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    paths.forEach(p => ctx.stroke(p));
+  }
+  ctx.fillStyle = opts.fill || '#111111';
   paths.forEach(p => ctx.fill(p));
   ctx.restore();
 }
@@ -3636,32 +4104,59 @@ function drawMapTitle(ctx) {
   if (!cfg || !cfg.label || introAnim) return;
   const area = getMapArea();
   const head = getMapHeaderHeight();
-  const showTime = currentState === GAME_STATE.PLAYING || currentState === GAME_STATE.GAME_OVER;
-  // 머리 공간(지도 위쪽 빈 곳) 안에만 그림: 이름 + 시계, 지도와는 여유 간격
-  const size = head * 0.36;
-  const clockH = head * 0.26;
-  const blockH = size + (showTime ? size * 0.18 + clockH : 0);
-  const top = area.y - head * 0.12 - blockH;
+  // 머리 공간(지도 위쪽 빈 곳) 안에만 이름을 새김. 시계·컨셉은 화면 좌표 알약(drawHudClock)으로 옮김
+  const size = head * 0.34;
+  const top = area.y - head * 0.12 - size;
   const tx = area.x + area.w / 2;
   ctx.save();
   ctx.font = `900 ${size}px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillStyle = 'rgba(30, 41, 59, 0.6)';
+  ctx.fillStyle = 'rgba(30, 41, 59, 0.52)';
   ctx.fillText(cfg.label, tx, top);
   const labelW = ctx.measureText(cfg.label).width;
-  // 맵 이름 위: 나라 컨셉 이름 + 다음 발동까지 남은 시간
-  const concept = showTime ? conceptStatusText() : null;
-  if (concept) {
-    const cs = size * 0.4;
-    ctx.font = `800 ${cs}px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
-    ctx.textBaseline = 'bottom';
-    ctx.fillStyle = EVENT_BANNER_COLORS[currentCountryKey()] || '#475569';
-    ctx.fillText(concept, tx, top - cs * 0.15);
-  }
   ctx.restore();
-  if (showTime) drawSevenSegment(ctx, formatTimeString(gameElapsedTime), tx, top + size * 1.18, clockH);
   if (eventBanners.length) drawEventBanners(ctx, tx, top + size * 0.5, labelW, size);
+}
+// 둥근 알약 경로 (roundRect 는 iOS 16 미만에서 없음 → arcTo)
+function pillPath(ctx, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+const HUD_FONT_11 = '800 11px -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+// 화면 좌표 시계 알약: 카메라와 무관하게 상단 가운데 고정. 7세그먼트 흰 숫자 + (있으면) 컨셉 상태 한 줄
+function drawHudClock(ctx) {
+  if (introAnim || currentState === GAME_STATE.SELECT_START || !rawZones.length) return;
+  if (currentState !== GAME_STATE.PLAYING && currentState !== GAME_STATE.GAME_OVER) return;
+  const c = conceptStatusText();
+  ctx.save();
+  ctx.font = HUD_FONT_11;
+  const tw = c ? ctx.measureText(c).width : 0;
+  const narrow = viewW < 360;
+  const h = c ? 52 : 34;
+  let w = Math.max(104, tw + 24);
+  if (narrow) w = Math.min(w, viewW - 2 * (16 + 72) - 12);
+  const x = viewW / 2 - w / 2, y = safeTop + (viewW >= 600 && viewH >= 600 ? 20 : 14);
+  pillPath(ctx, x, y, w, h, h / 2);
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+  ctx.fill();
+  ctx.restore();
+  drawSevenSegment(ctx, formatTimeString(gameElapsedTime), viewW / 2, y + 9, narrow ? 14 : 16, { stroke: false, fill: '#ffffff' });
+  if (c) {
+    ctx.save();
+    ctx.font = HUD_FONT_11;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.78)';
+    ctx.fillText(c, viewW / 2, y + 41);
+    ctx.restore();
+  }
 }
 // 지도 제목 위에 보여 줄 컨셉 상태: '지진 · 다음 12초' (계속 켜진 컨셉은 이름만)
 function conceptStatusText() {
@@ -3675,8 +4170,46 @@ function conceptStatusText() {
   return key === 'WD' ? `${concept[0]} · 다음 컨셉까지 ${left}초` : `${concept[0]} · 다음까지 ${left}초`;
 }
 
+// 종이 격자: 월드 좌표 26단위, 보이는 범위만. 확대할수록 옅어지고 너무 옅으면 생략
+function drawWorldGrid(ctx) {
+  const vr = visibleWorldRect();
+  const a = 0.035 * Math.min(1, 2.5 / view.scale);
+  if (a < 0.008) return;
+  const g = 26;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(30,41,59,' + a.toFixed(3) + ')';
+  ctx.lineWidth = 1 / view.scale;
+  ctx.beginPath();
+  for (let x = Math.floor(vr.minX / g) * g; x <= vr.maxX + g; x += g) {
+    ctx.moveTo(x, vr.minY - g);
+    ctx.lineTo(x, vr.maxY + g);
+  }
+  for (let y = Math.floor(vr.minY / g) * g; y <= vr.maxY + g; y += g) {
+    ctx.moveTo(vr.minX - g, y);
+    ctx.lineTo(vr.maxX + g, y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawExactDistrictsMap(ctx) {
+  // 0. 종이 격자 → 지도 그림자 → 배경 지역 순
+  drawWorldGrid(ctx);
+  const sh = getMapShadow();
+  if (sh) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, 1.6 / view.scale); // 많이 확대하면 그림자는 옅게
+    ctx.drawImage(sh.canvas, sh.x, sh.y, sh.w, sh.h);
+    ctx.restore();
+  }
   drawBackdropZones(ctx);
+  if (currentState !== GAME_STATE.SELECT_START && isFogActive()) {
+    // [안개] 빗금 패턴은 확대 배율과 무관하게 화면에서 8px 간격 유지
+    const p = getFogPattern();
+    if (p && p.setTransform) {
+      try { p.setTransform(new DOMMatrix([1 / view.scale, 0, 0, 1 / view.scale, 0, 0])); } catch (e) {}
+    }
+  }
 
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
@@ -3688,13 +4221,13 @@ function drawExactDistrictsMap(ctx) {
     if (!zone.path) continue;
     const st = getZoneStyle(zone);
     styles[i] = st;
-    ctx.fillStyle = st.base;
+    st.fill = zoneFillStyle(ctx, zone, st, 1.5 / view.scale);
+    ctx.fillStyle = st.fill;
     ctx.fill(zone.path);
     // 안티앨리어싱으로 생기는 경계의 머리카락 틈만 메우는 얇은 덧칠 (맵 데이터는 build_map.py로 경계가 정확히 맞물림)
-    ctx.strokeStyle = st.ratio >= 1 ? st.gauge : st.base;
+    ctx.strokeStyle = st.fill;
     ctx.lineWidth = 1.2 / view.scale;
     ctx.stroke(zone.path);
-    fillZoneFromBottom(ctx, zone, st.ratio, st.gauge);
   }
 
   // 2. 테두리: 중립 → 점령지 → 메인 순으로 그려 굵은 테두리가 이웃 선에 덮이지 않게 함
@@ -3711,11 +4244,18 @@ function drawExactDistrictsMap(ctx) {
       }
       // 점령지 테두리: 두 배 굵기로 그린 뒤 면을 다시 칠해 바깥쪽 절반만 남김
       // (여러 조각으로 된 지역(예: 수원 4개 구)의 안쪽 경계선이 보이지 않도록)
+      if (st.stroke === ZONE_COLORS.mainStroke && isMainZone(zone)) {
+        // 메인: 흰 테두리 바깥에 짙은 외곽선 한 겹 (밝은 땅 위에서도 흰 테두리가 읽히도록). 안개 중엔 흰 테두리 자체가 없음
+        ctx.strokeStyle = 'rgba(15,23,42,0.35)';
+        ctx.lineWidth = (st.width + 1.2) * 2 / view.scale;
+        ctx.stroke(zone.path);
+        ctx.strokeStyle = st.stroke;
+        ctx.lineWidth = st.width / view.scale;
+      }
       ctx.lineWidth *= 2;
       ctx.stroke(zone.path);
-      ctx.fillStyle = st.base;
+      ctx.fillStyle = st.fill;
       ctx.fill(zone.path);
-      fillZoneFromBottom(ctx, zone, st.ratio, st.gauge);
     }
   };
   strokePass(z => z.owner === OWNER.NEUTRAL);
@@ -3731,6 +4271,9 @@ function drawExactDistrictsMap(ctx) {
     ctx.fillStyle = ZONE_COLORS.main;
     ctx.fill(pendingStartZone.path);
     ctx.globalAlpha = 1;
+    ctx.strokeStyle = 'rgba(15,23,42,0.35)';
+    ctx.lineWidth = 4.4 / view.scale;
+    ctx.stroke(pendingStartZone.path);
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 3.2 / view.scale;
     ctx.stroke(pendingStartZone.path);
@@ -3749,33 +4292,57 @@ function drawExactDistrictsMap(ctx) {
   drawSkillGcdSweep(ctx, OWNER.PLAYER, playerSkillGcdUntil);
   drawSkillGcdSweep(ctx, OWNER.ENEMY, enemySkillGcdUntil);
 
+  // 3.7 큰 물(강·호수): 둑 그림자 → 물 면 → 가장자리 → 안쪽 흰 하이라이트 (번쩍 효과·이름보다 아래)
+  if (hanRiverPath) {
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(30,41,59,0.10)';
+    ctx.lineWidth = 4 / view.scale;
+    ctx.stroke(hanRiverPath);
+    ctx.fillStyle = '#bfe5fa'; // 산뜻한 한강 라이트 블루
+    ctx.fill(hanRiverPath);
+    ctx.strokeStyle = '#93cbf0';
+    ctx.lineWidth = 1.2 / view.scale;
+    ctx.stroke(hanRiverPath);
+    ctx.clip(hanRiverPath);
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 2.4 / view.scale;
+    ctx.stroke(hanRiverPath);
+    ctx.restore();
+  }
+
   // 4. 번쩍 효과 (점령 순간, 특수 기술 충전 완료 순간)
   const now = performance.now();
   const fogNow = currentState !== GAME_STATE.SELECT_START && isFogActive();
   for (let i = 0; i < rawZones.length; i++) {
     const zone = rawZones[i];
-    if (!zone.flashAt || !zone.path) continue;
+    if (!(zone.flashAt || zone.conqueredAt) || !zone.path) continue;
     if (fogNow && zone.owner !== OWNER.PLAYER) continue; // [영국 안개] 가려진 지역은 번쩍임도 안 보임
+    // 점령 물결: 가운데에서 지역 안쪽으로만 퍼지는 흰 원 (지역 모양으로 잘라냄)
+    if (zone.conqueredAt && zone.bbox) {
+      const c = (now - zone.conqueredAt) / 480;
+      if (c >= 1) zone.conqueredAt = 0;
+      else if (!(fogNow && zone.owner !== OWNER.PLAYER)) {
+        const R = Math.hypot(zone.bbox.maxX - zone.bbox.minX, zone.bbox.maxY - zone.bbox.minY) / 2, e = 1 - Math.pow(1 - c, 3);
+        ctx.save();
+        ctx.clip(zone.path);
+        ctx.globalAlpha = 0.6 * (1 - c);
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(zone.cx, zone.cy, R * e, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
     const t = (now - zone.flashAt) / ZONE_FLASH_MS;
+    if (t < 0) continue; // 예약된 번쩍임 (승리 물결)
     if (t >= 1) { zone.flashAt = 0; continue; }
     ctx.save();
     ctx.globalAlpha = 1 - t;
     ctx.strokeStyle = zone.flashColor;
-    ctx.lineWidth = (3 + 5 * (1 - t)) / view.scale;
+    ctx.lineWidth = (3 + 7 * (1 - t)) / view.scale;
     ctx.stroke(zone.path);
-    ctx.restore();
-  }
-
-  // 1.5 큰 물(강·호수)
-  if (hanRiverPath) {
-    ctx.save();
-    ctx.fillStyle = '#bfe5fa'; // 산뜻한 한강 라이트 블루
-    ctx.strokeStyle = '#93cbf0';
-    ctx.lineWidth = 1.6 / view.scale;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = 'round';
-    ctx.fill(hanRiverPath);
-    ctx.stroke(hanRiverPath);
     ctx.restore();
   }
 
@@ -3809,14 +4376,31 @@ function drawZoneBadges(ctx) {
   ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Pretendard", "Segoe UI", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
-  ctx.fillStyle = 'rgba(30, 41, 59, 0.55)';
   const lift = (ZONE_DOT_PX + 3) / view.scale; // 중심 점 바로 위에 이름을 올림
+  // 화면 밖 지역은 measureText 전에 걸러냄 (전세계 300구역을 확대했을 때 글자 측정 대부분 생략)
+  const fogNow = currentState !== GAME_STATE.SELECT_START && isFogActive();
+  const vr = visibleWorldRect();
+  const mg = 40 / view.scale;
+  // 점령지 이름의 흰 테두리: 지역이 아주 많은 맵은 확대했을 때만 (strokeText 비용)
+  const haloOK = rawZones.length <= 200 || view.scale >= 1.5;
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = 2.4 / view.scale;
+  ctx.strokeStyle = 'rgba(255,255,255,0.72)';
   for (let i = 0; i < rawZones.length; i++) {
     const zone = rawZones[i];
     if (!zone.bbox) continue;
+    if (zone.cx < vr.minX - mg || zone.cx > vr.maxX + mg || zone.cy < vr.minY - mg || zone.cy > vr.maxY + mg) continue;
+    if (fogNow && zone.owner !== OWNER.PLAYER) continue; // [영국 안개] 가려진 지역은 이름도 안 보임
     const w = ctx.measureText(zone.name).width;
     if (zone.bbox.maxX - zone.bbox.minX < w * 0.9) continue;
-    ctx.fillText(zone.name, zone.cx, zone.cy - lift);
+    const y = zone.cy - lift;
+    if (zone.owner !== OWNER.NEUTRAL) {
+      if (haloOK) ctx.strokeText(zone.name, zone.cx, y);
+      ctx.fillStyle = 'rgba(15,23,42,0.9)';
+    } else {
+      ctx.fillStyle = 'rgba(30,41,59,0.55)';
+    }
+    ctx.fillText(zone.name, zone.cx, y);
   }
 }
 
@@ -3878,6 +4462,8 @@ function drawMinimap(timestamp) {
   const k = L.scale * L.dpr;
   m.setTransform(1, 0, 0, 1, 0, 0);
   m.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+  m.fillStyle = '#efede6'; // 땅 아래 바다(종이) 색
+  m.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
   // 월드 좌표 그대로 그리도록 변환 (지역 Path2D 재사용)
   m.setTransform(k, 0, 0, k, -L.area.x * k, -L.area.y * k);
   m.lineJoin = 'round';
@@ -3892,12 +4478,13 @@ function drawMinimap(timestamp) {
     const zone = rawZones[i];
     if (!zone.path) continue;
     const st = getZoneStyle(zone);
-    m.fillStyle = st.base;
+    // [안개] 미니맵은 빗금 없이 단색 (패턴은 확대 배율용 변환이 걸려 있음)
+    const f = typeof st.base === 'string' ? zoneFillStyle(m, zone, st, 2 / L.scale, true) : FOG_FILL;
+    m.fillStyle = f;
     m.fill(zone.path);
-    m.strokeStyle = st.ratio >= 1 ? st.gauge : st.base;
+    m.strokeStyle = f;
     m.lineWidth = 2 / L.scale;
     m.stroke(zone.path);
-    fillZoneFromBottom(m, zone, st.ratio, st.gauge);
   }
   // 경계선 (얇게)
   m.lineWidth = 0.6 / L.scale;
@@ -3916,13 +4503,17 @@ function drawMinimap(timestamp) {
   }
 
   // 현재 보고 있는 화면 영역
-  const tl = screenToWorld(0, 0);
-  const br = screenToWorld(viewW, viewH);
+  const vr = visibleWorldRect();
+  const vx = vr.minX, vy = vr.minY, vw = vr.maxX - vr.minX, vh = vr.maxY - vr.minY;
+  // 흰 테두리 + 잉크 선: 파랑·빨강 땅 위에서도 읽힘 (노랑은 '본진' 뜻이라 쓰지 않음)
+  m.lineWidth = 3 / L.scale;
+  m.strokeStyle = 'rgba(255,255,255,0.75)';
+  m.strokeRect(vx, vy, vw, vh);
+  m.lineWidth = 1.5 / L.scale;
   m.strokeStyle = '#0f172a';
-  m.lineWidth = 1.6 / L.scale;
-  m.strokeRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
-  m.fillStyle = 'rgba(15, 23, 42, 0.08)';
-  m.fillRect(tl.x, tl.y, br.x - tl.x, br.y - tl.y);
+  m.strokeRect(vx, vy, vw, vh);
+  m.fillStyle = 'rgba(255,255,255,0.14)';
+  m.fillRect(vx, vy, vw, vh);
 }
 
 // 미니맵 탭/드래그 → 해당 월드 지점이 화면 중앙에 오도록 이동
@@ -3956,9 +4547,18 @@ if (minimapCanvas) {
 }
 
 // -------------------------------------------------------------
-// 시작 화면 전장 썸네일: 각 맵 실제 모양을 파스텔 실루엣으로 그림
+// 시작 화면 전장 썸네일: 각 맵 실제 모양을 구역 선이 보이는 작은 지도로 그림
+// 색은 진행 상태를 뜻함: 파랑 = 열림(다음에 할 맵), 초록 = 클리어, 회색 = 잠김, 빨강 = 패배(결과 카드)
 // -------------------------------------------------------------
-const THUMB_PALETTE = ['#93c5fd', '#fda4af', '#86efac', '#fcd34d', '#c4b5fd', '#fdba74', '#5eead4', '#f9a8d4'];
+// 잠긴 카드 꼬리표의 자물쇠 아이콘
+const LOCK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V8a5 5 0 0 1 10 0v2"/><rect x="5" y="10" width="14" height="11" rx="2"/></svg>';
+const THUMB_STATUS = {
+  cleared: ['#bbf7d0', '#16a34a'],
+  open: ['#60a5fa', '#2563eb'],
+  locked: ['#d6d3cd', '#b8b4ab'],
+  lost: ['#fecaca', '#991b1b']
+};
+const THUMB_JSON = new Map(); // 맵 파일 → fetch Promise (카드를 다시 그려도 한 번만 받음)
 
 // -------------------------------------------------------------
 // 홈 화면: 나라 선택 + 대한민국 캠페인(구역 적은 맵부터, 클리어하면 다음 맵 열림) + 튜토리얼
@@ -4010,10 +4610,16 @@ function getNextStageKey() {
   return order.find(k => isStageUnlocked(k) && !isStageCleared(k)) || order[order.length - 1];
 }
 
+// 안내 시트 아이콘 (24px 선 아이콘, CSS 가 :empty 면 숨김)
+const SHEET_ICON = {
+  lock: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 10V8a5 5 0 0 1 10 0v2"/><rect x="5" y="10" width="14" height="11" rx="2"/></svg>',
+  cart: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h8.4a2 2 0 0 0 2-1.5L21.5 8H6"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>',
+  restore: '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>'
+};
 function openSheet(icon, title, text) {
   const iconEl = document.getElementById('sheet-icon');
-  iconEl.textContent = icon;
-  iconEl.style.display = icon ? '' : 'none';
+  iconEl.innerHTML = SHEET_ICON[icon] || '';
+  iconEl.style.display = '';
   document.getElementById('sheet-title').textContent = title;
   document.getElementById('sheet-text').textContent = text;
   document.getElementById('sheet').style.display = 'flex';
@@ -4024,12 +4630,12 @@ function closeSheet() {
 window.closeSheet = closeSheet;
 
 function restorePurchases() {
-  if (!StorePlugin) { openSheet('', '구매 복원', '앱에서 사용할 수 있어요.\n같은 Apple ID로 산 나라·기능을 다시 열어 줍니다.'); return; }
+  if (!StorePlugin) { openSheet('restore', '구매 복원', '앱에서 사용할 수 있어요.\n같은 Apple ID로 산 나라·기능을 다시 열어 줍니다.'); return; }
   StorePlugin.restore().then(r => {
     setOwnedFromStore(r.owned);
     const names = Object.keys(PRODUCTS).filter(isOwned).map(k => PRODUCTS[k].title);
-    openSheet('', '구매 복원', names.length ? `복원했어요: ${names.join(', ')}` : '이 Apple ID로 구매한 항목이 없어요.');
-  }).catch(() => openSheet('', '구매 복원', '복원에 실패했어요. 잠시 후 다시 시도해 주세요.'));
+    openSheet('restore', '구매 복원', names.length ? `복원했어요: ${names.join(', ')}` : '이 Apple ID로 구매한 항목이 없어요.');
+  }).catch(() => openSheet('restore', '구매 복원', '복원에 실패했어요. 잠시 후 다시 시도해 주세요.'));
 }
 window.restorePurchases = restorePurchases;
 
@@ -4040,6 +4646,9 @@ const ITEM_GUIDE_GROUPS = [
   ['막을 때 · 회복', ['fortress', 'reflect', 'absorb', 'rebuild']],
   ['항상 켜짐', ['longrange']]
 ];
+// 카드 위 짧은 분류 꼬리표
+const ITEM_CAT = {};
+[['공격', 0], ['다음 5공격', 1], ['방어·회복', 2], ['항상', 3]].forEach(([lab, gi]) => ITEM_GUIDE_GROUPS[gi][1].forEach(k => ITEM_CAT[k] = lab));
 function openItemGuide() {
   const list = document.getElementById('item-guide-list');
   if (!list) return;
@@ -4063,13 +4672,17 @@ function buildCountryCards() {
   const grid = document.getElementById('country-grid');
   if (!grid) return;
   grid.innerHTML = '';
-  COUNTRIES.forEach(c => {
+  COUNTRIES.forEach((c, i) => {
     const b = document.createElement('button');
     b.id = `country-${c.key.toLowerCase()}`;
+    b.style.setProperty('--i', i); // 카드 등장 순서 (CSS 스태거)
     b.className = 'stage-card country-card' + (c.key === selectedCountryKey ? ' active' : '') + (isCountryOpen(c) ? '' : ' locked');
     // 국기 대신 그림이 있는 나라(Earth: 지구본)
     const flag = c.img ? `<img class="country-img" src="${c.img}" alt="">` : c.flag;
-    b.innerHTML = `<span class="country-flag" aria-hidden="true">${flag}</span><span class="stage-name">${c.name}</span>`;
+    const open = isCountryOpen(c);
+    const sub = open || !c.paid ? `${getCampaignOrder(c.key).length}개 맵` : '구매';
+    b.innerHTML = `<span class="country-flag" aria-hidden="true">${flag}</span><span class="stage-name">${c.name}</span><span class="stage-sub">${sub}</span>` +
+      (open ? '' : `<span class="stage-lock">${LOCK_SVG}구매</span>`);
     b.onclick = () => selectCountry(c.key);
     grid.appendChild(b);
   });
@@ -4099,7 +4712,7 @@ function updateStartBtn() {
 function enterCountry() {
   const c = COUNTRIES.find(x => x.key === selectedCountryKey);
   if (!isCountryOpen(c)) {
-    if (!c || !c.paid) { openSheet('', `${c ? c.name : ''} 전선`, '곧 출시돼요.'); return; }
+    if (!c || !c.paid) { openSheet('lock', `${c ? c.name : ''} 전선`, '곧 출시돼요.'); return; }
     const only = getCampaignOrder(c.key);
     if (only.length === 1) selectedModalMapKey = only[0];
     showStageView(); // 둘러보기
@@ -4365,12 +4978,13 @@ function buildStageCards() {
     const cleared = isStageCleared(key);
     const btn = document.createElement('button');
     btn.id = `modal-map-${k}`;
+    btn.style.setProperty('--i', i); // 카드 등장 순서 (CSS 스태거)
     btn.className = 'stage-card' + (key === selectedModalMapKey ? ' active' : '') +
       (unlocked && !isBrowsingCountry() ? '' : ' locked') + (cleared ? ' cleared' : ''); // 둘러보기 중에는 잠긴 모습(어둡게)
     btn.onclick = (e) => {
       if (!unlocked && !isBrowsingCountry()) { // 둘러보기 중에는 모든 맵 구경 가능
         const prev = MAP_CONFIGS[order[i - 1]];
-        openSheet('', `${cfg.label} 잠김`, `${prev.label} 맵을 클리어하면 열려요.`);
+        openSheet('lock', `${cfg.label} 잠김`, `${prev.label} 맵을 클리어하면 열려요.`);
         return;
       }
       selectModalMap(key);
@@ -4379,7 +4993,9 @@ function buildStageCards() {
       `<canvas class="stage-thumb" id="thumb-${k}"></canvas>` +
       `<span class="stage-title"><span class="stage-name">${cfg.label || key}</span><span class="stage-sub">${cfg.count || ''}</span></span>` +
       `<span class="stage-recrow"><span class="stage-record" id="modal-${k}-record"></span>` +
-      (cleared && MAP_RANKINGS ? `<span class="map-rank-pct" id="rank-${k}"></span>` : '') + `</span>`;
+      (cleared && MAP_RANKINGS ? `<span class="map-rank-pct" id="rank-${k}"></span>` : '') + `</span>` +
+      (unlocked && !isBrowsingCountry() ? '' : `<span class="stage-lock">${LOCK_SVG}${isBrowsingCountry() ? '구매' : '잠김'}</span>`) +
+      (cleared ? '<span class="stage-done">✓</span>' : '');
     grid.appendChild(btn);
   });
   // 마지막 맵 다음 카드: 이 나라의 글로벌 순위 (총 시간)
@@ -4387,6 +5003,7 @@ function buildStageCards() {
   const allDone = order.every(isStageCleared);
   const rank = document.createElement('button');
   rank.id = 'ranking-card';
+  rank.style.setProperty('--i', order.length);
   rank.className = 'stage-card ranking-card' + (allDone ? '' : ' locked');
   rank.onclick = openRanking;
   // 총 시간은 화면 위쪽에 이미 있으므로 카드에는 순위만
@@ -4557,44 +5174,73 @@ function renderStageThumbs() {
   updateStageProgress();
   Object.keys(MAP_CONFIGS).forEach(key => drawMapThumb(document.getElementById(`thumb-${key.toLowerCase()}`), key));
 }
-// 맵 썸네일: 맵 모양을 캔버스에 단색으로
-function drawMapThumb(c, key) {
-  if (!c) return;
-  const keys = Object.keys(MAP_CONFIGS);
-  {
-    fetch(MAP_CONFIGS[key].file).then(r => r.json()).then(data => {
-      const dpr = window.devicePixelRatio || 1;
-      const size = c.clientWidth || 96;
-      c.width = size * dpr;
-      c.height = size * dpr;
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      data.zones.forEach(z => z.polygons.forEach(r => r.forEach(([x, y]) => {
-        if (x < minX) minX = x; if (x > maxX) maxX = x;
-        if (y < minY) minY = y; if (y > maxY) maxY = y;
-      })));
-      const kx = Math.cos(((minY + maxY) / 2) * Math.PI / 180);
-      const w = (maxX - minX) * kx, h = maxY - minY;
-      const pad = 6 * dpr;
-      const sc = Math.min((c.width - pad * 2) / w, (c.height - pad * 2) / h);
-      const ox = (c.width - w * sc) / 2, oy = (c.height - h * sc) / 2;
-      const g = c.getContext('2d');
+// 맵 썸네일: 맵 모양을 캔버스에 작은 지도로 (status 생략 시 카드 상태(locked/cleared)나 진행 기록으로 결정)
+function drawMapThumb(c, key, status) {
+  if (!c || !MAP_CONFIGS[key]) return;
+  if (!status) {
+    const card = c.closest ? c.closest('.stage-card') : null;
+    if (card) status = card.classList.contains('cleared') ? 'cleared' : card.classList.contains('locked') ? 'locked' : 'open';
+    else status = isStageCleared(key) ? 'cleared' : (isStageUnlocked(key) && !isBrowsingCountry()) ? 'open' : 'locked';
+  }
+  const [fill, outline] = THUMB_STATUS[status] || THUMB_STATUS.open;
+  const file = MAP_CONFIGS[key].file;
+  const p = THUMB_JSON.get(file) || fetch(file).then(r => r.json());
+  THUMB_JSON.set(file, p);
+  p.then(data => {
+    const dpr = window.devicePixelRatio || 1;
+    const size = c.clientWidth || 96;
+    c.width = size * dpr;
+    c.height = size * dpr;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    data.zones.forEach(z => z.polygons.forEach(r => r.forEach(([x, y]) => {
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+    })));
+    const kx = Math.cos(((minY + maxY) / 2) * Math.PI / 180);
+    const w = (maxX - minX) * kx, h = maxY - minY;
+    const pad = 8 * dpr;
+    const sc = Math.min((c.width - pad * 2) / w, (c.height - pad * 2) / h);
+    const ox = (c.width - w * sc) / 2, oy = (c.height - h * sc) / 2;
+    const g = c.getContext('2d');
+    const toPath = (polys) => {
       const path = new Path2D();
-      data.zones.forEach(z => z.polygons.forEach(r => {
+      polys.forEach(r => {
         r.forEach(([x, y], i) => {
           const px = ox + (x - minX) * kx * sc, py = oy + (maxY - y) * sc;
           if (i === 0) path.moveTo(px, py); else path.lineTo(px, py);
         });
         path.closePath();
-      }));
-      const color = THUMB_PALETTE[keys.indexOf(key) % THUMB_PALETTE.length];
-      g.fillStyle = color;
-      g.strokeStyle = color;
-      g.lineWidth = 2 * dpr;
-      g.lineJoin = 'round';
-      g.fill(path);
-      g.stroke(path);
-    }).catch(() => {});
-  }
+      });
+      return path;
+    };
+    const zonePaths = data.zones.map(z => toPath(z.polygons));
+    const all = new Path2D();
+    zonePaths.forEach(zp => all.addPath(zp));
+    g.clearRect(0, 0, c.width, c.height);
+    g.lineJoin = 'round';
+    // 1) 그림자: 썸네일을 그릴 때 한 번만 (프레임마다 그리는 게 아님)
+    g.save();
+    g.shadowColor = 'rgba(30,41,59,0.18)';
+    g.shadowBlur = 8 * dpr;
+    g.shadowOffsetY = 3 * dpr;
+    g.fillStyle = fill;
+    g.fill(all);
+    g.restore();
+    // 2) 바깥 테두리 → 3) 면을 다시 칠해 테두리 안쪽 절반을 덮음 → 4) 구역 경계선(흰색) → 5) 큰 물
+    g.strokeStyle = outline;
+    g.lineWidth = 2 * dpr;
+    g.stroke(all);
+    g.fillStyle = fill;
+    zonePaths.forEach(zp => g.fill(zp));
+    const many = data.zones.length > 100;
+    g.strokeStyle = many ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.85)';
+    g.lineWidth = (many ? 0.75 : 1) * dpr;
+    zonePaths.forEach(zp => g.stroke(zp));
+    if (data.water && data.water.length) {
+      g.fillStyle = '#bfe5fa';
+      data.water.forEach(wt => g.fill(toPath(wt.polygons)));
+    }
+  }).catch(() => {});
 }
 // -------------------------------------------------------------
 // 시작 연출: 지구본이 돌며 한국으로 다가간 뒤 선택한 맵 범위까지 확대 → 게임 지도로 전환
@@ -4605,6 +5251,12 @@ const INTRO_ZOOM_MS = 2100;
 const INTRO_FADE_FROM = 0.72; // 확대 구간의 이 지점부터 게임 지도로 서서히 전환
 let worldLand = null;
 let introAnim = null;
+// 장면 베일: 다시 도전·다음 맵처럼 그 자리에서 맵을 바꿀 때 남색으로 덮었다가 새 지도가 준비되면 350ms 동안 걷음
+let sceneVeil = null;
+function startSceneVeil() { sceneVeil = { hold: true, until: 0, ms: 350 }; }
+function releaseSceneVeil() {
+  if (sceneVeil && sceneVeil.hold) { sceneVeil.hold = false; sceneVeil.until = performance.now() + sceneVeil.ms; }
+}
 // world: Natural Earth 110m 육지, korea: 우리 전국 맵을 합친 한국 윤곽(제주도 등 섬 포함)
 fetch('assets/world_land.json').then(r => r.json()).then(d => {
   worldLand = Array.isArray(d) ? d : d.world.concat(d.korea || []);
@@ -4628,6 +5280,18 @@ function startIntroZoom(mapKey) {
     lon: (b.minLng + b.maxLng) / 2,
     lat: (b.minLat + b.maxLat) / 2,
     dLat: b.maxLat - b.minLat,
+    // 경위선 (앱 아이콘의 지구본처럼 옅은 격자): 위선 7 + 자오선 대원 9
+    grat: (() => {
+      const rings = [];
+      for (let lat = -60; lat <= 60; lat += 20) rings.push(Array.from({ length: 73 }, (_, i) => [i * 5 - 180, lat]));
+      for (let lon = 0; lon < 180; lon += 20) {
+        const r = [];
+        for (let i = 0; i <= 36; i++) r.push([lon, -90 + i * 5]);
+        for (let i = 36; i >= 0; i--) r.push([lon + 180, -90 + i * 5]);
+        rings.push(r);
+      }
+      return rings;
+    })(),
     // 우주 배경 별 (화면 비율 좌표)
     stars: Array.from({ length: 140 }, () => ({
       x: Math.random(), y: Math.random(), r: Math.random() * 1.2 + 0.3, a: Math.random() * 0.6 + 0.4, p: Math.random() * Math.PI * 2
@@ -4765,24 +5429,25 @@ function drawIntro(ctx) {
     }
   }
 
+  const rise = Math.min(1, el / 250); // 홈 화면이 사라지는 동안 지구본이 아래서 떠오름 (하늘은 홈과 같은 남색)
   ctx.save();
   ctx.globalAlpha = alpha;
   const cx = W / 2, cy = area.y + area.h / 2;
-  // 우주 배경: 짙은 남색 그라데이션 + 반짝이는 별
+  // 우주 배경: 홈 화면과 같은 남색 그라데이션 + 반짝이는 별
   const space = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.hypot(W, H) * 0.7);
-  space.addColorStop(0, '#16213e');
-  space.addColorStop(1, '#05070f');
+  space.addColorStop(0, '#1e293b');
+  space.addColorStop(1, '#0b1222');
   ctx.fillStyle = space;
   ctx.fillRect(0, 0, W, H);
   const tw = performance.now() / 600;
   introAnim.stars.forEach(st => {
-    ctx.globalAlpha = alpha * st.a * (0.65 + 0.35 * Math.sin(tw + st.p));
+    ctx.globalAlpha = alpha * rise * st.a * (0.65 + 0.35 * Math.sin(tw + st.p));
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.arc(st.x * W, st.y * H, st.r, 0, Math.PI * 2);
     ctx.fill();
   });
-  ctx.globalAlpha = alpha;
+  ctx.globalAlpha = alpha * rise;
   // 대기권 빛 (지구 둘레의 푸른 테)
   if (R < Math.hypot(W, H)) {
     const glow = ctx.createRadialGradient(cx, cy, R * 0.98, cx, cy, R * 1.12);
@@ -4794,7 +5459,7 @@ function drawIntro(ctx) {
     ctx.fill();
   }
   // 바다 (지구가 화면보다 훨씬 커지면 원 대신 화면 전체를 칠함: 거대한 원 그리기에서 생기는 깜빡임 방지)
-  const seaColor = mixColor('#bfe5fa', '#f6f5f0', seaBlend);
+  const seaColor = mixColor('#7dbfdd', '#f6f5f0', seaBlend); // 아이콘 지구본의 바다색 → 지도 종이색
   const huge = R > Math.hypot(W, H) * 2;
   ctx.beginPath();
   if (huge) ctx.rect(0, 0, W, H);
@@ -4810,15 +5475,23 @@ function drawIntro(ctx) {
     const sub = new Path2D();
     if (traceOrthoRing(sub, worldLand[i], lon0, lat0, R, cx, cy)) landPath.addPath(sub);
   }
-  ctx.fillStyle = '#edebe3';
+  ctx.fillStyle = mixColor('#85b06f', '#edebe3', seaBlend); // 아이콘의 초록 육지 → 지도 땅색
   ctx.fill(landPath);
-  ctx.strokeStyle = '#cfcdc4';
+  ctx.strokeStyle = mixColor('#6f9a5c', '#cfcdc4', seaBlend);
   ctx.lineWidth = 1;
   ctx.stroke(landPath);
-  // 목표 지점 표시 (노란 점)
+  // 경위선 (너무 커지면 생략)
+  if (R < Math.hypot(W, H) * 1.5 && seaBlend < 1) {
+    const gp = new Path2D();
+    introAnim.grat.forEach(ring => { const sub = new Path2D(); if (traceOrthoRing(sub, ring, lon0, lat0, R, cx, cy)) gp.addPath(sub); });
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.35 * (1 - seaBlend)})`;
+    ctx.lineWidth = 1;
+    ctx.stroke(gp);
+  }
+  // 목표 지점 표시 (노란 점, 살짝 두근거림)
   const [tx, ty] = orthoProject(introAnim.lon, introAnim.lat, lon0, lat0, R, cx, cy);
   ctx.beginPath();
-  ctx.arc(tx, ty, 5, 0, Math.PI * 2);
+  ctx.arc(tx, ty, 5 + 2 * Math.sin(performance.now() / 300), 0, Math.PI * 2);
   ctx.fillStyle = ZONE_COLORS.main;
   ctx.fill();
   ctx.strokeStyle = '#ffffff';
@@ -4838,6 +5511,8 @@ function gameLoop(timestamp) {
     const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
     lastTime = timestamp;
 
+    // 종료 카드가 뜬 뒤 1.5초가 지나면 마지막 장면을 그대로 두고 그리기를 멈춤 (전력 절약)
+    if (currentState === GAME_STATE.GAME_OVER && endModalShownAt && timestamp - endModalShownAt > 1500) return;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.clearRect(0, 0, viewW, viewH);
     updateSurrenderButtonVisibility();
@@ -4846,16 +5521,7 @@ function gameLoop(timestamp) {
 
     if (currentState === GAME_STATE.PLAYING) {
       // 작전 소요 시간 측정 (스톱워치 기록계, 배속 연동)
-      gameElapsedTime += dt * gameSpeed;
-      const timerStr = formatTimeString(gameElapsedTime);
-      if (timerStr !== lastTimerText) {
-        lastTimerText = timerStr;
-        const timerEl = document.getElementById('match-timer');
-        if (timerEl) {
-          timerEl.innerText = timerStr;
-          timerEl.style.color = '#b45309';
-        }
-      }
+      if (!endPending) gameElapsedTime += dt * gameSpeed; // 종료 대기 중엔 기록 정지 (시계는 캔버스 알약에 그림)
 
       updateAI(timestamp);
       updateOrbSpawners(timestamp);
@@ -4894,13 +5560,21 @@ function gameLoop(timestamp) {
           flyingOrbs.splice(i, 1);
         }
       }
+    } else if (currentState === GAME_STATE.GAME_OVER) {
+      updateParticles(); // 승리 불꽃만 마무리
     }
 
+    // 승리 카메라 숨 (6% 확대)
+    if (camTween) {
+      const k = Math.min(1, (timestamp - camTween.t0) / camTween.ms);
+      view.scale = camTween.from + (camTween.to - camTween.from) * easeInOut(k);
+      if (k >= 1) camTween = null;
+    }
     // Camera Matrix
     ctx.save();
     const cx = viewW / 2;
     const cy = viewH / 2;
-    const shake = quakeShakeOffset();
+    const shake = shakeOffset();
     ctx.translate(cx + view.offsetX + shake.x, cy + view.offsetY + shake.y);
     ctx.scale(view.scale, view.scale);
     ctx.translate(-cx, -cy);
@@ -4911,6 +5585,7 @@ function gameLoop(timestamp) {
     drawTank(ctx);
     drawFocusRings(ctx);
     drawZoneDots(ctx);
+    drawFocusMarkers(ctx);
     drawFx(ctx);
     drawZoneBadges(ctx);
     drawFlyingOrbs(ctx);
@@ -4918,7 +5593,21 @@ function gameLoop(timestamp) {
 
     ctx.restore();
 
+    // 화면 좌표 레이어: 번쩍 → 시계 알약 → 인트로 → 장면 베일 → 미니맵
+    const nowMs = performance.now();
+    if (flashUntil > nowMs) {
+      ctx.globalAlpha = flashAlpha * ((flashUntil - nowMs) / flashMs);
+      ctx.fillStyle = flashColor;
+      ctx.fillRect(0, 0, viewW, viewH);
+      ctx.globalAlpha = 1;
+    }
+    drawHudClock(ctx);
     drawIntro(ctx);
+    if (sceneVeil) {
+      const k = sceneVeil.hold ? 1 : Math.max(0, (sceneVeil.until - timestamp) / sceneVeil.ms);
+      if (k <= 0) sceneVeil = null;
+      else { ctx.fillStyle = `rgba(11, 18, 34, ${k})`; ctx.fillRect(0, 0, viewW, viewH); }
+    }
     drawMinimap(timestamp);
   } catch (err) {
     console.error('gameLoop error:', err);
@@ -4972,6 +5661,7 @@ function maybeOpenTutorial() {
   const typeNext = () => {
     textEl.textContent = word.slice(0, ++i);
     if (i < word.length) { setTimeout(typeNext, 140); return; }
+    splash.classList.add('line'); // 글자 아래 밑줄 등장
     setTimeout(() => {
       splash.classList.add('hide');
       setTimeout(() => { splash.remove(); maybeOpenTutorial(); }, 450);
