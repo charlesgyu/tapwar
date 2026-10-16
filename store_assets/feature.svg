@@ -1,0 +1,43 @@
+<svg width="1024" height="500" viewBox="0 0 1024 500" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="skyGrad" cx="50%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="55%" stop-color="#16213a"/>
+      <stop offset="100%" stop-color="#0b1222"/>
+    </radialGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#334155" stroke-width="0.8" opacity="0.3"/>
+    </pattern>
+  </defs>
+
+  <rect width="1024" height="500" fill="url(#skyGrad)"/>
+  <rect width="1024" height="500" fill="url(#grid)"/>
+
+  <!-- Stars -->
+  <circle cx="120" cy="80" r="1.5" fill="#ffffff" opacity="0.8"/>
+  <circle cx="280" cy="140" r="2" fill="#fde047" opacity="0.9"/>
+  <circle cx="450" cy="60" r="1.2" fill="#ffffff" opacity="0.6"/>
+  <circle cx="780" cy="90" r="1.8" fill="#ffffff" opacity="0.7"/>
+  <circle cx="920" cy="160" r="2.2" fill="#fde047" opacity="0.9"/>
+  <circle cx="850" cy="380" r="1.5" fill="#ffffff" opacity="0.6"/>
+  <circle cx="150" cy="420" r="1.6" fill="#ffffff" opacity="0.7"/>
+
+  <!-- Planet / Earth circle on left -->
+  <g transform="translate(240, 250)">
+    <circle cx="0" cy="0" r="160" fill="#0f172a" stroke="#38bdf8" stroke-width="4"/>
+    <circle cx="0" cy="0" r="150" fill="#1e3a8a" opacity="0.7"/>
+    <!-- Abstract Continents -->
+    <path d="M-60,-80 Q-20,-120 40,-80 Q80,-40 60,20 Q20,80 -40,60 Q-90,20 -60,-80 Z" fill="#22c55e" opacity="0.85"/>
+    <path d="M50,40 Q90,30 110,80 Q70,120 20,100 Q40,60 50,40 Z" fill="#ef4444" opacity="0.85"/>
+    <circle cx="-10" cy="-20" r="10" fill="#fde047"/>
+    <!-- Orbital Ring -->
+    <ellipse cx="0" cy="0" rx="200" ry="60" fill="none" stroke="#fde047" stroke-width="3" stroke-dasharray="16 8" transform="rotate(-20)"/>
+  </g>
+
+  <!-- Titles on right -->
+  <g transform="translate(560, 220)">
+    <text x="0" y="0" font-family="-apple-system, BlinkMacSystemFont, Pretendard, sans-serif" font-size="74" font-weight="900" fill="#ffffff" letter-spacing="2">TAPWAR</text>
+    <text x="0" y="48" font-family="-apple-system, BlinkMacSystemFont, Pretendard, sans-serif" font-size="28" font-weight="800" fill="#fde047" letter-spacing="4">실시간 행정구역 전선 전략</text>
+    <text x="0" y="96" font-family="-apple-system, BlinkMacSystemFont, Pretendard, sans-serif" font-size="20" font-weight="500" fill="#94a3b8">서울 · 경기 · 전국 · 글로벌 전선 점령전</text>
+  </g>
+</svg>

@@ -25,12 +25,11 @@
 - 튜토리얼 건너뛰기: `localStorage.tapwar_tutorial_seen='1'`. 게임 상태 조작용 전역: `currentState, GAME_STATE, selectModalMap(key), rawZones, pendingStartZone, confirmBaseSelection(), gameSpeed, nextItemAt, gameOver(bool), triggerCountryEvent(cc), fogUntil, openItemGuide(), openPurchase(id)`.
 - 그래픽 확인은 스크린샷을 Read로 직접 봐야 함(코드만 보고 "됐다"고 하지 말 것).
 
-## 현재 상태 (2026-10-13)
-- App Store Connect: 앱 `TAPWAR-점령전` 생성, 빌드 1.0(1) 업로드됨, 스크린샷·설명·개인정보·연령등급(9+, 한국 전체)·순위표 10개·인앱구입 2개 등록, **심사 제출 완료**. 결과 대기 중.
-- 유료 앱 계약: 사용자가 비즈니스 메뉴에서 처리 중(케이뱅크 계좌, 사업자등록번호 세금 양식 제출 시 "나중에 다시 시도" 오류가 났었음 → 재시도 안내함).
-- 빌드 1.0(1)은 v53 쯤 코드. 그 뒤 바뀐 것(Earth 카드, 순위 나라별만, 결제 화면 문구 '모든 나라 열기', 그래픽 전면 개선 v59)은 **다음 빌드(Build 2)** 에 들어감. Mac에서: `git pull` → `npm run ios:sync` → Xcode Build 2 → Archive → 업로드.
-- 소개/개인정보 사이트: 공개 저장소 `charlesgyu/tapwar-site`(GitHub Pages) → `https://charlesgyu.github.io/tapwar-site/` , `/privacy.html`, 지원 URL `/#support`. 아이콘 바꾸면 거기 `icon.png`도 갱신.
-- 인앱 상품 ID: `com.tapwar.game.speed`(2배속), `com.tapwar.game.allcountries`(모든 나라 열기). 순위표 ID: `tapwar.leaderboard.{kr,jp,cn,us,fr,de,it,es,gb,wd}.totaltime`.
+## 현재 상태 (2026-10-16)
+- App Store: `TAPWAR-점령전` 1.0(1) 정식 출시 완료! 1.1(2) 결제 버그 수정 및 최신 기능 빌드 심사 제출 완료.
+- Google Play: 앱 `TAPWAR-점령전` 생성, 서명 키(tapwar-upload-keystore.jks) 등록, 스토어 등록정보(아이콘·그래픽·스크린샷) 및 배포용 AAB(v1.0(1)) 비공개 테스트 심사 제출 준비 완료.
+- 소개/개인정보 사이트: 공개 저장소 `charlesgyu/tapwar-site`(GitHub Pages) → `https://charlesgyu.github.io/tapwar-site/` , `/privacy.html`, 지원 URL `/#support`.
+- 인앱 상품 ID: `com.tapwar.game.speed`(2배속), `com.tapwar.game.allcountries`(모든 나라 열기).
 - 출시용 플래그: `DEV_TEST_SPEED/DEV_TEST_COUNTRIES/DEV_UNLOCK_ALL_MAPS = false`, `MAP_RANKINGS = false`. 로고 5번 탭 치트는 제거됨.
 
 ## 사용자가 정한 결정(되돌리지 말 것)
