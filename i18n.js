@@ -177,7 +177,7 @@
       product_speed2_title: '2x Speed',
       product_speed2_text: 'Speed up gameplay by 2x.\nPermanently unlocked for all maps.',
       product_all_countries_title: 'Unlock All Countries',
-      product_all_countries_text: 'Unlock Japan, China, USA, Europe, and Earth campaigns.\nPermanently unlocked.',
+      product_all_countries_text: 'Unlock South Korea, Japan, China, Europe, and Earth campaigns.\nPermanently unlocked for all maps.',
       purchase_processing: 'Processing…',
       purchase_pending: 'Waiting for approval…',
       purchase_failed: 'Purchase failed. Please try again.',
@@ -514,15 +514,24 @@
     }
   }
 
+  function getDefaultFreeCountry() {
+    return currentLang === 'en' ? 'US' : 'KR';
+  }
+
   function setLang(lang) {
     if (lang !== 'ko' && lang !== 'en') return;
+    const prevFree = getDefaultFreeCountry();
     currentLang = lang;
     try { localStorage.setItem(STORAGE_KEY, lang); } catch (e) {}
     updateDomTexts();
 
+    if (window.selectedCountryKey === prevFree || !window.selectedCountryKey) {
+      window.selectedCountryKey = getDefaultFreeCountry();
+    }
+
     // Trigger in-game re-renders if available
     if (typeof window.buildCountryCards === 'function') window.buildCountryCards();
-    if (typeof window.selectCountry === 'function') window.selectCountry(window.selectedCountryKey || 'KR');
+    if (typeof window.selectCountry === 'function') window.selectCountry(window.selectedCountryKey || getDefaultFreeCountry());
     if (typeof window.updateStartBtn === 'function') window.updateStartBtn();
     if (typeof window.buildStageCards === 'function') window.buildStageCards();
     if (typeof window.updateStageProgress === 'function') window.updateStageProgress();
@@ -545,6 +554,7 @@
   window.setLang = setLang;
   window.toggleLang = toggleLang;
   window.t = t;
+  window.getDefaultFreeCountry = getDefaultFreeCountry;
   window.getCountryName = getCountryName;
   window.getCountryConcept = getCountryConcept;
   window.getItems = getItems;
