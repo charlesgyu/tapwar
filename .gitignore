@@ -18,3 +18,12 @@ assets/south_korea_simplified_zones.json
 node_modules/
 www/
 tools/out/
+
+# Android keystores
+*.jks
+*.keystore
+
+# Xcode / SwiftPM cache
+**/xcshareddata/swiftpm/
+**/xcuserdata/
+*.xcuserstate

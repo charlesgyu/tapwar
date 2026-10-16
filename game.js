@@ -1888,7 +1888,7 @@ function beginGameAtZone(zone) {
   if (itemMode) { nextItemAt = 0; openItemPick(); }
 }
 
-const START_GUIDE_TEXT = '본진을 선택하세요';
+const getStartGuideText = () => (window.t ? window.t('start_guide') : '본진을 선택하세요');
 let pendingStartZone = null; // 본진 후보 (확인 팝업에서 확인하면 시작)
 let pointerDownPos = { x: 0, y: 0 };
 const TAP_MOVE_TOLERANCE = 8; // 이 거리(px) 이하로 움직이면 탭으로 판정
@@ -1905,7 +1905,16 @@ function handleStartSelectTap(zone) {
   pendingStartZone = zone;
   flashZone(zone, ZONE_COLORS.main);
   document.getElementById('confirm-base-name').textContent = zone.name;
-  document.getElementById('confirm-base').style.display = 'flex';
+  const sheet = document.getElementById('confirm-base');
+  if (sheet) {
+    const textEl = sheet.querySelector('.sheet-text');
+    if (textEl && window.t) textEl.textContent = window.t('confirm_base_text');
+    const prevBtn = sheet.querySelector('.tut-prev');
+    if (prevBtn && window.t) prevBtn.textContent = window.t('cancel');
+    const nextBtn = sheet.querySelector('.tut-next');
+    if (nextBtn && window.t) nextBtn.textContent = window.t('confirm');
+    sheet.style.display = 'flex';
+  }
 }
 function confirmBaseSelection() {
   document.getElementById('confirm-base').style.display = 'none';
@@ -1955,12 +1964,16 @@ function openPurchase(id) {
   const p = PRODUCTS[id];
   if (!p) return;
   purchaseProductId = id;
-  document.getElementById('purchase-title').textContent = p.title;
-  document.getElementById('purchase-text').textContent = p.text;
+  const title = window.t ? window.t(`product_${id}_title`) : p.title;
+  const text = window.t ? window.t(`product_${id}_text`) : p.text;
+  document.getElementById('purchase-title').textContent = title;
+  document.getElementById('purchase-text').textContent = text;
   document.getElementById('purchase-price').textContent = storePrices[p.storeId] || '';
   const buy = document.getElementById('purchase-buy');
-  buy.textContent = isOwned(id) ? '구매 완료' : '구매하기';
+  buy.textContent = isOwned(id) ? (window.t ? window.t('purchased') : '구매 완료') : (window.t ? window.t('buy') : '구매하기');
   buy.disabled = isOwned(id);
+  const closeBtn = document.querySelector('.purchase-close');
+  if (closeBtn && window.t) closeBtn.textContent = window.t('close');
   document.getElementById('purchase').style.display = 'flex';
 }
 function closePurchase() {
@@ -1971,22 +1984,23 @@ function buyProduct() {
   const id = purchaseProductId, p = PRODUCTS[id];
   const buy = document.getElementById('purchase-buy');
   if (!p) return;
-  if (!StorePlugin) { buy.textContent = '앱에서 구매할 수 있어요'; buy.disabled = true; return; }
-  buy.textContent = '결제 중…';
+  const title = window.t ? window.t(`product_${id}_title`) : p.title;
+  if (!StorePlugin) { buy.textContent = window.t ? window.t('purchase_not_native') : '앱에서 구매할 수 있어요'; buy.disabled = true; return; }
+  buy.textContent = window.t ? window.t('purchase_processing') : '결제 중…';
   buy.disabled = true;
   StorePlugin.purchase({ id: p.storeId }).then(r => {
     if (r.status === 'purchased') {
       setOwnedFromStore(r.owned);
       closePurchase();
-      openSheet('cart', '구매 완료', `${p.title}을(를) 쓸 수 있어요.`);
+      openSheet('cart', window.t ? window.t('purchase_complete_title') : '구매 완료', window.t ? window.t('purchase_complete_text', { title }) : `${title}을(를) 쓸 수 있어요.`);
     } else if (r.status === 'pending') {
-      buy.textContent = '승인 대기 중이에요';
+      buy.textContent = window.t ? window.t('purchase_pending') : '승인 대기 중이에요';
     } else {
-      buy.textContent = '구매하기';
+      buy.textContent = window.t ? window.t('buy') : '구매하기';
       buy.disabled = false;
     }
   }).catch(() => {
-    buy.textContent = '결제에 실패했어요. 다시 시도';
+    buy.textContent = window.t ? window.t('purchase_failed') : '결제에 실패했어요. 다시 시도';
     buy.disabled = false;
   });
 }
@@ -2052,7 +2066,7 @@ function updateHudVisibility() {
   // 시작 안내는 상단 띠 대신, 처음 한 번 화면 가운데에 글자만 1초 떴다 사라짐
   if (choosing && !startGuideShown) {
     startGuideShown = true;
-    flashCenterText(START_GUIDE_TEXT);
+    flashCenterText(getStartGuideText());
   }
 }
 
@@ -3278,6 +3292,12 @@ function openItemPick() {
   if (!itemChoices.length) { itemRound = itemRounds(); currentState = GAME_STATE.PLAYING; return; } // 모든 카드가 최대 장수
   const m = document.getElementById('item-modal');
   const list = document.getElementById('item-choices');
+  const titleEl = document.querySelector('.item-pick-title');
+  if (titleEl && titleEl.childNodes.length > 0) {
+    titleEl.childNodes[0].nodeValue = (window.t ? window.t('item_pick_title') : '아이템 카드') + ' ';
+  }
+  const subEl = document.querySelector('.item-pick-sub');
+  if (subEl && window.t) subEl.textContent = window.t('item_pick_sub');
   // 라운드 표시: 점 n개, 지난·지금 라운드는 켜짐
   document.getElementById('item-round').textContent = `${itemRound + 1}/${itemRounds()}`; // 몇 번째 카드인지
   list.innerHTML = '';
@@ -3301,9 +3321,17 @@ function openItemPick() {
 // 카드 모양 (고르기 화면·고른 카드 크게 보기 공통)
 // owned: 이미 가진 장수 (고르기 화면에서 '2장째 · 확률 +10%' 표시), held: 가진 카드 크게 보기에서 현재 장수
 function itemCardHtml(it, owned, held) {
-  const stack = owned > 0 ? `<span class="item-stack">${owned + 1}장째 +${Math.round(owned * ITEM_STACK_BONUS * 100)}%</span>`
-    : held > 1 ? `<span class="item-stack">${held}장 +${Math.round((held - 1) * ITEM_STACK_BONUS * 100)}%</span>` : '';
-  return `<span class="item-icon">${itemIconSvg(it.key, 30)}</span><span class="item-cat">${ITEM_CAT[it.key] || ''}</span><span class="item-name">${it.name}</span>${stack}<span class="item-desc">${it.desc}</span>`;
+  const all = window.getItems ? window.getItems() : ITEMS;
+  const item = all.find(x => x.key === it.key) || it;
+  const cat = window.getItemCat ? window.getItemCat(it.key) : (ITEM_CAT[it.key] || '');
+  const bonusOwned = Math.round(owned * ITEM_STACK_BONUS * 100);
+  const bonusHeld = Math.round((held - 1) * ITEM_STACK_BONUS * 100);
+  const stack = owned > 0
+    ? `<span class="item-stack">${window.t ? window.t('item_stack_owned', { count: owned + 1, bonus: bonusOwned }) : `${owned + 1}장째 +${bonusOwned}%`}</span>`
+    : held > 1
+    ? `<span class="item-stack">${window.t ? window.t('item_stack_held', { count: held, bonus: bonusHeld }) : `${held}장 +${bonusHeld}%`}</span>`
+    : '';
+  return `<span class="item-icon">${itemIconSvg(item.key, 30)}</span><span class="item-cat">${cat}</span><span class="item-name">${item.name}</span>${stack}<span class="item-desc">${item.desc}</span>`;
 }
 function gainItem(owner, key) {
   itemsOf[owner].push(key);
@@ -3321,9 +3349,10 @@ function chooseItem(key) {
   document.getElementById('item-modal').style.display = 'none';
   currentState = GAME_STATE.PLAYING;
   renderItemBar();
-  const mine = ITEMS.find(it => it.key === key).name, theirs = ek ? ITEMS.find(it => it.key === ek).name : '-';
-  statusQuiet(`[${mine}] 선택! 적은 [${theirs}]을(를) 골랐습니다.`);
-
+  const all = window.getItems ? window.getItems() : ITEMS;
+  const mineObj = all.find(it => it.key === key), theirsObj = ek ? all.find(it => it.key === ek) : null;
+  const mine = mineObj ? mineObj.name : key, theirs = theirsObj ? theirsObj.name : '-';
+  statusQuiet(window.t ? window.t('item_selected_status', { mine, theirs }) : `[${mine}] 선택! 적은 [${theirs}]을(를) 골랐습니다.`);
 }
 window.chooseItem = chooseItem;
 
@@ -3369,13 +3398,17 @@ function hideItemInfo(delay) {
 }
 function showItemInfo(key, owner) {
   // 화면 가운데에 고르기 화면과 같은 카드로 크게 (나: 파랑, 적: 빨강)
-  const it = ITEMS.find(x => x.key === key);
+  const all = window.getItems ? window.getItems() : ITEMS;
+  const it = all.find(x => x.key === key) || ITEMS.find(x => x.key === key);
   const tip = document.getElementById('item-tip');
   if (!it || !tip) return;
   clearTimeout(itemTipTimer);
   const toast = document.getElementById('center-toast');
   if (toast) toast.classList.remove('show');
-  tip.innerHTML = `<div class="item-tip-owner ${owner === OWNER.PLAYER ? 'mine' : 'theirs'}">${owner === OWNER.PLAYER ? '내 카드' : '적 카드'}</div>` +
+  const ownerLabel = owner === OWNER.PLAYER
+    ? (window.t ? window.t('my_card') : '내 카드')
+    : (window.t ? window.t('enemy_card') : '적 카드');
+  tip.innerHTML = `<div class="item-tip-owner ${owner === OWNER.PLAYER ? 'mine' : 'theirs'}">${ownerLabel}</div>` +
     `<div class="item-card ${owner === OWNER.PLAYER ? 'mine' : 'theirs'}">${itemCardHtml(it, 0, itemCount(owner, key))}</div>`;
   tip.hidden = false;
 }
@@ -3839,14 +3872,16 @@ function gameOver(isWin, isSurrender = false) {
   const desc = document.getElementById('end-message');
   const timeStr = formatTimeString(gameElapsedTime);
   const cfg = MAP_CONFIGS[currentMapKey];
-  const label = cfg && cfg.label ? cfg.label : currentMapKey;
-  const countryName = (COUNTRIES.find(x => x.key === selectedCountryKey) || COUNTRIES[0]).name;
+  const label = window.getMapLabel ? window.getMapLabel(currentMapKey) : (cfg && cfg.label ? cfg.label : currentMapKey);
+  const countryName = window.getCountryName ? window.getCountryName(selectedCountryKey) : ((COUNTRIES.find(x => x.key === selectedCountryKey) || COUNTRIES[0]).name);
 
+  const homeBtn = document.getElementById('end-home-btn');
+  if (homeBtn && window.t) homeBtn.textContent = window.t('go_home');
   const nextBtn = document.getElementById('end-next-btn');
-  if (nextBtn) nextBtn.hidden = true;
+  if (nextBtn) { nextBtn.hidden = true; if (window.t) nextBtn.textContent = window.t('next_map'); }
   // 패배·항복이면 같은 맵 다시 도전 버튼
   const retryBtn = document.getElementById('end-retry-btn');
-  if (retryBtn) retryBtn.hidden = !!isWin;
+  if (retryBtn) { retryBtn.hidden = !!isWin; if (window.t) retryBtn.textContent = window.t('retry'); }
   if (card) card.classList.toggle('lose', !isWin);
   if (title) { title.style.color = ''; title.innerText = label; }
 
@@ -3856,16 +3891,19 @@ function gameOver(isWin, isSurrender = false) {
     const recordResult = saveBattleRecord(currentMapKey, gameElapsedTime);
     const bestStr = formatTimeString(recordResult.bestTime);
     let bestLine;
-    if (prevBest == null) bestLine = `<div class="end-best new">첫 기록</div>`;
-    else if (recordResult.isNewBest) bestLine = `<div class="end-best new">최고 기록 갱신 ↑ −${formatTimeString(prevBest - gameElapsedTime)}</div>`;
-    else bestLine = `<div class="end-best">최고 ${bestStr}</div>`;
-    if (eyebrow) eyebrow.textContent = '점령 완료';
+    if (prevBest == null) bestLine = `<div class="end-best new">${window.t ? window.t('first_record') : '첫 기록'}</div>`;
+    else if (recordResult.isNewBest) bestLine = `<div class="end-best new">${window.t ? window.t('new_record', { diff: formatTimeString(prevBest - gameElapsedTime) }) : `최고 기록 갱신 ↑ −${formatTimeString(prevBest - gameElapsedTime)}`}</div>`;
+    else bestLine = `<div class="end-best">${window.t ? window.t('best_record', { time: bestStr }) : `최고 ${bestStr}`}</div>`;
+    if (eyebrow) eyebrow.textContent = window.t ? window.t('victory_eyebrow') : '점령 완료';
+    const subText = window.t ? window.t('victory_sub', { name: label }) : `${label}${josaEulReul(label)} 점령했습니다.`;
+    const recordLabel = window.t ? window.t('record_label') : '기록';
+    const totalLine = window.t ? window.t('total_time_country', { country: countryName, time: formatLongTime(getCampaignTotalTime().sum) }) : `${countryName} 총 시간 ${formatLongTime(getCampaignTotalTime().sum)}`;
     desc.innerHTML =
-      `<div class="end-sub">${label}${josaEulReul(label)} 점령했습니다.</div>` +
-      `<div class="end-record-label">기록</div>` +
+      `<div class="end-sub">${subText}</div>` +
+      `<div class="end-record-label">${recordLabel}</div>` +
       `<canvas id="end-clock" width="400" height="96" style="width:200px;height:48px"></canvas><span class="sr-only">${timeStr}</span>` +
       bestLine +
-      `<div class="end-total">${countryName} 총 시간 ${formatLongTime(getCampaignTotalTime().sum)}</div>`;
+      `<div class="end-total">${totalLine}</div>`;
     submitMapRanking(selectedCountryKey || 'KR', currentMapKey, gameElapsedTime);
     submitCountryRanking(selectedCountryKey || 'KR');
 
@@ -3875,12 +3913,17 @@ function gameOver(isWin, isSurrender = false) {
     if (nextBtn) nextBtn.hidden = !nextStageAfterWin;
     celebrateWin();
   } else {
-    if (eyebrow) eyebrow.textContent = isSurrender ? '작전 중단' : '본진 함락';
+    if (eyebrow) eyebrow.textContent = isSurrender ? (window.t ? window.t('defeat_eyebrow_surrender') : '작전 중단') : (window.t ? window.t('defeat_eyebrow_fallen') : '본진 함락');
+    const defeatSub = isSurrender
+      ? (window.t ? window.t('defeat_sub_surrender') : '스스로 항복하여 작전을 중단했습니다.')
+      : (window.t ? window.t('defeat_sub_fallen') : '적의 공세에 아군의 모든 거점이 함락되었습니다.');
+    const defeatRecordLabel = window.t ? window.t('defeat_record_label') : '작전 진행 시간';
+    const defeatTip = window.t ? window.t('defeat_tip') : '전열을 가다듬고 다시 도전하세요!';
     desc.innerHTML =
-      `<div class="end-sub">${isSurrender ? '스스로 항복하여 작전을 중단했습니다.' : '적의 공세에 아군의 모든 거점이 함락되었습니다.'}</div>` +
-      `<div class="end-record-label">작전 진행 시간</div>` +
+      `<div class="end-sub">${defeatSub}</div>` +
+      `<div class="end-record-label">${defeatRecordLabel}</div>` +
       `<canvas id="end-clock" width="400" height="96" style="width:200px;height:48px"></canvas><span class="sr-only">${timeStr}</span>` +
-      `<div class="end-total">전열을 가다듬고 다시 도전하세요!</div>`;
+      `<div class="end-total">${defeatTip}</div>`;
   }
   const showEnd = () => {
     if (currentState !== GAME_STATE.GAME_OVER) return;
@@ -4126,7 +4169,9 @@ function drawSevenSegment(ctx, text, cx, top, h, opts = {}) {
 
 function drawMapTitle(ctx) {
   const cfg = MAP_CONFIGS[currentMapKey];
-  if (!cfg || !cfg.label || introAnim) return;
+  if (!cfg || introAnim) return;
+  const label = window.getMapLabel ? window.getMapLabel(currentMapKey) : (cfg.label || cfg.name || '');
+  if (!label) return;
   const area = getMapArea();
   const head = getMapHeaderHeight();
   // 머리 공간(지도 위쪽 빈 곳) 안에만 이름을 새김. 시계·컨셉은 화면 좌표 알약(drawHudClock)으로 옮김
@@ -4138,8 +4183,8 @@ function drawMapTitle(ctx) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.fillStyle = 'rgba(30, 41, 59, 0.52)';
-  ctx.fillText(cfg.label, tx, top);
-  const labelW = ctx.measureText(cfg.label).width;
+  ctx.fillText(label, tx, top);
+  const labelW = ctx.measureText(label).width;
   ctx.restore();
   if (eventBanners.length) drawEventBanners(ctx, tx, top + size * 0.5, labelW, size);
 }
@@ -4186,13 +4231,15 @@ function drawHudClock(ctx) {
 // 지도 제목 위에 보여 줄 컨셉 상태: '지진 · 다음 12초' (계속 켜진 컨셉은 이름만)
 function conceptStatusText() {
   const key = currentCountryKey();
-  const concept = COUNTRY_CONCEPT[key];
+  const concept = window.getCountryConcept ? window.getCountryConcept(key) : COUNTRY_CONCEPT[key];
   if (!concept) return null;
   if (key === 'WD' || key === 'KR') return null; // 전세계·대한민국은 제목 위 문구 없음
   if (key === 'GB' || key === 'IT') return concept[0];
   if (!countryEventNext) return concept[0];
   const left = Math.max(0, Math.ceil(countryEventNext - gameElapsedTime));
-  return key === 'WD' ? `${concept[0]} · 다음 컨셉까지 ${left}초` : `${concept[0]} · 다음까지 ${left}초`;
+  return window.t
+    ? window.t(key === 'WD' ? 'next_concept_world' : 'next_concept_in', { name: concept[0], sec: left })
+    : (key === 'WD' ? `${concept[0]} · 다음 컨셉까지 ${left}초` : `${concept[0]} · 다음까지 ${left}초`);
 }
 
 // 종이 격자: 월드 좌표 26단위, 보이는 범위만. 확대할수록 옅어지고 너무 옅으면 생략
@@ -4602,6 +4649,7 @@ const COUNTRIES = [
   { key: 'GB', flag: '🇬🇧', name: '영국', open: false, paid: true },
   { key: 'WD', flag: '🌏', img: 'assets/earth.png', name: 'Earth', open: false, paid: true }
 ];
+window.COUNTRIES = COUNTRIES;
 // [테스트용] 유료 나라(일본·중국·미국·유럽 5개국·전세계)를 구매 없이 열기. 출시는 false (인앱 구매 'all_countries' 하나로 모두 열림)
 const DEV_TEST_COUNTRIES = false;
 function isCountryOpen(c) {
@@ -4657,12 +4705,19 @@ function closeSheet() {
 window.closeSheet = closeSheet;
 
 function restorePurchases() {
-  if (!StorePlugin) { openSheet('restore', '구매 복원', '앱에서 사용할 수 있어요.\n같은 Apple ID로 산 나라·기능을 다시 열어 줍니다.'); return; }
+  if (!StorePlugin) {
+    openSheet('restore', window.t ? window.t('restore_title') : '구매 복원', window.t ? window.t('restore_not_native') : '앱에서 사용할 수 있어요.\n같은 Apple ID로 산 나라·기능을 다시 열어 줍니다.');
+    return;
+  }
   StorePlugin.restore().then(r => {
     setOwnedFromStore(r.owned);
-    const names = Object.keys(PRODUCTS).filter(isOwned).map(k => PRODUCTS[k].title);
-    openSheet('restore', '구매 복원', names.length ? `복원했어요: ${names.join(', ')}` : '이 Apple ID로 구매한 항목이 없어요.');
-  }).catch(() => openSheet('restore', '구매 복원', '복원에 실패했어요. 잠시 후 다시 시도해 주세요.'));
+    const names = Object.keys(PRODUCTS).filter(isOwned).map(k => (window.t ? window.t(`product_${k}_title`) : PRODUCTS[k].title));
+    const title = window.t ? window.t('restore_title') : '구매 복원';
+    const msg = names.length
+      ? (window.t ? window.t('restore_success', { names: names.join(', ') }) : `복원했어요: ${names.join(', ')}`)
+      : (window.t ? window.t('restore_none') : '이 Apple ID로 구매한 항목이 없어요.');
+    openSheet('restore', title, msg);
+  }).catch(() => openSheet('restore', window.t ? window.t('restore_title') : '구매 복원', window.t ? window.t('restore_fail') : '복원에 실패했어요. 잠시 후 다시 시도해 주세요.'));
 }
 window.restorePurchases = restorePurchases;
 
@@ -4677,17 +4732,26 @@ const ITEM_GUIDE_GROUPS = [
 const ITEM_CAT = {};
 [['공격', 0], ['다음 5공격', 1], ['방어·회복', 2], ['항상', 3]].forEach(([lab, gi]) => ITEM_GUIDE_GROUPS[gi][1].forEach(k => ITEM_CAT[k] = lab));
 function openItemGuide() {
+  const guideCard = document.getElementById('item-guide');
+  if (guideCard) {
+    const titleEl = guideCard.querySelector('.sheet-title');
+    if (titleEl && window.t) titleEl.textContent = window.t('item_guide_title');
+    const subEl = guideCard.querySelector('.guide-sub');
+    if (subEl && window.t) subEl.textContent = window.t('item_guide_sub');
+  }
   const list = document.getElementById('item-guide-list');
   if (!list) return;
-  list.innerHTML = ITEM_GUIDE_GROUPS.map(([title, keys]) =>
+  const groups = window.getItemGuideGroups ? window.getItemGuideGroups() : ITEM_GUIDE_GROUPS;
+  const allItems = window.getItems ? window.getItems() : ITEMS;
+  list.innerHTML = groups.map(([title, keys]) =>
     `<div class="guide-group">${title}</div>` + keys.map(k => {
-      const it = ITEMS.find(x => x.key === k);
+      const it = allItems.find(x => x.key === k) || ITEMS.find(x => x.key === k);
       if (!it) return '';
       return `<div class="guide-row"><span class="guide-icon">${itemIconSvg(k, 24)}</span>` +
         `<span><div class="guide-name">${it.name}</div><div class="guide-desc">${it.desc}</div></span></div>`;
     }).join('')).join('');
   list.scrollTop = 0;
-  document.getElementById('item-guide').style.display = 'flex';
+  if (guideCard) guideCard.style.display = 'flex';
 }
 function closeItemGuide() { document.getElementById('item-guide').style.display = 'none'; }
 window.openItemGuide = openItemGuide;
@@ -4707,9 +4771,14 @@ function buildCountryCards() {
     // 국기 대신 그림이 있는 나라(Earth: 지구본)
     const flag = c.img ? `<img class="country-img" src="${c.img}" alt="">` : c.flag;
     const open = isCountryOpen(c);
-    const sub = open || !c.paid ? `${getCampaignOrder(c.key).length}개 맵` : '구매';
-    b.innerHTML = `<span class="country-flag" aria-hidden="true">${flag}</span><span class="stage-name">${c.name}</span><span class="stage-sub">${sub}</span>` +
-      (open ? '' : `<span class="stage-lock">${LOCK_SVG}구매</span>`);
+    const count = getCampaignOrder(c.key).length;
+    const sub = open || !c.paid
+      ? (window.t ? window.t('maps_count', { count }) : `${count}개 맵`)
+      : (window.t ? window.t('buy') : '구매');
+    const cName = window.getCountryName ? window.getCountryName(c.key) : c.name;
+    const buyLabel = window.t ? window.t('buy') : '구매';
+    b.innerHTML = `<span class="country-flag" aria-hidden="true">${flag}</span><span class="stage-name">${cName}</span><span class="stage-sub">${sub}</span>` +
+      (open ? '' : `<span class="stage-lock">${LOCK_SVG}${buyLabel}</span>`);
     b.onclick = () => selectCountry(c.key);
     grid.appendChild(b);
   });
@@ -4723,7 +4792,11 @@ function selectCountry(key) {
   centerCard('country-grid', document.getElementById(`country-${key.toLowerCase()}`));
   const c = COUNTRIES.find(x => x.key === key);
   const btn = document.getElementById('enter-btn');
-  if (btn) btn.textContent = isCountryOpen(c) || !(c && c.paid) ? '참전하기' : '둘러보기';
+  if (btn) {
+    btn.textContent = isCountryOpen(c) || !(c && c.paid)
+      ? (window.t ? window.t('deploy') : '참전하기')
+      : (window.t ? window.t('explore') : '둘러보기');
+  }
 }
 
 // 참전하기: 열린 국가면 도시 맵 화면으로, 잠긴 국가면 안내
@@ -4734,12 +4807,17 @@ function isBrowsingCountry() {
 }
 function updateStartBtn() {
   const btn = document.getElementById('start-btn');
-  if (btn) btn.textContent = isBrowsingCountry() ? '구매하기' : '시작';
+  if (btn) {
+    btn.textContent = isBrowsingCountry()
+      ? (window.t ? window.t('buy') : '구매하기')
+      : (window.t ? window.t('start') : '시작');
+  }
 }
 function enterCountry() {
   const c = COUNTRIES.find(x => x.key === selectedCountryKey);
   if (!isCountryOpen(c)) {
-    if (!c || !c.paid) { openSheet('lock', `${c ? c.name : ''} 전선`, '곧 출시돼요.'); return; }
+    const cName = window.getCountryName ? window.getCountryName(c.key) : (c ? c.name : '');
+    if (!c || !c.paid) { openSheet('lock', `${cName}`, window.t ? window.t('country_coming_soon') : '곧 출시돼요.'); return; }
     const only = getCampaignOrder(c.key);
     if (only.length === 1) selectedModalMapKey = only[0];
     showStageView(); // 둘러보기
@@ -4774,9 +4852,9 @@ function showStageView() {
   // 맵 카드 화면에서는 튜토리얼·구매 복원 링크 숨김
   const links = document.getElementById('home-links');
   if (links) links.hidden = true;
-  document.getElementById('country-title').textContent = c.name;
+  document.getElementById('country-title').textContent = window.getCountryName ? window.getCountryName(c.key) : c.name;
   // 나라 컨셉 설명 (이름 아래)
-  const concept = COUNTRY_CONCEPT[c.key];
+  const concept = window.getCountryConcept ? window.getCountryConcept(c.key) : COUNTRY_CONCEPT[c.key];
   const conceptEl = document.getElementById('country-concept');
   if (conceptEl) {
     conceptEl.hidden = !concept;
@@ -4809,7 +4887,9 @@ function updateStageProgress() {
   const totalEl = document.getElementById('stage-total-time');
   if (totalEl) {
     const t = getCampaignTotalTime();
-    totalEl.textContent = t.count > 0 ? `총 시간 ${formatLongTime(t.sum)}` : '';
+    totalEl.textContent = t.count > 0
+      ? (window.t ? window.t('total_time', { time: formatLongTime(t.sum) }) : `총 시간 ${formatLongTime(t.sum)}`)
+      : '';
   }
 }
 
@@ -4918,7 +4998,12 @@ function openRanking() {
   }
   const order = getCampaignOrder();
   const done = order.filter(isStageCleared).length;
-  openSheet('', `${c.name} 순위`, `${c.name}의 모든 맵(${order.length}개)을 클리어하면 총 시간으로 전 세계 순위에 올라가요.\n순위는 아이폰 앱(게임 센터)에서 볼 수 있어요. (${done}/${order.length} 클리어)`);
+  const cName = window.getCountryName ? window.getCountryName(c.key) : c.name;
+  const title = window.t ? window.t('rank_sheet_title', { name: cName }) : `${cName} 순위`;
+  const text = window.t
+    ? window.t('rank_sheet_text', { name: cName, total: order.length, cleared: done })
+    : `${cName}의 모든 맵(${order.length}개)을 클리어하면 총 시간으로 전 세계 순위에 올라가요.\n순위는 아이폰 앱(게임 센터)에서 볼 수 있어요. (${done}/${order.length} 클리어)`;
+  openSheet('', title, text);
 }
 window.openRanking = openRanking;
 
@@ -5003,6 +5088,7 @@ function buildStageCards() {
     const k = key.toLowerCase();
     const unlocked = isStageUnlocked(key);
     const cleared = isStageCleared(key);
+    const label = window.getMapLabel ? window.getMapLabel(key) : (cfg.label || key);
     const btn = document.createElement('button');
     btn.id = `modal-map-${k}`;
     btn.style.setProperty('--i', i); // 카드 등장 순서 (CSS 스태거)
@@ -5010,18 +5096,23 @@ function buildStageCards() {
       (unlocked && !isBrowsingCountry() ? '' : ' locked') + (cleared ? ' cleared' : ''); // 둘러보기 중에는 잠긴 모습(어둡게)
     btn.onclick = (e) => {
       if (!unlocked && !isBrowsingCountry()) { // 둘러보기 중에는 모든 맵 구경 가능
-        const prev = MAP_CONFIGS[order[i - 1]];
-        openSheet('lock', `${cfg.label} 잠김`, `${prev.label} 맵을 클리어하면 열려요.`);
+        const prevKey = order[i - 1];
+        const prev = MAP_CONFIGS[prevKey];
+        const prevLabel = prev ? (window.getMapLabel ? window.getMapLabel(prevKey) : prev.label) : '';
+        const lockTitle = window.t ? window.t('map_locked_title', { name: label }) : `${label} 잠김`;
+        const lockText = window.t ? window.t('map_locked_text', { prev: prevLabel }) : `${prevLabel} 맵을 클리어하면 열려요.`;
+        openSheet('lock', lockTitle, lockText);
         return;
       }
       selectModalMap(key);
     };
+    const lockTag = isBrowsingCountry() ? (window.t ? window.t('buy') : '구매') : (window.t ? window.t('locked') : '잠김');
     btn.innerHTML = `<span class="stage-no">${i + 1}</span>` +
       `<canvas class="stage-thumb" id="thumb-${k}"></canvas>` +
-      `<span class="stage-title"><span class="stage-name">${cfg.label || key}</span><span class="stage-sub">${cfg.count || ''}</span></span>` +
+      `<span class="stage-title"><span class="stage-name">${label}</span><span class="stage-sub">${cfg.count || ''}</span></span>` +
       `<span class="stage-recrow"><span class="stage-record" id="modal-${k}-record"></span>` +
       (cleared && MAP_RANKINGS ? `<span class="map-rank-pct" id="rank-${k}"></span>` : '') + `</span>` +
-      (unlocked && !isBrowsingCountry() ? '' : `<span class="stage-lock">${LOCK_SVG}${isBrowsingCountry() ? '구매' : '잠김'}</span>`) +
+      (unlocked && !isBrowsingCountry() ? '' : `<span class="stage-lock">${LOCK_SVG}${lockTag}</span>`) +
       (cleared ? '<span class="stage-done">✓</span>' : '');
     grid.appendChild(btn);
   });
@@ -5034,9 +5125,11 @@ function buildStageCards() {
   rank.className = 'stage-card ranking-card' + (allDone ? '' : ' locked');
   rank.onclick = openRanking;
   // 총 시간은 화면 위쪽에 이미 있으므로 카드에는 순위만
-  rank.innerHTML = `<span class="ranking-title">순위</span>` +
+  const rankTitle = window.t ? window.t('rank_title') : '순위';
+  const rankLockSub = window.t ? window.t('rank_lock_sub') : '모든 맵 클리어 후 참여';
+  rank.innerHTML = `<span class="ranking-title">${rankTitle}</span>` +
     (allDone ? `<span class="map-rank-pct" id="rank-total"></span>`
-      : `<span class="ranking-time">${order.filter(isStageCleared).length}/${order.length}</span><span class="stage-sub">모든 맵 클리어 후 참여</span>`);
+      : `<span class="ranking-time">${order.filter(isStageCleared).length}/${order.length}</span><span class="stage-sub">${rankLockSub}</span>`);
   grid.appendChild(rank);
   updateRecordDisplays();
   loadRankPercents();
@@ -5170,12 +5263,24 @@ let tutorialIndex = 0;
 
 function renderTutorial() {
   const t = TUTORIAL[tutorialIndex];
+  const textInfo = window.getTutorialText ? window.getTutorialText(tutorialIndex) : t;
   document.getElementById('tut-art').innerHTML = t.art;
-  document.getElementById('tut-title').textContent = t.title;
-  document.getElementById('tut-text').textContent = t.text;
+  document.getElementById('tut-title').textContent = textInfo.title;
+  document.getElementById('tut-text').textContent = textInfo.text;
   document.getElementById('tut-dots').innerHTML = TUTORIAL.map((_, i) => `<i class="${i === tutorialIndex ? 'on' : ''}"></i>`).join('');
-  document.getElementById('tut-prev').disabled = tutorialIndex === 0;
-  document.getElementById('tut-next').textContent = tutorialIndex === TUTORIAL.length - 1 ? '시작하기' : '다음';
+  const prevBtn = document.getElementById('tut-prev');
+  if (prevBtn) {
+    prevBtn.disabled = tutorialIndex === 0;
+    if (window.t) prevBtn.textContent = window.t('tut_prev');
+  }
+  const nextBtn = document.getElementById('tut-next');
+  if (nextBtn) {
+    nextBtn.textContent = tutorialIndex === TUTORIAL.length - 1
+      ? (window.t ? window.t('tut_start') : '시작하기')
+      : (window.t ? window.t('tut_next') : '다음');
+  }
+  const skipBtn = document.querySelector('.tut-skip');
+  if (skipBtn && window.t) skipBtn.textContent = window.t('tut_skip');
 }
 function openTutorial() {
   tutorialIndex = 0;

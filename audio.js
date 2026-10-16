@@ -177,8 +177,12 @@
   }
   function refreshButtons() {
     const m = document.getElementById('music-btn'), s = document.getElementById('sfx-btn');
-    if (m) m.textContent = S.musicOn ? '음악 켜짐' : '음악 꺼짐';
-    if (s) s.textContent = S.sfxOn ? '효과음 켜짐' : '효과음 꺼짐';
+    if (m) {
+      m.textContent = window.t ? window.t(S.musicOn ? 'music_on' : 'music_off') : (S.musicOn ? '음악 켜짐' : '음악 꺼짐');
+    }
+    if (s) {
+      s.textContent = window.t ? window.t(S.sfxOn ? 'sfx_on' : 'sfx_off') : (S.sfxOn ? '효과음 켜짐' : '효과음 꺼짐');
+    }
   }
   // iOS는 사용자가 화면을 처음 만질 때만 소리를 켤 수 있음
   const unlock = () => { if (S.musicOn || S.sfxOn) ensure(); };
@@ -191,5 +195,5 @@
   document.addEventListener('DOMContentLoaded', refreshButtons);
   refreshButtons();
 
-  window.Sound = { sfx, setMode, toggleMusic: () => setMusic(!S.musicOn), toggleSfx: () => setSfx(!S.sfxOn), _s: S, _playBar: playBar };
+  window.Sound = { sfx, setMode, toggleMusic: () => setMusic(!S.musicOn), toggleSfx: () => setSfx(!S.sfxOn), refreshButtons, _s: S, _playBar: playBar };
 })();

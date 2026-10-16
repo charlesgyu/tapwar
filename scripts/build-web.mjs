@@ -8,6 +8,7 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 cpSync('game.js', `${out}/game.js`);
 cpSync('audio.js', `${out}/audio.js`);
+cpSync('i18n.js', `${out}/i18n.js`);
 cpSync('assets', `${out}/assets`, { recursive: true });
 
 let commit = 'unknown';
